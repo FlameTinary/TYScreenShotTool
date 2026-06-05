@@ -10,8 +10,9 @@ import SwiftUI
 @main
 struct TYScreenShotToolApp: App {
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra("ScreenshotTool", systemImage: "camera.viewfinder") {
+            MenuBarContentView()
         }
+        .menuBarExtraStyle(.menu)
     }
 }
