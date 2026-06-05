@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 06 Completed
+Sprint 07 Completed
 
 ## Completed
 
@@ -28,6 +28,9 @@ ScreenCaptureKit Integration
 
 Sprint 06
 PNG Export
+
+Sprint 07
+Clipboard Support
 
 ## Principles
 
@@ -53,6 +56,6 @@ ROADMAP
 
 ## Current Next Sprint
 
-Sprint 07
+Sprint 08
 
-Clipboard Support
+OCR

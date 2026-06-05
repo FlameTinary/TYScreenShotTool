@@ -381,3 +381,91 @@ HotKey
 ✓ ScreenCaptureKit
 
 下一阶段：
+
+---
+
+## Sprint 07
+
+日期：2026-06-06
+
+### Goal
+
+实现：
+
+CGImage
+→ Clipboard
+
+并保持 PNG 保存链路成立。
+
+---
+
+### Completed
+
+#### ClipboardService
+
+新增独立剪贴板服务：
+
+- `CGImage` 转换为 `NSImage`
+- 写入 `NSPasteboard`
+- 输出复制成功结果
+
+---
+
+#### Temp PNG Workflow
+
+为满足失败回滚要求，
+调整保存链路为：
+
+CGImage
+→ Temp PNG
+→ Clipboard
+→ Desktop PNG
+
+这样在复制失败时，
+桌面不会残留本次截图文件。
+
+---
+
+#### Capture Session Integration
+
+在 `CaptureSessionService` 中完成：
+
+- 截图成功后先生成临时 PNG
+- 剪贴板复制成功后再移动到桌面
+- 成功后输出：
+  - `Save Success`
+  - `path: ...`
+  - `Clipboard Copy Success`
+
+---
+
+### Validation
+
+已验证通过：
+
+- 编译通过
+- ⌘⇧2 可触发截图
+- 可正常粘贴到聊天框
+- 桌面最终生成 PNG
+- Console 输出保存路径
+- Console 输出复制成功
+
+未验证：
+
+- 人工制造复制失败时的回滚分支
+
+---
+
+### Outcome
+
+Sprint 07 完成。
+
+当前 MVP 链路已具备：
+
+HotKey
+→ Overlay
+→ Selection Rect
+→ ScreenCaptureKit
+→ Temp PNG
+→ Clipboard
+→ Desktop PNG

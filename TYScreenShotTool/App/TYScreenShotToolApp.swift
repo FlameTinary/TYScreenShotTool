@@ -11,6 +11,7 @@ import SwiftUI
 struct TYScreenShotToolApp: App {
     private let captureOverlayService: CaptureOverlayService
     private let captureSessionService: CaptureSessionService
+    private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
     private let screenCaptureService: ScreenCaptureService
     private let globalHotKeyService: GlobalHotKeyService
@@ -18,10 +19,12 @@ struct TYScreenShotToolApp: App {
     init() {
         let overlayService = CaptureOverlayService()
         let screenCaptureService = ScreenCaptureService()
+        let clipboardService = ClipboardService()
         let imageSaveService = ImageSaveService()
         let sessionService = CaptureSessionService(
             overlayService: overlayService,
             screenCaptureService: screenCaptureService,
+            clipboardService: clipboardService,
             imageSaveService: imageSaveService
         )
 
@@ -46,6 +49,7 @@ struct TYScreenShotToolApp: App {
 
         self.captureOverlayService = overlayService
         self.captureSessionService = sessionService
+        self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
         self.screenCaptureService = screenCaptureService
         self.globalHotKeyService = hotKeyService

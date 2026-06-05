@@ -11,16 +11,19 @@ import Foundation
 final class CaptureSessionService {
     private let overlayService: CaptureOverlayService
     private let screenCaptureService: ScreenCaptureService
+    private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
     private var state: CaptureState = .idle
 
     init(
         overlayService: CaptureOverlayService,
         screenCaptureService: ScreenCaptureService,
+        clipboardService: ClipboardService,
         imageSaveService: ImageSaveService
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
+        self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
     }
 
@@ -62,9 +65,31 @@ final class CaptureSessionService {
         Task {
             do {
                 let image = try await screenCaptureService.captureImage(in: rect)
-                let savedFileURL = try imageSaveService.savePNG(image)
+                let temporaryFileURL = try imageSaveService.saveTemporaryPNG(image)
+
+                do {
+                    try clipboardService.copyImage(image)
+                } catch {
+                    do {
+                        try imageSaveService.removeImage(at: temporaryFileURL)
+                    } catch let rollbackError as ImageSaveError {
+                        print("Cleanup failed: \(rollbackError.localizedDescription)")
+                    } catch {
+                        print("Cleanup failed: \(error.localizedDescription)")
+                    }
+
+                    if let clipboardError = error as? ClipboardError {
+                        print("Clipboard copy failed: \(clipboardError.localizedDescription)")
+                    } else {
+                        print("Clipboard copy failed: \(error.localizedDescription)")
+                    }
+                    return
+                }
+
+                let savedFileURL = try imageSaveService.moveImageToDesktop(from: temporaryFileURL)
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
+                print("Clipboard Copy Success")
             } catch ScreenCaptureError.invalidSelection {
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
