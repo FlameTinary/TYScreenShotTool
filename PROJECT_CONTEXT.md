@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 05 Completed
+Sprint 06 Completed
 
 ## Completed
 
@@ -25,6 +25,9 @@ Capture Session State Machine
 
 Sprint 05
 ScreenCaptureKit Integration
+
+Sprint 06
+PNG Export
 
 ## Principles
 
@@ -50,6 +53,6 @@ ROADMAP
 
 ## Current Next Sprint
 
-Sprint 06
+Sprint 07
 
-PNG Export
+Clipboard Support

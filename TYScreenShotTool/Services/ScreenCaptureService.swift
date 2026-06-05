@@ -8,6 +8,7 @@
 import CoreGraphics
 import CoreMedia
 import Foundation
+import AppKit
 import ScreenCaptureKit
 
 final class ScreenCaptureService {
@@ -20,8 +21,10 @@ final class ScreenCaptureService {
             throw ScreenCaptureError.permissionRequired
         }
 
+        let captureRect = try screenCaptureRect(from: rect)
+
         if #available(macOS 15.2, *) {
-            return try await captureImageInRect(rect)
+            return try await captureImageInRect(captureRect)
         }
 
         return try await captureImageWithContentFilter(in: rect)
@@ -49,7 +52,12 @@ final class ScreenCaptureService {
     private func captureImageWithContentFilter(in rect: CGRect) async throws -> CGImage {
         let shareableContent = try await SCShareableContent.current
 
-        guard let display = shareableContent.displays.first(where: { $0.frame.contains(rect) }) else {
+        guard let screen = screen(containing: rect) else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        let displayID = try displayID(for: screen)
+        guard let display = shareableContent.displays.first(where: { $0.displayID == displayID }) else {
             throw ScreenCaptureError.displayNotFound
         }
 
@@ -57,7 +65,7 @@ final class ScreenCaptureService {
         let configuration = SCStreamConfiguration()
         configuration.sourceRect = CGRect(
             x: rect.origin.x - display.frame.origin.x,
-            y: rect.origin.y - display.frame.origin.y,
+            y: screen.frame.maxY - rect.maxY,
             width: rect.width,
             height: rect.height
         )
@@ -79,6 +87,33 @@ final class ScreenCaptureService {
                 continuation.resume(returning: image)
             }
         }
+    }
+
+    private func screenCaptureRect(from rect: CGRect) throws -> CGRect {
+        guard let desktopMaxY = NSScreen.screens.map(\.frame.maxY).max() else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        return CGRect(
+            x: rect.origin.x,
+            y: desktopMaxY - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    private func screen(containing rect: CGRect) -> NSScreen? {
+        NSScreen.screens.first { $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY)) }
+    }
+
+    private func displayID(for screen: NSScreen) throws -> CGDirectDisplayID {
+        guard
+            let value = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        return CGDirectDisplayID(value.uint32Value)
     }
 }
 

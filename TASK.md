@@ -2,15 +2,16 @@
 
 Version: V0.1
 
-Current Sprint: Sprint 05
+Current Sprint: Sprint 07
 
 ---
 
 ## 目标
 
-接入 ScreenCaptureKit。
+在 Sprint 06 已完成 PNG 自动保存的基础上，
+实现截图后自动复制到剪贴板。
 
-实现：
+流程：
 
 Selection Rect
 
@@ -22,31 +23,33 @@ ScreenCaptureKit
 
 CGImage
 
+↓
+
+Clipboard
+
 ---
 
 ## 必须完成
 
-1. 根据选区矩形截图
+1. 将截图结果写入系统剪贴板
 
-2. 获取 CGImage
+2. 保持现有 PNG 保存能力不受影响
 
-3. 输出截图尺寸
+3. 控制台输出复制成功信息
 
 例如：
 
-Capture Success
-
-width: 1280
-
-height: 720
+Clipboard Copy Success
 
 ---
 
 ## 不做
 
-PNG保存
+通知
 
-剪贴板
+PNG 命名配置
+
+保存目录配置
 
 OCR
 
@@ -68,13 +71,11 @@ AI
 
 控制台输出：
 
-Capture Success
+Clipboard Copy Success
 
-width
+并且可以在 Preview、聊天框或文档中直接粘贴截图。
 
-height
-
-说明真实截图成功。
+说明截图复制链路已打通。
 
 ---
 

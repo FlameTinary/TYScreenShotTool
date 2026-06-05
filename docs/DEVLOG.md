@@ -258,7 +258,126 @@ HotKey
 
 ✓ Selection Rect
 
+✓ PNG 自动保存到桌面
+
+---
+
+## Sprint 06
+
+日期：2026-06-05
+
+### Goal
+
+实现：
+
+CGImage
+→ PNG
+→ Desktop
+
+---
+
+### Completed
+
+#### ImageSaveService
+
+新增独立保存服务：
+
+- `CGImage` 编码 PNG
+- 自动生成毫秒级文件名
+- 保存到桌面
+- 返回最终保存路径
+
+---
+
+#### Capture Session Integration
+
+在 `CaptureSessionService` 中完成：
+
+- 截图成功后调用 `ImageSaveService`
+- 控制台输出 `Save Success`
+- 控制台输出实际保存路径
+
+---
+
+#### File Naming
+
+使用：
+
+`Screenshot-yyyy-MM-dd-HH-mm-ss-SSS.png`
+
+避免连续截图重名。
+
+---
+
+### Bug Fix
+
+#### Desktop 写入失败
+
+问题：
+
+应用开启 `App Sandbox`，
+无法直接写入真实桌面。
+
+修复：
+
+关闭 target 的 `App Sandbox`。
+
+结果：
+
+PNG 可正常保存到真实桌面目录。
+
+---
+
+#### 选区与截图内容不一致
+
+问题：
+
+AppKit 选区坐标与 ScreenCaptureKit 坐标系不一致。
+
+导致：
+
+截图位置偏移。
+
+修复：
+
+- 增加显示空间坐标转换
+- 修正 `sourceRect.y`
+- 使用 `NSScreen + displayID` 匹配实际显示器
+
+结果：
+
+选区与最终截图内容一致。
+
+---
+
+### Validation
+
+验证通过：
+
+- 编译通过
+- ⌘⇧2 可触发截图
+- 桌面成功生成 PNG
+- Console 输出保存路径
+- Retina 正常
+- 多显示器正常
+- 选区与截图内容一致
+
+---
+
+### Outcome
+
+Sprint 06 完成。
+
+当前 MVP 链路已具备：
+
+HotKey
+→ Overlay
+→ Selection Rect
+→ ScreenCaptureKit
+→ CGImage
+→ PNG
+→ Desktop
+
 ✓ ScreenCaptureKit
 
 下一阶段：
-

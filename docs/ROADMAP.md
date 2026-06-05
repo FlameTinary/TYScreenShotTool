@@ -54,35 +54,36 @@ ScreenCaptureKit 集成
 
 ---
 
-## 当前进行中
-
 ### Sprint 06
 
 PNG 自动保存
 
-目标：
+状态：
+✅ Done
 
-CGImage
-→ PNG
-→ Desktop
+成果：
 
-计划：
-
-- ImageIO
-- PNG 编码
-- 自动文件命名
-- 保存到桌面
+- `CGImage` 保存为 PNG
+- 自动生成毫秒级文件名
+- 保存到真实桌面
 - Console 输出保存路径
+- 修复坐标转换偏移问题
 
 ---
 
-## Backlog
+## 当前进行中
 
 ### Sprint 07
 
 Clipboard 支持
 
+目标：
+
+截图完成后自动复制到剪贴板。
+
 ---
+
+## Backlog
 
 ### Sprint 08
 

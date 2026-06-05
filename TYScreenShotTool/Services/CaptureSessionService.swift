@@ -11,11 +11,17 @@ import Foundation
 final class CaptureSessionService {
     private let overlayService: CaptureOverlayService
     private let screenCaptureService: ScreenCaptureService
+    private let imageSaveService: ImageSaveService
     private var state: CaptureState = .idle
 
-    init(overlayService: CaptureOverlayService, screenCaptureService: ScreenCaptureService) {
+    init(
+        overlayService: CaptureOverlayService,
+        screenCaptureService: ScreenCaptureService,
+        imageSaveService: ImageSaveService
+    ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
+        self.imageSaveService = imageSaveService
     }
 
     func startSession() {
@@ -56,14 +62,16 @@ final class CaptureSessionService {
         Task {
             do {
                 let image = try await screenCaptureService.captureImage(in: rect)
-                print("Capture Success")
-                print("width: \(image.width)")
-                print("height: \(image.height)")
+                let savedFileURL = try imageSaveService.savePNG(image)
+                print("Save Success")
+                print("path: \(savedFileURL.path)")
             } catch ScreenCaptureError.invalidSelection {
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
+            } catch let error as ImageSaveError {
+                print("Save failed: \(error.localizedDescription)")
             } catch {
                 print("Capture failed: \(error.localizedDescription)")
             }
