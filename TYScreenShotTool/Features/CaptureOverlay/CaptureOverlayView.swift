@@ -9,6 +9,7 @@ import AppKit
 
 final class CaptureOverlayView: NSView {
     var onCancel: (() -> Void)?
+    var onDragStarted: (() -> Void)?
     var onSelection: ((CGRect) -> Void)?
 
     private var dragStartPoint: CGPoint?
@@ -47,6 +48,7 @@ final class CaptureOverlayView: NSView {
         dragStartPoint = point
         currentPoint = point
         isDragging = true
+        onDragStarted?()
         needsDisplay = true
     }
 

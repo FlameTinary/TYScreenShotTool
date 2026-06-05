@@ -8,6 +8,14 @@
 import AppKit
 
 final class CaptureOverlayWindow: NSWindow {
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
+    }
+
     init(screen: NSScreen, contentView: NSView) {
         super.init(
             contentRect: screen.frame,

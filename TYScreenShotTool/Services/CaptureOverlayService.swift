@@ -9,6 +9,10 @@ import AppKit
 import CoreGraphics
 
 final class CaptureOverlayService {
+    var onCancel: (() -> Void)?
+    var onDragStarted: (() -> Void)?
+    var onSelectionCompleted: ((CGRect) -> Void)?
+
     private var overlayWindows: [CaptureOverlayWindow] = []
 
     func presentOverlay() {
@@ -19,11 +23,13 @@ final class CaptureOverlayService {
         for screen in NSScreen.screens {
             let overlayView = CaptureOverlayView(frame: screen.frame)
             overlayView.onCancel = { [weak self] in
-                self?.dismissOverlay()
+                self?.onCancel?()
+            }
+            overlayView.onDragStarted = { [weak self] in
+                self?.onDragStarted?()
             }
             overlayView.onSelection = { [weak self] rect in
-                self?.logSelection(rect)
-                self?.dismissOverlay()
+                self?.onSelectionCompleted?(rect)
             }
 
             let window = CaptureOverlayWindow(screen: screen, contentView: overlayView)
@@ -38,13 +44,5 @@ final class CaptureOverlayService {
             window.orderOut(nil)
         }
         overlayWindows.removeAll()
-    }
-
-    private func logSelection(_ rect: CGRect) {
-        print("Selection Rect")
-        print("x: \(Int(rect.origin.x))")
-        print("y: \(Int(rect.origin.y))")
-        print("width: \(Int(rect.width))")
-        print("height: \(Int(rect.height))")
     }
 }
