@@ -10,10 +10,12 @@ import Foundation
 
 final class CaptureSessionService {
     private let overlayService: CaptureOverlayService
+    private let screenCaptureService: ScreenCaptureService
     private var state: CaptureState = .idle
 
-    init(overlayService: CaptureOverlayService) {
+    init(overlayService: CaptureOverlayService, screenCaptureService: ScreenCaptureService) {
         self.overlayService = overlayService
+        self.screenCaptureService = screenCaptureService
     }
 
     func startSession() {
@@ -38,10 +40,34 @@ final class CaptureSessionService {
             return
         }
 
+        guard rect.width > 1, rect.height > 1 else {
+            print("Capture skipped: invalid selection")
+            overlayService.dismissOverlay()
+            transition(to: .selectionCompleted)
+            transition(to: .idle)
+            return
+        }
+
         transition(to: .selectionCompleted)
         logSelection(rect)
         overlayService.dismissOverlay()
         transition(to: .idle)
+
+        Task {
+            do {
+                let image = try await screenCaptureService.captureImage(in: rect)
+                print("Capture Success")
+                print("width: \(image.width)")
+                print("height: \(image.height)")
+            } catch ScreenCaptureError.invalidSelection {
+                print("Capture skipped: invalid selection")
+            } catch ScreenCaptureError.permissionRequired {
+                print("Screen Recording permission required.")
+                print("Please restart the app after granting permission.")
+            } catch {
+                print("Capture failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     func cancelSession() {

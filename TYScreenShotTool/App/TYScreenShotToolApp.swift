@@ -11,11 +11,16 @@ import SwiftUI
 struct TYScreenShotToolApp: App {
     private let captureOverlayService: CaptureOverlayService
     private let captureSessionService: CaptureSessionService
+    private let screenCaptureService: ScreenCaptureService
     private let globalHotKeyService: GlobalHotKeyService
 
     init() {
         let overlayService = CaptureOverlayService()
-        let sessionService = CaptureSessionService(overlayService: overlayService)
+        let screenCaptureService = ScreenCaptureService()
+        let sessionService = CaptureSessionService(
+            overlayService: overlayService,
+            screenCaptureService: screenCaptureService
+        )
 
         overlayService.onCancel = {
             sessionService.cancelSession()
@@ -38,6 +43,7 @@ struct TYScreenShotToolApp: App {
 
         self.captureOverlayService = overlayService
         self.captureSessionService = sessionService
+        self.screenCaptureService = screenCaptureService
         self.globalHotKeyService = hotKeyService
     }
 

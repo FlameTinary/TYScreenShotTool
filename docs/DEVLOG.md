@@ -126,6 +126,120 @@ ESC 正常退出。
 
 ---
 
+## Sprint 05
+
+日期：2026-06-05
+
+### Goal
+
+接入真实截图能力。
+
+### Completed
+
+#### ScreenCaptureService
+
+新增独立截图服务：
+
+- 权限检查
+- ScreenCaptureKit 封装
+- 返回 CGImage
+
+---
+
+#### ScreenCaptureKit
+
+实现双路径支持：
+
+macOS 15.2+
+
+- captureImage(in:)
+
+macOS 15.0~15.1
+
+- SCShareableContent
+- SCContentFilter
+- SCStreamConfiguration
+- captureImage(contentFilter:)
+
+---
+
+#### 坐标转换
+
+改用：
+
+window.convertRectToScreen(...)
+
+统一转换到全局屏幕坐标。
+
+---
+
+#### 生命周期
+
+保持 Sprint 04 四状态：
+
+Idle
+OverlayPresented
+Dragging
+SelectionCompleted
+
+未新增截图相关状态。
+
+---
+
+### Validation
+
+#### 单显示器
+
+验证通过。
+
+成功输出：
+
+Capture Success
+
+---
+
+#### 双显示器
+
+验证通过。
+
+副显示器坐标：
+
+x = -1440
+
+截图成功。
+
+---
+
+#### Retina
+
+验证通过。
+
+截图尺寸约为选区尺寸 2 倍。
+
+---
+
+#### ESC
+
+验证通过。
+
+Overlay 可正常退出。
+
+---
+
+### Outcome
+
+项目首次具备真实截图能力。
+
+MVP 已完成：
+
+HotKey
+→ Overlay
+→ Selection
+→ ScreenCaptureKit
+→ CGImage
+
+---
+
 ## 当前项目能力
 
 已完成：
@@ -144,6 +258,7 @@ ESC 正常退出。
 
 ✓ Selection Rect
 
+✓ ScreenCaptureKit
+
 下一阶段：
 
-Sprint 05 - ScreenCaptureKit

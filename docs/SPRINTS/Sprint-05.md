@@ -1,71 +1,172 @@
-# Sprint 05 - ScreenCaptureKit 截图能力
+# Sprint 05 - 接入真实截图能力（ScreenCaptureKit）
 
-## 目标
+## Sprint Goal
 
-实现真正截图。
+将 Sprint 03 的选区能力与 Sprint 04 的 Capture Session 生命周期管理接入真实截图能力。
 
-根据 Overlay 选区矩形：
+实现以下最小链路：
 
-Selection Rect
-↓
+HotKey
+→ Overlay
+→ Selection Rect
+→ ScreenCaptureKit
+→ CGImage
 
-ScreenCaptureKit
-↓
-
-CGImage
-
-完成截图数据获取。
+验证能够成功获取截图结果。
 
 ---
 
-## 本 Sprint 范围
+## Scope
 
-实现：
+### Included
 
-- 获取选区矩形
-- 调用 ScreenCaptureKit
-- 返回 CGImage
-- 输出截图尺寸日志
+- 接入 ScreenCaptureKit
+- 获取真实 CGImage
+- 支持多显示器截图
+- 支持 Retina 显示器
+- 屏幕录制权限检查
+- 截图成功日志输出
 
----
+### Excluded
 
-## 不实现
-
-- PNG保存
+- PNG 保存
 - 剪贴板
 - OCR
 - AI
 - 历史记录
-- 设置页
+- 设置页面
 
 ---
 
-## 验收标准
+## Implementation
 
-按下：
+### 新增
 
-⌘⇧2
+- ScreenCaptureService
 
-出现 Overlay
+职责：
 
-拖拽选区
+- 屏幕录制权限检查
+- ScreenCaptureKit 封装
+- 返回 CGImage
 
-完成选择
+---
 
-Console 输出：
+### macOS 15.2+
+
+使用：
+
+SCScreenshotManager.captureImage(in:)
+
+特点：
+
+- 输入全局屏幕坐标
+- 直接返回 CGImage
+- 支持多显示器
+
+---
+
+### macOS 15.0 ~ 15.1
+
+兼容路径：
+
+- SCShareableContent
+- SCContentFilter
+- SCStreamConfiguration
+- sourceRect
+- captureImage(contentFilter:)
+
+---
+
+### 坐标转换
+
+使用：
+
+window.convertRectToScreen(...)
+
+不再手动计算：
+
+screen.origin + localRect
+
+不做 Y 轴翻转。
+
+---
+
+### 生命周期保持不变
+
+Capture State：
+
+Idle
+→ OverlayPresented
+→ Dragging
+→ SelectionCompleted
+→ Idle
+
+未新增任何状态。
+
+---
+
+## Validation
+
+### 单显示器
+
+成功输出：
 
 Capture Success
 
-width: xxx
-
-height: xxx
+width: xxxx
+height: xxxx
 
 ---
 
-## 完成标志
+### 双显示器
 
-获得真实截图图像数据。
+测试结果：
 
-即：
+Selection Rect
+x: -1440
+y: 84
+width: 1122
+height: 697
 
-CGImage 成功生成。
+Capture Success
+width: 2246
+height: 1398
+
+验证：
+
+- 多显示器坐标正常
+- ScreenCaptureKit 截图正常
+- Retina 缩放正常
+
+---
+
+### ESC 测试
+
+Overlay 状态下：
+
+ESC
+
+输出：
+
+OverlayPresented → Idle
+
+通过。
+
+---
+
+## Result
+
+Sprint 05 完成。
+
+当前项目已经具备：
+
+- 全局热键
+- Overlay 选区
+- 生命周期状态机
+- ScreenCaptureKit 截图
+- 多显示器支持
+
+下一阶段进入：
+
+Sprint 06 - PNG 自动保存

@@ -29,7 +29,11 @@ final class CaptureOverlayService {
                 self?.onDragStarted?()
             }
             overlayView.onSelection = { [weak self] rect in
-                self?.onSelectionCompleted?(rect)
+                guard let self, let window = overlayView.window else {
+                    return
+                }
+
+                self.onSelectionCompleted?(window.convertToScreen(rect))
             }
 
             let window = CaptureOverlayWindow(screen: screen, contentView: overlayView)
