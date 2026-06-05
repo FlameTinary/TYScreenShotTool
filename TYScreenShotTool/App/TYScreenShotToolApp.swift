@@ -9,12 +9,22 @@ import SwiftUI
 
 @main
 struct TYScreenShotToolApp: App {
+    private let captureOverlayService: CaptureOverlayService
     private let globalHotKeyService: GlobalHotKeyService
 
     init() {
-        let service = GlobalHotKeyService(hotKey: .screenshot)
-        _ = service.register()
-        self.globalHotKeyService = service
+        let overlayService = CaptureOverlayService()
+        let hotKeyService = GlobalHotKeyService(
+            hotKey: .screenshot,
+            onHotKeyPressed: {
+                overlayService.presentOverlay()
+            }
+        )
+
+        _ = hotKeyService.register()
+
+        self.captureOverlayService = overlayService
+        self.globalHotKeyService = hotKeyService
     }
 
     var body: some Scene {

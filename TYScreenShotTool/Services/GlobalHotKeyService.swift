@@ -10,11 +10,13 @@ import Foundation
 
 final class GlobalHotKeyService {
     private let hotKey: ScreenshotHotKey
+    private let onHotKeyPressed: () -> Void
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 
-    init(hotKey: ScreenshotHotKey) {
+    init(hotKey: ScreenshotHotKey, onHotKeyPressed: @escaping () -> Void) {
         self.hotKey = hotKey
+        self.onHotKeyPressed = onHotKeyPressed
     }
 
     deinit {
@@ -101,7 +103,7 @@ final class GlobalHotKeyService {
             return OSStatus(eventNotHandledErr)
         }
 
-        print("Screenshot shortcut triggered")
+        onHotKeyPressed()
         return noErr
     }
 
