@@ -8,8 +8,16 @@
 import SwiftUI
 
 struct SettingsView: View {
+    private let globalHotKeyService: GlobalHotKeyService
+
     @AppStorage(AppSettings.isOCREnabledKey)
     private var isOCREnabled = AppSettings.isOCREnabledDefaultValue
+    @AppStorage(AppSettings.screenshotHotKeyKey)
+    private var selectedHotKeyStorageValue = AppSettings.screenshotHotKeyDefaultValue
+
+    init(globalHotKeyService: GlobalHotKeyService) {
+        self.globalHotKeyService = globalHotKeyService
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -21,7 +29,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 12) {
-                settingPlaceholder(title: "HotKey 配置")
+                hotKeyPicker
                 settingPlaceholder(title: "保存目录配置")
                 ocrToggle
             }
@@ -30,6 +38,34 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(minWidth: 420, minHeight: 260, alignment: .topLeading)
+        .onChange(of: selectedHotKeyStorageValue) { _, newValue in
+            guard let hotKey = ScreenshotHotKey(storageValue: newValue) else {
+                return
+            }
+
+            if !globalHotKeyService.updateHotKey(hotKey) {
+                selectedHotKeyStorageValue = AppSettings.screenshotHotKeyDefaultValue
+            }
+        }
+    }
+
+    private var hotKeyPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("HotKey 配置")
+                .font(.headline)
+
+            Picker("截图快捷键", selection: $selectedHotKeyStorageValue) {
+                ForEach(ScreenshotHotKey.presets, id: \.storageValue) { hotKey in
+                    Text(hotKey.displayName)
+                        .tag(hotKey.storageValue)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text("仅支持少量预设快捷键，修改后立即生效。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var ocrToggle: some View {

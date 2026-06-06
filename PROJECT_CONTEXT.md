@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 11 Planned
+Sprint 12 Planned
 
 ## Principles
 
@@ -30,12 +30,13 @@ Shared
 - OCR
 - Settings Entry
 - OCR Toggle
+- HotKey Settings
 
 ## Current Next Sprint
 
-Sprint 11
+Sprint 12
 
-HotKey Settings
+Save Directory Settings
 
 ## Source Of Truth
 

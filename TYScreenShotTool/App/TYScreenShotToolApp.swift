@@ -42,7 +42,7 @@ struct TYScreenShotToolApp: App {
         }
 
         let hotKeyService = GlobalHotKeyService(
-            hotKey: .screenshot,
+            hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {
                 sessionService.startSession()
             }
@@ -66,7 +66,14 @@ struct TYScreenShotToolApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
-            SettingsView()
+            SettingsView(globalHotKeyService: globalHotKeyService)
         }
+    }
+
+    private static func loadConfiguredHotKey() -> ScreenshotHotKey {
+        let storageValue = UserDefaults.standard.string(forKey: AppSettings.screenshotHotKeyKey)
+            ?? AppSettings.screenshotHotKeyDefaultValue
+
+        return ScreenshotHotKey(storageValue: storageValue) ?? .screenshot
     }
 }

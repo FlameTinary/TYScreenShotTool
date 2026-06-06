@@ -9,7 +9,7 @@ import Carbon
 import Foundation
 
 final class GlobalHotKeyService {
-    private let hotKey: ScreenshotHotKey
+    private var hotKey: ScreenshotHotKey
     private let onHotKeyPressed: () -> Void
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
@@ -31,6 +31,44 @@ final class GlobalHotKeyService {
 
     @discardableResult
     func register() -> Bool {
+        guard installEventHandlerIfNeeded() else {
+            return false
+        }
+
+        return registerCurrentHotKey()
+    }
+
+    @discardableResult
+    func updateHotKey(_ newHotKey: ScreenshotHotKey) -> Bool {
+        guard newHotKey != hotKey else {
+            return true
+        }
+
+        guard installEventHandlerIfNeeded() else {
+            return false
+        }
+
+        let previousHotKey = hotKey
+        unregisterCurrentHotKey()
+        hotKey = newHotKey
+
+        guard registerCurrentHotKey() else {
+            hotKey = previousHotKey
+            _ = registerCurrentHotKey()
+            print("Failed to update global hot key. Restored previous value: \(previousHotKey.displayName)")
+            return false
+        }
+
+        print("HotKey Update Success")
+        print("value: \(newHotKey.displayName)")
+        return true
+    }
+
+    private func installEventHandlerIfNeeded() -> Bool {
+        guard eventHandlerRef == nil else {
+            return true
+        }
+
         let eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
@@ -50,6 +88,10 @@ final class GlobalHotKeyService {
             return false
         }
 
+        return true
+    }
+
+    private func registerCurrentHotKey() -> Bool {
         let hotKeyID = EventHotKeyID(
             signature: OSType(0x54595353),
             id: hotKey.id
@@ -66,16 +108,19 @@ final class GlobalHotKeyService {
 
         guard registerStatus == noErr else {
             print("Failed to register global hot key: \(registerStatus)")
-
-            if let eventHandlerRef {
-                RemoveEventHandler(eventHandlerRef)
-                self.eventHandlerRef = nil
-            }
-
             return false
         }
 
         return true
+    }
+
+    private func unregisterCurrentHotKey() {
+        guard let hotKeyRef else {
+            return
+        }
+
+        UnregisterEventHotKey(hotKeyRef)
+        self.hotKeyRef = nil
     }
 
     private func handleHotKeyPressed(_ event: EventRef?) -> OSStatus {
