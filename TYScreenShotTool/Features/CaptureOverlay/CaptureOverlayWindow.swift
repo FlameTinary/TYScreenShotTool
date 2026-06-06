@@ -37,5 +37,10 @@ final class CaptureOverlayWindow: NSWindow {
     func showOverlay() {
         orderFrontRegardless()
         makeKeyAndOrderFront(nil)
+        if let contentView {
+            makeFirstResponder(contentView)
+            invalidateCursorRects(for: contentView)
+        }
+        NSCursor.crosshair.set()
     }
 }

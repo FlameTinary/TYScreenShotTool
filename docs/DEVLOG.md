@@ -262,6 +262,35 @@ HotKey
 
 # 2026-06-06
 
+## Sprint 13 补充修复
+
+### 工具栏截图交互收紧
+
+修复：
+
+- 热键唤起 overlay 后可直接开始拖拽
+- 连续多次热键截图时无需先额外点击一次
+- 拖拽完成后仅保留选区，不再立刻执行真实截图
+- 点击复制或保存时才真正调用截图能力
+
+调整：
+
+- `TYScreenShotToolApp`
+- `CaptureOverlayService`
+- `CaptureOverlayView`
+- `CaptureOverlayWindow`
+- `CaptureSessionService`
+
+验证：
+
+- 编译通过
+- 连续多次热键截图验证通过
+- 工具栏复制与保存触发时机符合预期
+
+---
+
+# 2026-06-06
+
 ## Sprint 13 完成
 
 ### 截图工具栏基础

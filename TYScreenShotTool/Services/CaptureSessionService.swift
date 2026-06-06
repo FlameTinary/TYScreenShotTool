@@ -65,32 +65,8 @@ final class CaptureSessionService {
 
         transition(to: .selectionCompleted)
         logSelection(rect)
-
-        Task {
-            do {
-                let image = try await screenCaptureService.captureImage(in: rect)
-                pendingImage = image
-                pendingSelectionRect = rect
-                overlayService.showCapturedPreview(image: image, selectionRect: rect)
-            } catch ScreenCaptureError.invalidSelection {
-                overlayService.dismissOverlay()
-                transition(to: .idle)
-                print("Capture skipped: invalid selection")
-            } catch ScreenCaptureError.permissionRequired {
-                overlayService.dismissOverlay()
-                transition(to: .idle)
-                print("Screen Recording permission required.")
-                print("Please restart the app after granting permission.")
-            } catch let error as ImageSaveError {
-                overlayService.dismissOverlay()
-                transition(to: .idle)
-                print("Save failed: \(error.localizedDescription)")
-            } catch {
-                overlayService.dismissOverlay()
-                transition(to: .idle)
-                print("Capture failed: \(error.localizedDescription)")
-            }
-        }
+        pendingSelectionRect = rect
+        overlayService.showSelectionPreview(selectionRect: rect)
     }
 
     func cancelSession() {
@@ -104,42 +80,58 @@ final class CaptureSessionService {
     }
 
     func copyPendingCapture(style: CapturePreviewStyle) {
-        guard state == .selectionCompleted, let pendingImage else {
+        guard state == .selectionCompleted, let pendingSelectionRect else {
             return
         }
 
-        do {
-            let exportedImage = try exportedImage(from: pendingImage, style: style)
-            try clipboardService.copyImage(exportedImage)
-            print("Clipboard Copy Success")
-            overlayService.dismissOverlay()
-            clearPendingCapture()
-            transition(to: .idle)
-        } catch let error as ClipboardError {
-            print("Clipboard copy failed: \(error.localizedDescription)")
-        } catch {
-            print("Clipboard copy failed: \(error.localizedDescription)")
+        Task {
+            do {
+                let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
+                let exportedImage = try exportedImage(from: image, style: style)
+                try clipboardService.copyImage(exportedImage)
+                print("Clipboard Copy Success")
+                overlayService.dismissOverlay()
+                clearPendingCapture()
+                transition(to: .idle)
+            } catch ScreenCaptureError.invalidSelection {
+                print("Capture skipped: invalid selection")
+            } catch ScreenCaptureError.permissionRequired {
+                print("Screen Recording permission required.")
+                print("Please restart the app after granting permission.")
+            } catch let error as ClipboardError {
+                print("Clipboard copy failed: \(error.localizedDescription)")
+            } catch {
+                print("Clipboard copy failed: \(error.localizedDescription)")
+            }
         }
     }
 
     func savePendingCapture(style: CapturePreviewStyle) {
-        guard state == .selectionCompleted, let pendingImage else {
+        guard state == .selectionCompleted, let pendingSelectionRect else {
             return
         }
 
-        do {
-            let exportedImage = try exportedImage(from: pendingImage, style: style)
-            let temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
-            let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL)
-            print("Save Success")
-            print("path: \(savedFileURL.path)")
-            overlayService.dismissOverlay()
-            clearPendingCapture()
-            transition(to: .idle)
-        } catch let error as ImageSaveError {
-            print("Save failed: \(error.localizedDescription)")
-        } catch {
-            print("Save failed: \(error.localizedDescription)")
+        Task {
+            do {
+                let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
+                let exportedImage = try exportedImage(from: image, style: style)
+                let temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
+                let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL)
+                print("Save Success")
+                print("path: \(savedFileURL.path)")
+                overlayService.dismissOverlay()
+                clearPendingCapture()
+                transition(to: .idle)
+            } catch ScreenCaptureError.invalidSelection {
+                print("Capture skipped: invalid selection")
+            } catch ScreenCaptureError.permissionRequired {
+                print("Screen Recording permission required.")
+                print("Please restart the app after granting permission.")
+            } catch let error as ImageSaveError {
+                print("Save failed: \(error.localizedDescription)")
+            } catch {
+                print("Save failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -158,7 +150,6 @@ final class CaptureSessionService {
     }
 
     private func clearPendingCapture() {
-        pendingImage = nil
         pendingSelectionRect = nil
     }
 

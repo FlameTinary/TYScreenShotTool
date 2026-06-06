@@ -53,7 +53,7 @@ final class CaptureOverlayService {
         overlayWindows.forEach { $0.showOverlay() }
     }
 
-    func showCapturedPreview(image: CGImage, selectionRect: CGRect) {
+    func showSelectionPreview(selectionRect: CGRect) {
         guard let activeScreen = screen(containing: selectionRect) else {
             return
         }
@@ -71,10 +71,7 @@ final class CaptureOverlayService {
 
         activeOverlayWindow = window
         activeOverlayView = overlayView
-        overlayView.showCapturedPreview(
-            image: image,
-            selectionRect: window.convertFromScreen(selectionRect)
-        )
+        overlayView.showSelectionPreview(selectionRect: window.convertFromScreen(selectionRect))
         window.showOverlay()
     }
 

@@ -50,6 +50,10 @@ final class CaptureOverlayView: NSView {
         true
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
@@ -60,8 +64,25 @@ final class CaptureOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.35).setFill()
-        dirtyRect.fill()
+        let activeRect: CGRect?
+        switch mode {
+        case .selection:
+            activeRect = selectionRect
+        case .preview:
+            activeRect = previewSelectionRect
+        }
+
+        if let activeRect {
+            let overlayPath = NSBezierPath(rect: bounds)
+            let cutoutPath = cutoutPath(for: activeRect)
+            overlayPath.append(cutoutPath)
+            overlayPath.windingRule = .evenOdd
+            NSColor.black.withAlphaComponent(0.35).setFill()
+            overlayPath.fill()
+        } else {
+            NSColor.black.withAlphaComponent(0.35).setFill()
+            bounds.fill()
+        }
 
         switch mode {
         case .selection:
@@ -91,6 +112,7 @@ final class CaptureOverlayView: NSView {
             return
         }
 
+        window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
         dragStartPoint = point
         currentPoint = point
@@ -147,10 +169,10 @@ final class CaptureOverlayView: NSView {
         layoutPreviewInterface()
     }
 
-    func showCapturedPreview(image: CGImage, selectionRect: CGRect) {
+    func showSelectionPreview(selectionRect: CGRect) {
         mode = .preview
         previewSelectionRect = selectionRect
-        previewImageView.image = NSImage(cgImage: image, size: selectionRect.size)
+        previewImageView.image = nil
         sizeLabel.stringValue = "\(Int(selectionRect.width)) x \(Int(selectionRect.height))"
         previewStyle = .default
         roundedToggle.state = .off
@@ -379,6 +401,7 @@ final class CaptureOverlayView: NSView {
         previewContainerView.layer?.shadowOpacity = previewStyle.showsShadow ? 0.25 : 0
         previewContainerView.layer?.shadowRadius = previewStyle.showsShadow ? 12 : 0
         previewContainerView.layer?.shadowOffset = CGSize(width: 0, height: -4)
+        needsDisplay = true
     }
 
     @objc
@@ -406,6 +429,18 @@ final class CaptureOverlayView: NSView {
     @objc
     private func requestCancel() {
         onCancel?()
+    }
+
+    private func cutoutPath(for rect: CGRect) -> NSBezierPath {
+        if mode == .preview && previewStyle.showsRoundedCorners {
+            return NSBezierPath(
+                roundedRect: rect,
+                xRadius: 12,
+                yRadius: 12
+            )
+        }
+
+        return NSBezierPath(rect: rect)
     }
 
     private enum Mode {

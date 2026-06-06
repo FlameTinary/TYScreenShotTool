@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 @main
 struct TYScreenShotToolApp: App {
@@ -48,6 +49,7 @@ struct TYScreenShotToolApp: App {
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {
+                NSApplication.shared.activate(ignoringOtherApps: true)
                 sessionService.startSession()
             }
         )
