@@ -2,7 +2,7 @@
 
 Version: V0.3
 
-Current Sprint: Sprint 09
+Current Sprint: Sprint 09 Completed
 
 ---
 
@@ -65,7 +65,7 @@ OCR 开关实际生效逻辑
 
 同时现有截图、PNG 保存、剪贴板复制、OCR 功能仍正常可用。
 
-说明 Sprint 09 的设置入口主链路已打通。
+说明 Sprint 09 的设置入口主链路已打通，Sprint 09 已完成。
 
 ---
 

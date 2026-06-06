@@ -14,6 +14,11 @@ final class OCRService {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
+        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+
+        if #available(macOS 13.0, *) {
+            request.automaticallyDetectsLanguage = true
+        }
 
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
 

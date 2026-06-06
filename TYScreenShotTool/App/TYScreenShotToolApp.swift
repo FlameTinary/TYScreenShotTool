@@ -64,5 +64,9 @@ struct TYScreenShotToolApp: App {
             MenuBarContentView()
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsView()
+        }
     }
 }

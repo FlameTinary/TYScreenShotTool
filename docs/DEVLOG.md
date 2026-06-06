@@ -551,3 +551,100 @@ HotKey
 → Desktop PNG
 → OCR
 → Text
+
+---
+
+## Sprint 09
+
+日期：2026-06-06
+
+### Goal
+
+实现：
+
+Menu Bar
+→ Settings Entry
+→ Settings Window
+
+并提供最小设置页面入口。
+
+---
+
+### Completed
+
+#### Settings Scene
+
+在 `App` 层增加：
+
+- 原生 `Settings` scene
+- 最小 `SettingsView`
+- 设置页占位内容
+
+页面中展示：
+
+- `HotKey 配置`
+- `保存目录配置`
+- `OCR 开关`
+
+---
+
+#### Menu Bar Integration
+
+在菜单栏中增加：
+
+- `Settings` 入口
+
+并修复：
+
+- 首次点击 `Settings` 无法打开页面的问题
+
+最终改为通过 SwiftUI 原生设置打开动作触发设置窗口。
+
+---
+
+#### OCR Fix
+
+在 `OCRService` 中补充识别语言配置：
+
+- `zh-Hans`
+- `zh-Hant`
+- `en-US`
+
+并启用自动语言检测，
+修复中文识别乱码问题。
+
+---
+
+### Validation
+
+已验证通过：
+
+- 构建通过
+- 菜单栏 `Settings` 可正常打开
+- `Settings` 页面可正常显示
+- 页面包含 3 个最小占位项
+- 中文 OCR 识别恢复正常
+- 现有截图、PNG、Clipboard、OCR 链路正常
+
+---
+
+### Outcome
+
+Sprint 09 完成。
+
+当前 MVP 链路已具备：
+
+HotKey
+→ Overlay
+→ Selection Rect
+→ ScreenCaptureKit
+→ Temp PNG
+→ Clipboard
+→ Desktop PNG
+→ OCR
+
+并新增：
+
+Menu Bar
+→ Settings Entry
+→ Settings Window

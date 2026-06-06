@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 09 Planned
+Sprint 09 Completed
 
 ## Completed
 
@@ -34,6 +34,9 @@ Clipboard Support
 
 Sprint 08
 OCR
+
+Sprint 09
+Settings Page
 
 ## Principles
 
