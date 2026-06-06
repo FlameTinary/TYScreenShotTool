@@ -32,12 +32,13 @@ Shared
 - OCR Toggle
 - HotKey Settings
 - Save Directory Settings
+- Preparing Toolbar Workflow
 
 ## Current Next Sprint
 
 Sprint 13
 
-AI Analysis
+Toolbar Editing Foundation
 
 ## Source Of Truth
 
