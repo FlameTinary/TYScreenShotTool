@@ -258,6 +258,46 @@ HotKey
 
 ✓ Selection Rect
 
+---
+
+# 2026-06-06
+
+## Sprint 13 完成
+
+### 截图工具栏基础
+
+实现：
+
+- 框选完成后不再自动复制、保存或 OCR
+- 截图进入预览编辑态
+- 增加底部工具栏：复制、保存、取消
+- 增加顶部悬浮设置栏：尺寸、圆角、阴影
+- 保存与复制前按当前样式重新导出图片
+
+新增：
+
+- `CapturePreviewStyle`
+
+调整：
+
+- `CaptureOverlayView`
+- `CaptureOverlayService`
+- `CaptureSessionService`
+- `TYScreenShotToolApp`
+
+验证：
+
+- 编译通过
+- 工具栏交互正常
+- 保存后的 PNG 正常生成
+- 剪贴板复制正常
+- 圆角、阴影在最终导出 PNG 中生效
+- 控制台输出保存成功日志
+
+结果：
+
+项目完成最小截图工具栏主链路，为后续标注与动作扩展提供交互基础。
+
 ✓ PNG 自动保存到桌面
 
 ---

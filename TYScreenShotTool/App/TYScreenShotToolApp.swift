@@ -13,7 +13,6 @@ struct TYScreenShotToolApp: App {
     private let captureSessionService: CaptureSessionService
     private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
-    private let ocrService: OCRService
     private let screenCaptureService: ScreenCaptureService
     private let globalHotKeyService: GlobalHotKeyService
 
@@ -22,13 +21,12 @@ struct TYScreenShotToolApp: App {
         let screenCaptureService = ScreenCaptureService()
         let clipboardService = ClipboardService()
         let imageSaveService = ImageSaveService()
-        let ocrService = OCRService()
         let sessionService = CaptureSessionService(
             overlayService: overlayService,
             screenCaptureService: screenCaptureService,
             clipboardService: clipboardService,
             imageSaveService: imageSaveService,
-            ocrService: ocrService
+            ocrService: OCRService()
         )
 
         overlayService.onCancel = {
@@ -39,6 +37,12 @@ struct TYScreenShotToolApp: App {
         }
         overlayService.onSelectionCompleted = { rect in
             sessionService.completeSelection(rect)
+        }
+        overlayService.onCopyRequested = { style in
+            sessionService.copyPendingCapture(style: style)
+        }
+        overlayService.onSaveRequested = { style in
+            sessionService.savePendingCapture(style: style)
         }
 
         let hotKeyService = GlobalHotKeyService(
@@ -54,7 +58,6 @@ struct TYScreenShotToolApp: App {
         self.captureSessionService = sessionService
         self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
-        self.ocrService = ocrService
         self.screenCaptureService = screenCaptureService
         self.globalHotKeyService = hotKeyService
     }

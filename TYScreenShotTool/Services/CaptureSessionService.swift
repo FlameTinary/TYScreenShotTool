@@ -6,6 +6,7 @@
 //
 
 import CoreGraphics
+import CoreImage
 import Foundation
 
 final class CaptureSessionService {
@@ -15,6 +16,8 @@ final class CaptureSessionService {
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
     private var state: CaptureState = .idle
+    private var pendingImage: CGImage?
+    private var pendingSelectionRect: CGRect?
 
     init(
         overlayService: CaptureOverlayService,
@@ -62,72 +65,82 @@ final class CaptureSessionService {
 
         transition(to: .selectionCompleted)
         logSelection(rect)
-        overlayService.dismissOverlay()
-        transition(to: .idle)
 
         Task {
             do {
                 let image = try await screenCaptureService.captureImage(in: rect)
-                let temporaryFileURL = try imageSaveService.saveTemporaryPNG(image)
-
-                do {
-                    try clipboardService.copyImage(image)
-                } catch {
-                    do {
-                        try imageSaveService.removeImage(at: temporaryFileURL)
-                    } catch let rollbackError as ImageSaveError {
-                        print("Cleanup failed: \(rollbackError.localizedDescription)")
-                    } catch {
-                        print("Cleanup failed: \(error.localizedDescription)")
-                    }
-
-                    if let clipboardError = error as? ClipboardError {
-                        print("Clipboard copy failed: \(clipboardError.localizedDescription)")
-                    } else {
-                        print("Clipboard copy failed: \(error.localizedDescription)")
-                    }
-                    return
-                }
-
-                let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL)
-                print("Save Success")
-                print("path: \(savedFileURL.path)")
-                print("Clipboard Copy Success")
-
-                guard isOCREnabled else {
-                    print("OCR skipped: disabled in settings")
-                    return
-                }
-
-                do {
-                    let recognizedText = try ocrService.recognizeText(in: image)
-                    print("OCR Success")
-                    print("text: \(recognizedText)")
-                } catch let error as OCRError {
-                    print("OCR failed: \(error.localizedDescription)")
-                } catch {
-                    print("OCR failed: \(error.localizedDescription)")
-                }
+                pendingImage = image
+                pendingSelectionRect = rect
+                overlayService.showCapturedPreview(image: image, selectionRect: rect)
             } catch ScreenCaptureError.invalidSelection {
+                overlayService.dismissOverlay()
+                transition(to: .idle)
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
+                overlayService.dismissOverlay()
+                transition(to: .idle)
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
             } catch let error as ImageSaveError {
+                overlayService.dismissOverlay()
+                transition(to: .idle)
                 print("Save failed: \(error.localizedDescription)")
             } catch {
+                overlayService.dismissOverlay()
+                transition(to: .idle)
                 print("Capture failed: \(error.localizedDescription)")
             }
         }
     }
 
     func cancelSession() {
-        guard state == .overlayPresented || state == .dragging else {
+        guard state == .overlayPresented || state == .dragging || state == .selectionCompleted else {
             return
         }
 
+        clearPendingCapture()
         overlayService.dismissOverlay()
         transition(to: .idle)
+    }
+
+    func copyPendingCapture(style: CapturePreviewStyle) {
+        guard state == .selectionCompleted, let pendingImage else {
+            return
+        }
+
+        do {
+            let exportedImage = try exportedImage(from: pendingImage, style: style)
+            try clipboardService.copyImage(exportedImage)
+            print("Clipboard Copy Success")
+            overlayService.dismissOverlay()
+            clearPendingCapture()
+            transition(to: .idle)
+        } catch let error as ClipboardError {
+            print("Clipboard copy failed: \(error.localizedDescription)")
+        } catch {
+            print("Clipboard copy failed: \(error.localizedDescription)")
+        }
+    }
+
+    func savePendingCapture(style: CapturePreviewStyle) {
+        guard state == .selectionCompleted, let pendingImage else {
+            return
+        }
+
+        do {
+            let exportedImage = try exportedImage(from: pendingImage, style: style)
+            let temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
+            let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL)
+            print("Save Success")
+            print("path: \(savedFileURL.path)")
+            overlayService.dismissOverlay()
+            clearPendingCapture()
+            transition(to: .idle)
+        } catch let error as ImageSaveError {
+            print("Save failed: \(error.localizedDescription)")
+        } catch {
+            print("Save failed: \(error.localizedDescription)")
+        }
     }
 
     private func transition(to newState: CaptureState) {
@@ -144,8 +157,96 @@ final class CaptureSessionService {
         print("height: \(Int(rect.height))")
     }
 
-    private var isOCREnabled: Bool {
-        UserDefaults.standard.object(forKey: AppSettings.isOCREnabledKey) as? Bool
-            ?? AppSettings.isOCREnabledDefaultValue
+    private func clearPendingCapture() {
+        pendingImage = nil
+        pendingSelectionRect = nil
+    }
+
+    private func exportedImage(from image: CGImage, style: CapturePreviewStyle) throws -> CGImage {
+        guard style.showsRoundedCorners || style.showsShadow else {
+            return image
+        }
+
+        let shadowInset: CGFloat = style.showsShadow ? 24 : 0
+        let imageRect = CGRect(
+            x: shadowInset,
+            y: shadowInset,
+            width: CGFloat(image.width),
+            height: CGFloat(image.height)
+        )
+        let canvasSize = CGSize(
+            width: imageRect.width + (shadowInset * 2),
+            height: imageRect.height + (shadowInset * 2)
+        )
+
+        guard
+            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+            let context = CGContext(
+                data: nil,
+                width: Int(canvasSize.width),
+                height: Int(canvasSize.height),
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            throw ExportRenderError.contextCreationFailed
+        }
+
+        context.interpolationQuality = .high
+        context.setAllowsAntialiasing(true)
+        context.setShouldAntialias(true)
+
+        let path: CGPath
+        if style.showsRoundedCorners {
+            path = CGPath(
+                roundedRect: imageRect,
+                cornerWidth: 18,
+                cornerHeight: 18,
+                transform: nil
+            )
+        } else {
+            path = CGPath(rect: imageRect, transform: nil)
+        }
+
+        if style.showsShadow {
+            context.saveGState()
+            context.setShadow(
+                offset: CGSize(width: 0, height: 0),
+                blur: 18,
+                color: CGColor(gray: 0, alpha: 0.28)
+            )
+            context.addPath(path)
+            context.setFillColor(CGColor(gray: 0, alpha: 0.9))
+            context.fillPath()
+            context.restoreGState()
+        }
+
+        context.saveGState()
+        context.addPath(path)
+        context.clip()
+        context.draw(image, in: imageRect)
+        context.restoreGState()
+
+        guard let renderedImage = context.makeImage() else {
+            throw ExportRenderError.imageCreationFailed
+        }
+
+        return renderedImage
+    }
+}
+
+enum ExportRenderError: LocalizedError {
+    case contextCreationFailed
+    case imageCreationFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .contextCreationFailed:
+            return "Failed to create export render context."
+        case .imageCreationFailed:
+            return "Failed to create rendered export image."
+        }
     }
 }

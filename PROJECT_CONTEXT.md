@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 13 Planned
+Sprint 13 Completed
 
 ## Principles
 
@@ -32,13 +32,13 @@ Shared
 - OCR Toggle
 - HotKey Settings
 - Save Directory Settings
-- Preparing Toolbar Workflow
+- Toolbar Editing Foundation
 
 ## Current Next Sprint
 
-Sprint 13
+Pending Planning
 
-Toolbar Editing Foundation
+Sprint 14
 
 ## Source Of Truth
 

@@ -12,8 +12,12 @@ final class CaptureOverlayService {
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
     var onSelectionCompleted: ((CGRect) -> Void)?
+    var onCopyRequested: ((CapturePreviewStyle) -> Void)?
+    var onSaveRequested: ((CapturePreviewStyle) -> Void)?
 
     private var overlayWindows: [CaptureOverlayWindow] = []
+    private weak var activeOverlayView: CaptureOverlayView?
+    private weak var activeOverlayWindow: CaptureOverlayWindow?
 
     func presentOverlay() {
         guard overlayWindows.isEmpty else {
@@ -35,6 +39,12 @@ final class CaptureOverlayService {
 
                 self.onSelectionCompleted?(window.convertToScreen(rect))
             }
+            overlayView.onCopyRequested = { [weak self] in
+                self?.onCopyRequested?($0)
+            }
+            overlayView.onSaveRequested = { [weak self] in
+                self?.onSaveRequested?($0)
+            }
 
             let window = CaptureOverlayWindow(screen: screen, contentView: overlayView)
             overlayWindows.append(window)
@@ -43,10 +53,41 @@ final class CaptureOverlayService {
         overlayWindows.forEach { $0.showOverlay() }
     }
 
+    func showCapturedPreview(image: CGImage, selectionRect: CGRect) {
+        guard let activeScreen = screen(containing: selectionRect) else {
+            return
+        }
+
+        for window in overlayWindows where window.screen != activeScreen {
+            window.orderOut(nil)
+        }
+
+        overlayWindows.removeAll { $0.screen != activeScreen }
+
+        guard let window = overlayWindows.first,
+              let overlayView = window.contentView as? CaptureOverlayView else {
+            return
+        }
+
+        activeOverlayWindow = window
+        activeOverlayView = overlayView
+        overlayView.showCapturedPreview(
+            image: image,
+            selectionRect: window.convertFromScreen(selectionRect)
+        )
+        window.showOverlay()
+    }
+
     func dismissOverlay() {
         overlayWindows.forEach { window in
             window.orderOut(nil)
         }
         overlayWindows.removeAll()
+        activeOverlayView = nil
+        activeOverlayWindow = nil
+    }
+
+    private func screen(containing rect: CGRect) -> NSScreen? {
+        NSScreen.screens.first { $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY)) }
     }
 }
