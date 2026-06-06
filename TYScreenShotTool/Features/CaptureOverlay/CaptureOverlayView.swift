@@ -176,7 +176,7 @@ final class CaptureOverlayView: NSView {
         sizeLabel.stringValue = "\(Int(selectionRect.width)) x \(Int(selectionRect.height))"
         previewStyle = .default
         roundedToggle.state = .off
-        shadowToggle.state = .on
+        shadowToggle.state = .off
 
         previewContainerView.isHidden = false
         topBarContainerView.isHidden = false

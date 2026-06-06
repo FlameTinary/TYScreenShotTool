@@ -13,6 +13,6 @@ struct CapturePreviewStyle {
 
     static let `default` = CapturePreviewStyle(
         showsRoundedCorners: false,
-        showsShadow: true
+        showsShadow: false
     )
 }
