@@ -75,6 +75,14 @@ final class CaptureOverlayService {
         window.showOverlay()
     }
 
+    func hideActiveOverlay() {
+        activeOverlayWindow?.orderOut(nil)
+    }
+
+    func restoreActiveOverlay() {
+        activeOverlayWindow?.showOverlay()
+    }
+
     func dismissOverlay() {
         overlayWindows.forEach { window in
             window.orderOut(nil)

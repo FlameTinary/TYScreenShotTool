@@ -16,7 +16,6 @@ final class CaptureSessionService {
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
     private var state: CaptureState = .idle
-    private var pendingImage: CGImage?
     private var pendingSelectionRect: CGRect?
 
     init(
@@ -86,6 +85,8 @@ final class CaptureSessionService {
 
         Task {
             do {
+                overlayService.hideActiveOverlay()
+                try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
                 let exportedImage = try exportedImage(from: image, style: style)
                 try clipboardService.copyImage(exportedImage)
@@ -94,13 +95,17 @@ final class CaptureSessionService {
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
+                overlayService.restoreActiveOverlay()
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
+                overlayService.restoreActiveOverlay()
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
             } catch let error as ClipboardError {
+                overlayService.restoreActiveOverlay()
                 print("Clipboard copy failed: \(error.localizedDescription)")
             } catch {
+                overlayService.restoreActiveOverlay()
                 print("Clipboard copy failed: \(error.localizedDescription)")
             }
         }
@@ -113,6 +118,8 @@ final class CaptureSessionService {
 
         Task {
             do {
+                overlayService.hideActiveOverlay()
+                try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
                 let exportedImage = try exportedImage(from: image, style: style)
                 let temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
@@ -123,13 +130,17 @@ final class CaptureSessionService {
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
+                overlayService.restoreActiveOverlay()
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
+                overlayService.restoreActiveOverlay()
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
             } catch let error as ImageSaveError {
+                overlayService.restoreActiveOverlay()
                 print("Save failed: \(error.localizedDescription)")
             } catch {
+                overlayService.restoreActiveOverlay()
                 print("Save failed: \(error.localizedDescription)")
             }
         }
