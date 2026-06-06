@@ -103,16 +103,16 @@ OCR
 
 ### Sprint 09
 
-AI 分析
-
-OpenAI API
-
----
-
-### Sprint 10
-
 设置页面
 
 - HotKey 配置
 - 保存目录配置
 - OCR 开关
+
+---
+
+### Sprint 10
+
+AI 分析
+
+OpenAI API
