@@ -30,18 +30,18 @@ final class ImageSaveService {
         return temporaryURL
     }
 
-    func moveImageToDesktop(from temporaryURL: URL) throws -> URL {
-        let desktopURL = try desktopDirectoryURL()
-        let destinationURL = desktopURL.appendingPathComponent(temporaryURL.lastPathComponent)
+    func moveImageToConfiguredDirectory(from temporaryURL: URL) throws -> URL {
+        let destinationDirectoryURL = try configuredDirectoryURL()
+        let destinationURL = destinationDirectoryURL.appendingPathComponent(temporaryURL.lastPathComponent)
 
         do {
             try fileManager.moveItem(at: temporaryURL, to: destinationURL)
         } catch {
-            throw ImageSaveError.moveToDesktopFailed(destinationURL)
+            throw ImageSaveError.moveToConfiguredDirectoryFailed(destinationURL)
         }
 
         guard fileManager.fileExists(atPath: destinationURL.path) else {
-            throw ImageSaveError.moveToDesktopFailed(destinationURL)
+            throw ImageSaveError.moveToConfiguredDirectoryFailed(destinationURL)
         }
 
         return destinationURL
@@ -88,6 +88,26 @@ final class ImageSaveService {
         return desktopURL
     }
 
+    private func configuredDirectoryURL() throws -> URL {
+        guard let configuredPath = UserDefaults.standard.string(forKey: AppSettings.saveDirectoryPathKey),
+              !configuredPath.isEmpty else {
+            return try desktopDirectoryURL()
+        }
+
+        let configuredURL = URL(fileURLWithPath: configuredPath, isDirectory: true)
+        var isDirectory: ObjCBool = false
+
+        guard fileManager.fileExists(atPath: configuredURL.path, isDirectory: &isDirectory) else {
+            throw ImageSaveError.configuredDirectoryNotFound(configuredURL)
+        }
+
+        guard isDirectory.boolValue else {
+            throw ImageSaveError.configuredPathIsNotDirectory(configuredURL)
+        }
+
+        return configuredURL
+    }
+
     private func temporaryDirectoryURL() -> URL {
         fileManager.temporaryDirectory
     }
@@ -99,24 +119,30 @@ final class ImageSaveService {
 
 enum ImageSaveError: LocalizedError {
     case desktopDirectoryUnavailable
+    case configuredDirectoryNotFound(URL)
+    case configuredPathIsNotDirectory(URL)
     case destinationCreationFailed(URL)
     case finalizeFailed(URL)
     case fileWriteFailed(URL)
-    case moveToDesktopFailed(URL)
+    case moveToConfiguredDirectoryFailed(URL)
     case removeFailed(URL)
 
     var errorDescription: String? {
         switch self {
         case .desktopDirectoryUnavailable:
             return "Desktop directory unavailable."
+        case let .configuredDirectoryNotFound(url):
+            return "Configured save directory not found at \(url.path)."
+        case let .configuredPathIsNotDirectory(url):
+            return "Configured save path is not a directory at \(url.path)."
         case let .destinationCreationFailed(url):
             return "Failed to create PNG destination at \(url.path)."
         case let .finalizeFailed(url):
             return "Failed to finalize PNG file at \(url.path)."
         case let .fileWriteFailed(url):
             return "Failed to write PNG file at \(url.path)."
-        case let .moveToDesktopFailed(url):
-            return "Failed to move PNG file to desktop at \(url.path)."
+        case let .moveToConfiguredDirectoryFailed(url):
+            return "Failed to move PNG file to configured directory at \(url.path)."
         case let .removeFailed(url):
             return "Failed to remove PNG file at \(url.path)."
         }

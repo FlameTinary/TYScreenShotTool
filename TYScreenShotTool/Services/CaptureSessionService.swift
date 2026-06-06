@@ -89,7 +89,7 @@ final class CaptureSessionService {
                     return
                 }
 
-                let savedFileURL = try imageSaveService.moveImageToDesktop(from: temporaryFileURL)
+                let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL)
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
                 print("Clipboard Copy Success")

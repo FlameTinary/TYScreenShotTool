@@ -5,6 +5,7 @@
 //  Created by Codex on 2026/6/6.
 //
 
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -14,6 +15,8 @@ struct SettingsView: View {
     private var isOCREnabled = AppSettings.isOCREnabledDefaultValue
     @AppStorage(AppSettings.screenshotHotKeyKey)
     private var selectedHotKeyStorageValue = AppSettings.screenshotHotKeyDefaultValue
+    @AppStorage(AppSettings.saveDirectoryPathKey)
+    private var saveDirectoryPath = ""
 
     init(globalHotKeyService: GlobalHotKeyService) {
         self.globalHotKeyService = globalHotKeyService
@@ -30,7 +33,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 hotKeyPicker
-                settingPlaceholder(title: "保存目录配置")
+                saveDirectoryPicker
                 ocrToggle
             }
 
@@ -68,6 +71,33 @@ struct SettingsView: View {
         }
     }
 
+    private var saveDirectoryPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("保存目录配置")
+                .font(.headline)
+
+            Text(currentSaveDirectoryPath)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .lineLimit(2)
+
+            HStack(spacing: 12) {
+                Button("选择目录") {
+                    chooseSaveDirectory()
+                }
+
+                Button("恢复默认桌面") {
+                    saveDirectoryPath = ""
+                }
+            }
+
+            Text("仅支持选择单个目录，留空时默认保存到桌面。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var ocrToggle: some View {
         VStack(alignment: .leading, spacing: 6) {
             Toggle("OCR 开关", isOn: $isOCREnabled)
@@ -79,13 +109,38 @@ struct SettingsView: View {
         }
     }
 
-    private func settingPlaceholder(title: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.headline)
-            Text("Planned for a future Sprint.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private var currentSaveDirectoryPath: String {
+        if saveDirectoryPath.isEmpty {
+            return defaultDesktopPath
         }
+
+        return saveDirectoryPath
+    }
+
+    private var defaultDesktopPath: String {
+        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
+            ?? "Desktop directory unavailable"
+    }
+
+    private func chooseSaveDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.prompt = "选择"
+        panel.message = "选择截图 PNG 的保存目录"
+
+        if saveDirectoryPath.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: defaultDesktopPath, isDirectory: true)
+        } else {
+            panel.directoryURL = URL(fileURLWithPath: saveDirectoryPath, isDirectory: true)
+        }
+
+        guard panel.runModal() == .OK, let selectedDirectoryURL = panel.url else {
+            return
+        }
+
+        saveDirectoryPath = selectedDirectoryURL.path
     }
 }
