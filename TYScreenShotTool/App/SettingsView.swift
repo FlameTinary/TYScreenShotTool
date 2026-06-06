@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage(AppSettings.isOCREnabledKey)
+    private var isOCREnabled = AppSettings.isOCREnabledDefaultValue
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Settings")
@@ -20,13 +23,24 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 settingPlaceholder(title: "HotKey 配置")
                 settingPlaceholder(title: "保存目录配置")
-                settingPlaceholder(title: "OCR 开关")
+                ocrToggle
             }
 
             Spacer()
         }
         .padding(24)
         .frame(minWidth: 420, minHeight: 260, alignment: .topLeading)
+    }
+
+    private var ocrToggle: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("OCR 开关", isOn: $isOCREnabled)
+                .font(.headline)
+
+            Text(isOCREnabled ? "截图后将自动执行 OCR。" : "截图后将跳过 OCR。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func settingPlaceholder(title: String) -> some View {

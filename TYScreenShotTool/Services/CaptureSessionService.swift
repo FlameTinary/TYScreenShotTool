@@ -94,6 +94,11 @@ final class CaptureSessionService {
                 print("path: \(savedFileURL.path)")
                 print("Clipboard Copy Success")
 
+                guard isOCREnabled else {
+                    print("OCR skipped: disabled in settings")
+                    return
+                }
+
                 do {
                     let recognizedText = try ocrService.recognizeText(in: image)
                     print("OCR Success")
@@ -137,5 +142,10 @@ final class CaptureSessionService {
         print("y: \(Int(rect.origin.y))")
         print("width: \(Int(rect.width))")
         print("height: \(Int(rect.height))")
+    }
+
+    private var isOCREnabled: Bool {
+        UserDefaults.standard.object(forKey: AppSettings.isOCREnabledKey) as? Bool
+            ?? AppSettings.isOCREnabledDefaultValue
     }
 }

@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 09 Completed
+Sprint 11 Planned
 
 ## Principles
 
@@ -29,12 +29,13 @@ Shared
 - Clipboard Copy
 - OCR
 - Settings Entry
+- OCR Toggle
 
 ## Current Next Sprint
 
-Sprint 10
+Sprint 11
 
-AI Analysis
+HotKey Settings
 
 ## Source Of Truth
 
