@@ -469,3 +469,85 @@ HotKey
 → Temp PNG
 → Clipboard
 → Desktop PNG
+
+---
+
+## Sprint 08
+
+日期：2026-06-06
+
+### Goal
+
+实现：
+
+CGImage
+→ OCR
+→ Text
+
+并保持 PNG 保存与剪贴板复制链路正常。
+
+---
+
+### Completed
+
+#### OCRService
+
+新增独立 OCR 服务：
+
+- 使用 `Vision`
+- 使用 `VNRecognizeTextRequest`
+- 接收 `CGImage`
+- 返回识别文本
+- 明确处理空结果与请求失败
+
+---
+
+#### Capture Session Integration
+
+在 `CaptureSessionService` 中完成：
+
+- 截图成功后保持原有保存与剪贴板链路
+- 在 `Save Success` 与 `Clipboard Copy Success` 后执行 OCR
+- 成功后输出：
+  - `OCR Success`
+  - `text: ...`
+- 失败时输出：
+  - `OCR failed: ...`
+
+---
+
+### Validation
+
+已验证通过：
+
+- 构建通过
+- `⌘⇧2` 可触发截图
+- 桌面 PNG 保存正常
+- 剪贴板复制正常
+- Console 输出 `OCR Success`
+- Console 输出 `text: ...`
+- OCR 可识别实际界面中的英文代码文字
+
+未验证：
+
+- 人工制造 OCR 失败分支
+- 中文文本识别效果
+- `fopen failed for data file: errno = 2 (No such file or directory)` 日志来源
+
+---
+
+### Outcome
+
+Sprint 08 完成。
+
+当前 MVP 链路已具备：
+
+HotKey
+→ Overlay
+→ Selection Rect
+→ ScreenCaptureKit
+→ Temp PNG
+→ Clipboard
+→ Desktop PNG
+→ OCR
+→ Text

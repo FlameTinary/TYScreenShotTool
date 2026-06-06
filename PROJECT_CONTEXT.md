@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 08 In Progress
+Sprint 08 Completed
 
 ## Completed
 
@@ -31,6 +31,9 @@ PNG Export
 
 Sprint 07
 Clipboard Support
+
+Sprint 08
+OCR
 
 ## Principles
 

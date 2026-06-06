@@ -13,18 +13,21 @@ final class CaptureSessionService {
     private let screenCaptureService: ScreenCaptureService
     private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
+    private let ocrService: OCRService
     private var state: CaptureState = .idle
 
     init(
         overlayService: CaptureOverlayService,
         screenCaptureService: ScreenCaptureService,
         clipboardService: ClipboardService,
-        imageSaveService: ImageSaveService
+        imageSaveService: ImageSaveService,
+        ocrService: OCRService
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
         self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
+        self.ocrService = ocrService
     }
 
     func startSession() {
@@ -90,6 +93,16 @@ final class CaptureSessionService {
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
                 print("Clipboard Copy Success")
+
+                do {
+                    let recognizedText = try ocrService.recognizeText(in: image)
+                    print("OCR Success")
+                    print("text: \(recognizedText)")
+                } catch let error as OCRError {
+                    print("OCR failed: \(error.localizedDescription)")
+                } catch {
+                    print("OCR failed: \(error.localizedDescription)")
+                }
             } catch ScreenCaptureError.invalidSelection {
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {

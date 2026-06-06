@@ -1,14 +1,14 @@
 # TYScreenShotTool
 
-Version: V0.1
+Version: V0.2
 
-Current Sprint: Sprint 08
+Current Sprint: Sprint 08 Completed
 
 ---
 
 ## 目标
 
-在 Sprint 07 已完成剪贴板复制的基础上，
+在 Sprint 07 已完成 PNG 保存与剪贴板复制的基础上，
 实现截图结果进入 OCR 链路。
 
 流程：
@@ -22,6 +22,14 @@ ScreenCaptureKit
 ↓
 
 CGImage
+
+↓
+
+Desktop PNG
+
+↓
+
+Clipboard
 
 ↓
 
@@ -87,9 +95,10 @@ OCR Success
 
 text
 
-并且现有 PNG 保存与剪贴板复制链路仍正常可用。
+并且现有 PNG 保存、剪贴板复制链路仍正常可用，
+随后 OCR 结果正常输出。
 
-说明 OCR 主链路已打通。
+说明 OCR 主链路已打通，Sprint 08 已完成。
 
 ---
 
