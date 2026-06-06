@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 08 Completed
+Sprint 09 Planned
 
 ## Completed
 
@@ -59,6 +59,6 @@ ROADMAP
 
 ## Current Next Sprint
 
-Sprint 09
+Sprint 10
 
-Settings Page
+AI Analysis

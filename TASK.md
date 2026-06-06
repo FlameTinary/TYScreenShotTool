@@ -1,65 +1,43 @@
 # TYScreenShotTool
 
-Version: V0.2
+Version: V0.3
 
-Current Sprint: Sprint 08 Completed
+Current Sprint: Sprint 09
 
 ---
 
 ## 目标
 
-在 Sprint 07 已完成 PNG 保存与剪贴板复制的基础上，
-实现截图结果进入 OCR 链路。
+在 Sprint 08 已完成截图、保存、剪贴板与 OCR 主链路的基础上，
+实现最小设置页面入口。
 
 流程：
 
-Selection Rect
+Menu Bar
 
 ↓
 
-ScreenCaptureKit
+Settings Entry
 
 ↓
 
-CGImage
-
-↓
-
-Desktop PNG
-
-↓
-
-Clipboard
-
-↓
-
-OCR
-
-↓
-
-Text
+Settings Window
 
 ---
 
 ## 必须完成
 
-1. 对截图结果执行文字识别
+1. 增加设置页面入口
 
-2. 输出 OCR 识别结果
+2. 设置页面可以正常打开并显示
 
-例如：
+3. 页面中展示最小配置项占位信息
 
-OCR Success
+- HotKey 配置
+- 保存目录配置
+- OCR 开关
 
-text: ...
-
-3. 保持现有截图、PNG 保存、剪贴板复制能力不受影响
-
-4. OCR 失败时输出明确错误信息
-
-例如：
-
-OCR failed: ...
+4. 保持现有截图、PNG 保存、剪贴板复制、OCR 链路不受影响
 
 ---
 
@@ -67,38 +45,27 @@ OCR failed: ...
 
 通知
 
-PNG 命名配置
-
-保存目录配置
-
 AI
-
-设置页
 
 历史记录
 
-OCR 结果预览界面
+HotKey 实际修改逻辑
+
+保存目录实际配置逻辑
+
+OCR 开关实际生效逻辑
 
 ---
 
 ## 验收标准
 
-按下：
+启动应用后，
+用户可以从菜单栏打开设置页面，
+并看到最小设置页内容。
 
-⌘⇧2
+同时现有截图、PNG 保存、剪贴板复制、OCR 功能仍正常可用。
 
-完成拖拽
-
-控制台输出：
-
-OCR Success
-
-text
-
-并且现有 PNG 保存、剪贴板复制链路仍正常可用，
-随后 OCR 结果正常输出。
-
-说明 OCR 主链路已打通，Sprint 08 已完成。
+说明 Sprint 09 的设置入口主链路已打通。
 
 ---
 
