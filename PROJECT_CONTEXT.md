@@ -9,35 +9,6 @@ macOS 截图工具
 ## Current Sprint
 Sprint 09 Completed
 
-## Completed
-
-Sprint 01
-菜单栏应用
-
-Sprint 02
-全局热键
-
-Sprint 03
-Overlay UI
-
-Sprint 04
-Capture Session State Machine
-
-Sprint 05
-ScreenCaptureKit Integration
-
-Sprint 06
-PNG Export
-
-Sprint 07
-Clipboard Support
-
-Sprint 08
-OCR
-
-Sprint 09
-Settings Page
-
 ## Principles
 
 MVP
@@ -51,17 +22,30 @@ Service
 Feature
 Shared
 
-## Workflow
+## Current State
 
-ROADMAP
-→ Sprint
-→ TASK
-→ Implementation Plan
-→ Code
-→ DEVLOG
+- Screenshot
+- PNG Save
+- Clipboard Copy
+- OCR
+- Settings Entry
 
 ## Current Next Sprint
 
 Sprint 10
 
 AI Analysis
+
+## Source Of Truth
+
+Roadmap:
+`docs/ROADMAP.md`
+
+Current Task:
+`TASK.md`
+
+Engineering Rules:
+`AGENTS.md`
+
+AI Workflow:
+`SKILL.md`
