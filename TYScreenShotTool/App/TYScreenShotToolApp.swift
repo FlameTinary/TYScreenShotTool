@@ -73,7 +73,7 @@ struct TYScreenShotToolApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("ScreenshotTool", systemImage: "camera.viewfinder") {
+        MenuBarExtra("TShot", systemImage: "camera.viewfinder") {
             MenuBarContentView(settingsOpenCoordinator: settingsOpenCoordinator)
         }
         .menuBarExtraStyle(.menu)

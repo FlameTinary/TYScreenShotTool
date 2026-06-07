@@ -16,7 +16,7 @@ struct MenuBarContentView: View {
     }
 
     var body: some View {
-        Button("ScreenshotTool") {
+        Button("TShot") {
         }
 
         Divider()
