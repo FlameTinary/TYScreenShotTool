@@ -82,7 +82,7 @@ final class CaptureSessionService {
         transition(to: .idle)
     }
 
-    func copyPendingCapture(style: CapturePreviewStyle) {
+    func copyPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingSelectionRect else {
             return
         }
@@ -92,7 +92,12 @@ final class CaptureSessionService {
                 overlayService.hideActiveOverlay()
                 try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
-                let exportedImage = try exportedImage(from: image, style: style)
+                let exportedImage = try exportedImage(
+                    from: image,
+                    style: style,
+                    annotations: annotations,
+                    previewSize: pendingSelectionRect.size
+                )
                 try clipboardService.copyImage(exportedImage)
                 print("Clipboard Copy Success")
                 overlayService.dismissOverlay()
@@ -115,7 +120,7 @@ final class CaptureSessionService {
         }
     }
 
-    func savePendingCapture(style: CapturePreviewStyle) {
+    func savePendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingSelectionRect else {
             return
         }
@@ -127,7 +132,12 @@ final class CaptureSessionService {
                 overlayService.hideActiveOverlay()
                 try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
-                let exportedImage = try exportedImage(from: image, style: style)
+                let exportedImage = try exportedImage(
+                    from: image,
+                    style: style,
+                    annotations: annotations,
+                    previewSize: pendingSelectionRect.size
+                )
                 temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
                 let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
                 print("Save Success")
@@ -244,11 +254,12 @@ final class CaptureSessionService {
         settingsOpenCoordinator.openSettings()
     }
 
-    private func exportedImage(from image: CGImage, style: CapturePreviewStyle) throws -> CGImage {
-        guard style.showsRoundedCorners || style.showsShadow else {
-            return image
-        }
-
+    private func exportedImage(
+        from image: CGImage,
+        style: CapturePreviewStyle,
+        annotations: [CaptureAnnotation],
+        previewSize: CGSize
+    ) throws -> CGImage {
         let shadowInset: CGFloat = style.showsShadow ? 24 : 0
         let imageRect = CGRect(
             x: shadowInset,
@@ -311,11 +322,118 @@ final class CaptureSessionService {
         context.draw(image, in: imageRect)
         context.restoreGState()
 
+        drawAnnotations(
+            annotations,
+            in: context,
+            imageRect: imageRect,
+            previewSize: previewSize
+        )
+
         guard let renderedImage = context.makeImage() else {
             throw ExportRenderError.imageCreationFailed
         }
 
         return renderedImage
+    }
+
+    private func drawAnnotations(
+        _ annotations: [CaptureAnnotation],
+        in context: CGContext,
+        imageRect: CGRect,
+        previewSize: CGSize
+    ) {
+        guard annotations.isEmpty == false else {
+            return
+        }
+        guard previewSize.width > 0, previewSize.height > 0 else {
+            return
+        }
+
+        context.saveGState()
+        context.translateBy(x: imageRect.minX, y: imageRect.minY)
+        context.scaleBy(
+            x: imageRect.width / previewSize.width,
+            y: imageRect.height / previewSize.height
+        )
+
+        for annotation in annotations {
+            switch annotation {
+            case let .rectangle(rect):
+                context.setStrokeColor(CaptureAnnotation.strokeColor)
+                context.setLineWidth(CaptureAnnotation.lineWidth)
+                context.stroke(rect.standardized)
+            case let .ellipse(rect):
+                context.setStrokeColor(CaptureAnnotation.strokeColor)
+                context.setLineWidth(CaptureAnnotation.lineWidth)
+                context.strokeEllipse(in: rect.standardized)
+            case let .arrow(start, end):
+                drawArrow(from: start, to: end, in: context)
+            case let .pen(points):
+                guard let first = points.first else {
+                    continue
+                }
+
+                context.setStrokeColor(CaptureAnnotation.strokeColor)
+                context.setLineWidth(CaptureAnnotation.lineWidth)
+                context.setLineCap(.round)
+                context.setLineJoin(.round)
+                context.beginPath()
+                context.move(to: first)
+                for point in points.dropFirst() {
+                    context.addLine(to: point)
+                }
+                context.strokePath()
+            case let .text(value, origin):
+                drawText(value, at: origin, in: context)
+            }
+        }
+
+        context.restoreGState()
+    }
+
+    private func drawArrow(from start: CGPoint, to end: CGPoint, in context: CGContext) {
+        context.setStrokeColor(CaptureAnnotation.strokeColor)
+        context.setLineWidth(CaptureAnnotation.lineWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.beginPath()
+        context.move(to: start)
+        context.addLine(to: end)
+
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let arrowLength: CGFloat = 14
+        let arrowAngle: CGFloat = .pi / 7
+
+        let leftPoint = CGPoint(
+            x: end.x - cos(angle - arrowAngle) * arrowLength,
+            y: end.y - sin(angle - arrowAngle) * arrowLength
+        )
+        let rightPoint = CGPoint(
+            x: end.x - cos(angle + arrowAngle) * arrowLength,
+            y: end.y - sin(angle + arrowAngle) * arrowLength
+        )
+
+        context.move(to: end)
+        context.addLine(to: leftPoint)
+        context.move(to: end)
+        context.addLine(to: rightPoint)
+        context.strokePath()
+    }
+
+    private func drawText(_ text: String, at origin: CGPoint, in context: CGContext) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: CaptureAnnotation.fontSize, weight: .semibold),
+            .foregroundColor: NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed
+        ]
+
+        let attributedString = NSAttributedString(string: text, attributes: attributes)
+        let line = CTLineCreateWithAttributedString(attributedString)
+
+        context.saveGState()
+        context.textMatrix = .identity
+        context.textPosition = origin
+        CTLineDraw(line, context)
+        context.restoreGState()
     }
 }
 

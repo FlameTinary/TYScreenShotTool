@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Blocked
 
 ## Goal
 
@@ -95,4 +95,16 @@ Settings 中的保存目录配置，
 
 ## Result
 
-Pending
+Blocked
+
+当前结果：
+
+- App Sandbox 已开启并适配当前保存目录模型
+- 保存目录权限配置、应用重启后权限恢复、未配置目录时错误提示已完成
+- 工程已具备继续执行 Release / Archive / Upload 前的最小功能条件
+- 当前阻塞点不在代码，而在开发者账号尚未申请完成
+
+后续恢复条件：
+
+- 开发者账号可用
+- 可以继续执行 Archive / Upload / TestFlight 验证

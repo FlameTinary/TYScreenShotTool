@@ -49,11 +49,11 @@ struct TYScreenShotToolApp: App {
         overlayService.onSelectionCompleted = { rect in
             sessionService.completeSelection(rect)
         }
-        overlayService.onCopyRequested = { style in
-            sessionService.copyPendingCapture(style: style)
+        overlayService.onCopyRequested = { style, annotations in
+            sessionService.copyPendingCapture(style: style, annotations: annotations)
         }
-        overlayService.onSaveRequested = { style in
-            sessionService.savePendingCapture(style: style)
+        overlayService.onSaveRequested = { style, annotations in
+            sessionService.savePendingCapture(style: style, annotations: annotations)
         }
 
         hotKeyService.onHotKeyPressed = {

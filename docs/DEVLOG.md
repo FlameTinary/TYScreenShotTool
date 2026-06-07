@@ -218,6 +218,44 @@ x = -1440
 
 ---
 
+# 2026-06-07
+
+## Sprint 15 完成
+
+### 基础标注工具
+
+实现：
+
+- 在截图工具栏中增加矩形、圆形、箭头、画笔、文字 5 类基础标注能力
+- 标注内容能够实时显示在截图编辑态预览中
+- 复制与保存导出结果均包含已添加的标注内容
+
+新增：
+
+- AnnotationTool
+- CaptureAnnotation
+- CaptureAnnotationCanvasView
+
+修改：
+
+- CaptureOverlayView
+- CaptureOverlayService
+- CaptureSessionService
+- TYScreenShotToolApp
+
+关键修复：
+
+- 修复预览标注与最终导出 PNG 位置不一致问题
+- 导出阶段按预览尺寸统一缩放标注坐标，保证预览与最终结果一致
+
+验证结果：
+
+- 工程编译通过
+- 5 类标注工具均可正常使用
+- 保存后的 PNG 与预览标注位置一致
+- 复制结果包含标注内容
+- 圆角、阴影、复制、保存、取消主链路保持正常
+
 #### ESC
 
 验证通过。

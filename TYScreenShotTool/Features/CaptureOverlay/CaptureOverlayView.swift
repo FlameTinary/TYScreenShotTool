@@ -11,8 +11,8 @@ final class CaptureOverlayView: NSView {
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
     var onSelection: ((CGRect) -> Void)?
-    var onCopyRequested: ((CapturePreviewStyle) -> Void)?
-    var onSaveRequested: ((CapturePreviewStyle) -> Void)?
+    var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
 
     private var dragStartPoint: CGPoint?
     private var currentPoint: CGPoint?
@@ -24,14 +24,17 @@ final class CaptureOverlayView: NSView {
     private let previewContainerView = NSView()
     private let previewClipView = NSView()
     private let previewImageView = NSImageView()
+    private let annotationCanvasView = CaptureAnnotationCanvasView()
     private let topBarContainerView = NSVisualEffectView()
     private let sizeLabel = NSTextField(labelWithString: "")
     private let roundedToggle = NSButton(checkboxWithTitle: "圆角", target: nil, action: nil)
     private let shadowToggle = NSButton(checkboxWithTitle: "阴影", target: nil, action: nil)
     private let toolbarContainerView = NSVisualEffectView()
+    private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
+    private var currentAnnotationTool: AnnotationTool?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -177,6 +180,9 @@ final class CaptureOverlayView: NSView {
         previewStyle = .default
         roundedToggle.state = .off
         shadowToggle.state = .off
+        currentAnnotationTool = nil
+        annotationCanvasView.resetAnnotations()
+        updateAnnotationToolSelection()
 
         previewContainerView.isHidden = false
         topBarContainerView.isHidden = false
@@ -195,6 +201,8 @@ final class CaptureOverlayView: NSView {
         isDragging = false
         previewSelectionRect = nil
         previewImageView.image = nil
+        currentAnnotationTool = nil
+        annotationCanvasView.resetAnnotations()
         previewContainerView.isHidden = true
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
@@ -235,8 +243,12 @@ final class CaptureOverlayView: NSView {
 
         previewImageView.imageScaling = .scaleAxesIndependently
         previewImageView.autoresizingMask = [.width, .height]
+        annotationCanvasView.autoresizingMask = [.width, .height]
+        annotationCanvasView.wantsLayer = true
+        annotationCanvasView.layer?.backgroundColor = NSColor.clear.cgColor
 
         previewClipView.addSubview(previewImageView)
+        previewClipView.addSubview(annotationCanvasView)
         previewContainerView.addSubview(previewClipView)
         addSubview(previewContainerView)
     }
@@ -279,9 +291,17 @@ final class CaptureOverlayView: NSView {
         cancelButton.target = self
         cancelButton.action = #selector(requestCancel)
 
-        [copyButton, saveButton, cancelButton].forEach { button in
+        let annotationButtons = AnnotationTool.allCases.map { tool -> NSButton in
+            let button = NSButton(title: tool.title, target: self, action: #selector(selectAnnotationTool(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(tool.title)
+            annotationToolButtons[tool] = button
+            return button
+        }
+
+        (annotationButtons + [copyButton, saveButton, cancelButton]).forEach { button in
             button.bezelStyle = .rounded
         }
+        annotationButtons.forEach(toolbarContainerView.addSubview)
         toolbarContainerView.addSubview(copyButton)
         toolbarContainerView.addSubview(saveButton)
         toolbarContainerView.addSubview(cancelButton)
@@ -296,6 +316,7 @@ final class CaptureOverlayView: NSView {
         previewContainerView.frame = previewSelectionRect
         previewClipView.frame = previewContainerView.bounds
         previewImageView.frame = previewClipView.bounds
+        annotationCanvasView.frame = previewClipView.bounds
 
         sizeLabel.sizeToFit()
         roundedToggle.sizeToFit()
@@ -347,6 +368,8 @@ final class CaptureOverlayView: NSView {
             y: (topBarHeight - shadowToggle.frame.height) / 2
         )
 
+        let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }
+        annotationButtons.forEach { $0.sizeToFit() }
         copyButton.sizeToFit()
         saveButton.sizeToFit()
         cancelButton.sizeToFit()
@@ -355,16 +378,15 @@ final class CaptureOverlayView: NSView {
         let toolbarPaddingY: CGFloat = 6
         let toolbarSpacing: CGFloat = 12
         let toolbarContentHeight = max(
+            annotationButtons.map(\.frame.height).max() ?? 0,
             copyButton.frame.height,
             saveButton.frame.height,
             cancelButton.frame.height
         )
+        let toolbarButtons = annotationButtons + [copyButton, saveButton, cancelButton]
         let toolbarWidth = toolbarPaddingX * 2
-            + copyButton.frame.width
-            + toolbarSpacing
-            + saveButton.frame.width
-            + toolbarSpacing
-            + cancelButton.frame.width
+            + toolbarButtons.reduce(CGFloat(0)) { $0 + $1.frame.width }
+            + (toolbarSpacing * CGFloat(max(toolbarButtons.count - 1, 0)))
         let toolbarHeight = toolbarPaddingY * 2 + toolbarContentHeight
         let toolbarX = min(
             max(previewSelectionRect.midX - (toolbarWidth / 2), 24),
@@ -379,20 +401,13 @@ final class CaptureOverlayView: NSView {
         )
 
         var currentToolbarX = toolbarPaddingX
-        copyButton.frame.origin = CGPoint(
-            x: currentToolbarX,
-            y: (toolbarHeight - copyButton.frame.height) / 2
-        )
-        currentToolbarX += copyButton.frame.width + toolbarSpacing
-        saveButton.frame.origin = CGPoint(
-            x: currentToolbarX,
-            y: (toolbarHeight - saveButton.frame.height) / 2
-        )
-        currentToolbarX += saveButton.frame.width + toolbarSpacing
-        cancelButton.frame.origin = CGPoint(
-            x: currentToolbarX,
-            y: (toolbarHeight - cancelButton.frame.height) / 2
-        )
+        for button in toolbarButtons {
+            button.frame.origin = CGPoint(
+                x: currentToolbarX,
+                y: (toolbarHeight - button.frame.height) / 2
+            )
+            currentToolbarX += button.frame.width + toolbarSpacing
+        }
     }
 
     private func updatePreviewAppearance() {
@@ -418,17 +433,42 @@ final class CaptureOverlayView: NSView {
 
     @objc
     private func requestCopy() {
-        onCopyRequested?(previewStyle)
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onCopyRequested?(previewStyle, annotationCanvasView.annotations)
     }
 
     @objc
     private func requestSave() {
-        onSaveRequested?(previewStyle)
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onSaveRequested?(previewStyle, annotationCanvasView.annotations)
     }
 
     @objc
     private func requestCancel() {
         onCancel?()
+    }
+
+    @objc
+    private func selectAnnotationTool(_ sender: NSButton) {
+        guard let tool = annotationToolButtons.first(where: { $0.value === sender })?.key else {
+            return
+        }
+
+        if currentAnnotationTool == tool {
+            currentAnnotationTool = nil
+        } else {
+            currentAnnotationTool = tool
+        }
+
+        annotationCanvasView.currentTool = currentAnnotationTool
+        updateAnnotationToolSelection()
+        window?.makeFirstResponder(annotationCanvasView)
+    }
+
+    private func updateAnnotationToolSelection() {
+        for (tool, button) in annotationToolButtons {
+            button.state = tool == currentAnnotationTool ? .on : .off
+        }
     }
 
     private func cutoutPath(for rect: CGRect) -> NSBezierPath {
