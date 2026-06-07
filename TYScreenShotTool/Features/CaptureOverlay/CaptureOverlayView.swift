@@ -11,12 +11,18 @@ final class CaptureOverlayView: NSView {
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
     var onSelection: ((CGRect) -> Void)?
+    var onPreviewSelectionChanged: ((CGRect) -> Void)?
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
 
     private var dragStartPoint: CGPoint?
     private var currentPoint: CGPoint?
     private var isDragging = false
+    private var isMovingPreviewSelection = false
+    private var movingStartMousePoint: CGPoint?
+    private var movingStartSelectionRect: CGRect?
+    private var previewSelectionLocked = false
+    private var cursorTrackingArea: NSTrackingArea?
     private var mode: Mode = .selection
     private var previewSelectionRect: CGRect?
     private var previewStyle = CapturePreviewStyle.default
@@ -61,10 +67,24 @@ final class CaptureOverlayView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
+        window?.acceptsMouseMovedEvents = true
     }
 
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .crosshair)
+    override func updateTrackingAreas() {
+        if let cursorTrackingArea {
+            removeTrackingArea(cursorTrackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseMoved, .cursorUpdate, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        cursorTrackingArea = trackingArea
+
+        super.updateTrackingAreas()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -111,6 +131,11 @@ final class CaptureOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        if mode == .preview {
+            handlePreviewMouseDown(with: event)
+            return
+        }
+
         guard mode == .selection else {
             super.mouseDown(with: event)
             return
@@ -123,9 +148,15 @@ final class CaptureOverlayView: NSView {
         isDragging = true
         onDragStarted?()
         needsDisplay = true
+        updateCursor(for: point)
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if mode == .preview {
+            handlePreviewMouseDragged(with: event)
+            return
+        }
+
         guard mode == .selection else {
             super.mouseDragged(with: event)
             return
@@ -138,9 +169,15 @@ final class CaptureOverlayView: NSView {
         let point = constrainedPoint(for: event)
         currentPoint = point
         needsDisplay = true
+        updateCursor(for: point)
     }
 
     override func mouseUp(with event: NSEvent) {
+        if mode == .preview {
+            handlePreviewMouseUp(with: event)
+            return
+        }
+
         guard mode == .selection else {
             super.mouseUp(with: event)
             return
@@ -157,6 +194,8 @@ final class CaptureOverlayView: NSView {
         if let selectionRect {
             onSelection?(selectionRect)
         }
+
+        updateCursor(for: currentPoint ?? .zero)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -166,6 +205,16 @@ final class CaptureOverlayView: NSView {
         }
 
         super.keyDown(with: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(for: point)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        updateCursor(for: point)
     }
 
     override func layout() {
@@ -193,6 +242,7 @@ final class CaptureOverlayView: NSView {
         needsLayout = true
         needsDisplay = true
         window?.makeFirstResponder(self)
+        updateCursor(for: selectionRect.origin)
     }
 
     func resetToSelectionMode() {
@@ -200,6 +250,10 @@ final class CaptureOverlayView: NSView {
         dragStartPoint = nil
         currentPoint = nil
         isDragging = false
+        isMovingPreviewSelection = false
+        movingStartMousePoint = nil
+        movingStartSelectionRect = nil
+        previewSelectionLocked = false
         previewSelectionRect = nil
         previewImageView.image = nil
         currentAnnotationTool = nil
@@ -208,6 +262,7 @@ final class CaptureOverlayView: NSView {
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
         needsDisplay = true
+        NSCursor.crosshair.set()
     }
 
     private var selectionRect: CGRect? {
@@ -221,6 +276,30 @@ final class CaptureOverlayView: NSView {
         let height = abs(currentPoint.y - dragStartPoint.y)
 
         return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    private var canMovePreviewSelection: Bool {
+        guard mode == .preview else {
+            return false
+        }
+
+        guard previewSelectionRect != nil else {
+            return false
+        }
+
+        guard currentAnnotationTool == nil else {
+            return false
+        }
+
+        guard previewSelectionLocked == false else {
+            return false
+        }
+
+        guard annotationCanvasView.annotations.isEmpty else {
+            return false
+        }
+
+        return annotationCanvasView.hasActiveTextInput == false
     }
 
     private func constrainedPoint(for event: NSEvent) -> CGPoint {
@@ -247,11 +326,120 @@ final class CaptureOverlayView: NSView {
         annotationCanvasView.autoresizingMask = [.width, .height]
         annotationCanvasView.wantsLayer = true
         annotationCanvasView.layer?.backgroundColor = NSColor.clear.cgColor
+        annotationCanvasView.annotationsDidChange = { [weak self] annotations in
+            guard let self else {
+                return
+            }
+
+            if annotations.isEmpty == false {
+                self.previewSelectionLocked = true
+                self.updateCursorFromCurrentEvent()
+            }
+        }
 
         previewClipView.addSubview(previewImageView)
         previewClipView.addSubview(annotationCanvasView)
         previewContainerView.addSubview(previewClipView)
         addSubview(previewContainerView)
+    }
+
+    private func handlePreviewMouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        let point = convert(event.locationInWindow, from: nil)
+
+        guard
+            canMovePreviewSelection,
+            let previewSelectionRect,
+            previewSelectionRect.contains(point)
+        else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        isMovingPreviewSelection = true
+        movingStartMousePoint = point
+        movingStartSelectionRect = previewSelectionRect
+        needsDisplay = true
+        updateCursor(for: point)
+    }
+
+    private func handlePreviewMouseDragged(with event: NSEvent) {
+        guard
+            isMovingPreviewSelection,
+            let startMousePoint = movingStartMousePoint,
+            let startSelectionRect = movingStartSelectionRect
+        else {
+            super.mouseDragged(with: event)
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        let deltaX = point.x - startMousePoint.x
+        let deltaY = point.y - startMousePoint.y
+        previewSelectionRect = constrainedPreviewSelectionRect(
+            startSelectionRect.offsetBy(dx: deltaX, dy: deltaY)
+        )
+        needsLayout = true
+        needsDisplay = true
+        updateCursor(for: point)
+    }
+
+    private func handlePreviewMouseUp(with event: NSEvent) {
+        guard isMovingPreviewSelection else {
+            super.mouseUp(with: event)
+            return
+        }
+
+        isMovingPreviewSelection = false
+        movingStartMousePoint = nil
+        movingStartSelectionRect = nil
+
+        if let previewSelectionRect {
+            onPreviewSelectionChanged?(previewSelectionRect)
+        }
+
+        needsDisplay = true
+        updateCursor(for: convert(event.locationInWindow, from: nil))
+    }
+
+    private func constrainedPreviewSelectionRect(_ rect: CGRect) -> CGRect {
+        let constrainedX = min(max(rect.minX, bounds.minX), bounds.maxX - rect.width)
+        let constrainedY = min(max(rect.minY, bounds.minY), bounds.maxY - rect.height)
+
+        return CGRect(
+            x: constrainedX,
+            y: constrainedY,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    private func updateCursorFromCurrentEvent() {
+        guard let window else {
+            NSCursor.crosshair.set()
+            return
+        }
+
+        let location = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        updateCursor(for: location)
+    }
+
+    private func updateCursor(for point: CGPoint) {
+        guard mode == .preview else {
+            NSCursor.crosshair.set()
+            return
+        }
+
+        guard canMovePreviewSelection, let previewSelectionRect, previewSelectionRect.contains(point) else {
+            NSCursor.crosshair.set()
+            return
+        }
+
+        if isMovingPreviewSelection {
+            NSCursor.closedHand.set()
+        } else {
+            NSCursor.openHand.set()
+        }
     }
 
     private func configureTopBar() {
@@ -474,6 +662,7 @@ final class CaptureOverlayView: NSView {
         annotationCanvasView.currentTool = currentAnnotationTool
         updateAnnotationToolSelection()
         window?.makeFirstResponder(annotationCanvasView)
+        updateCursorFromCurrentEvent()
     }
 
     private func updateAnnotationToolSelection() {

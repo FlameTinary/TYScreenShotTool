@@ -49,6 +49,9 @@ struct TYScreenShotToolApp: App {
         overlayService.onSelectionCompleted = { rect in
             sessionService.completeSelection(rect)
         }
+        overlayService.onPreviewSelectionChanged = { rect in
+            sessionService.updatePendingSelection(rect)
+        }
         overlayService.onCopyRequested = { style, annotations in
             sessionService.copyPendingCapture(style: style, annotations: annotations)
         }

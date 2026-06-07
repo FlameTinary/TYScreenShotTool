@@ -33,6 +33,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         true
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        currentTool != nil || activeTextField != nil
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard currentTool != nil || activeTextField != nil else {
+            return nil
+        }
+
+        return super.hitTest(point)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
@@ -132,6 +144,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         _ = annotations.removeLast()
         annotationsDidChange?(annotations)
         needsDisplay = true
+    }
+
+    var hasActiveTextInput: Bool {
+        activeTextField != nil
     }
 
     func commitActiveTextIfNeeded() {

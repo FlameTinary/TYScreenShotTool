@@ -73,6 +73,18 @@ final class CaptureSessionService {
         overlayService.showSelectionPreview(selectionRect: rect)
     }
 
+    func updatePendingSelection(_ rect: CGRect) {
+        guard state == .selectionCompleted else {
+            return
+        }
+
+        guard rect.width > 1, rect.height > 1 else {
+            return
+        }
+
+        pendingSelectionRect = rect
+    }
+
     func cancelSession() {
         guard state == .overlayPresented || state == .dragging || state == .selectionCompleted else {
             return
