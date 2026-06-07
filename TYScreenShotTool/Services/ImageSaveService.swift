@@ -2,7 +2,7 @@
 //  ImageSaveService.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/5.
+//  Created by Sheldon on 2026/6/5.
 //
 
 import CoreGraphics

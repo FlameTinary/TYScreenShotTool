@@ -2,7 +2,7 @@
 //  AppSettings.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/6.
+//  Created by Sheldon on 2026/6/6.
 //
 
 import Foundation

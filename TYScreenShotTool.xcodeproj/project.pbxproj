@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		08E7B3A42FD276F200BC7687 /* TYScreenShotTool.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TYScreenShotTool.app; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		08E7B3A42FD276F200BC7687 /* TShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -40,7 +40,7 @@
 		08E7B3A52FD276F200BC7687 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				08E7B3A42FD276F200BC7687 /* TYScreenShotTool.app */,
+				08E7B3A42FD276F200BC7687 /* TShot.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -67,7 +67,7 @@
 			packageProductDependencies = (
 			);
 			productName = TYScreenShotTool;
-			productReference = 08E7B3A42FD276F200BC7687 /* TYScreenShotTool.app */;
+			productReference = 08E7B3A42FD276F200BC7687 /* TShot.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
