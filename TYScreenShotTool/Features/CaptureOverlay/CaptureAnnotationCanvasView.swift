@@ -55,7 +55,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         switch currentTool {
-        case .rectangle, .ellipse, .arrow:
+        case .rectangle, .ellipse, .arrow, .mosaic:
             dragStartPoint = point
             currentPoint = point
             temporaryAnnotation = makeDragAnnotation(from: point, to: point)
@@ -77,7 +77,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         let point = convert(event.locationInWindow, from: nil)
 
         switch currentTool {
-        case .rectangle, .ellipse, .arrow:
+        case .rectangle, .ellipse, .arrow, .mosaic:
             guard let dragStartPoint else {
                 return
             }
@@ -103,7 +103,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         currentPoint = point
 
         switch currentTool {
-        case .rectangle, .ellipse, .arrow:
+        case .rectangle, .ellipse, .arrow, .mosaic:
             finalizeDragAnnotation()
         case .pen:
             finalizePenAnnotation()
@@ -118,6 +118,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         dragStartPoint = nil
         currentPoint = nil
         temporaryAnnotation = nil
+        annotationsDidChange?(annotations)
+        needsDisplay = true
+    }
+
+    func undoLastAnnotation() {
+        commitActiveTextIfNeeded()
+
+        guard annotations.isEmpty == false else {
+            return
+        }
+
+        _ = annotations.removeLast()
         annotationsDidChange?(annotations)
         needsDisplay = true
     }
@@ -181,7 +193,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         switch annotation {
-        case let .rectangle(rect), let .ellipse(rect):
+        case let .rectangle(rect), let .ellipse(rect), let .mosaic(rect):
             guard rect.standardized.width > 4, rect.standardized.height > 4 else {
                 return
             }
@@ -221,6 +233,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return .ellipse(normalizedRect(from: start, to: end))
         case .arrow:
             return .arrow(start: start, end: end)
+        case .mosaic:
+            return .mosaic(normalizedRect(from: start, to: end))
         case .pen, .text, .none:
             return nil
         }
@@ -240,10 +254,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case let .rectangle(rect):
             let path = NSBezierPath(rect: rect.standardized)
             configureStroke()
+            path.lineWidth = CaptureAnnotation.lineWidth
             path.stroke()
         case let .ellipse(rect):
             let path = NSBezierPath(ovalIn: rect.standardized)
             configureStroke()
+            path.lineWidth = CaptureAnnotation.lineWidth
             path.stroke()
         case let .arrow(start, end):
             let path = arrowPath(from: start, to: end)
@@ -266,6 +282,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
             (NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed).setStroke()
             path.stroke()
+        case let .mosaic(rect):
+            drawMosaic(in: rect.standardized)
         case let .text(value, origin):
             drawText(value, at: origin)
         }
@@ -310,6 +328,26 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         path.move(to: end)
         path.line(to: rightPoint)
         return path
+    }
+
+    private func drawMosaic(in rect: CGRect) {
+        guard rect.width > 0, rect.height > 0 else {
+            return
+        }
+
+        let path = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+        NSColor.white.withAlphaComponent(0.14).setFill()
+        path.fill()
+
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.white.withAlphaComponent(0.22)
+        shadow.shadowBlurRadius = 10
+        shadow.shadowOffset = .zero
+        shadow.set()
+        NSColor.white.withAlphaComponent(0.18).setFill()
+        path.fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     @objc

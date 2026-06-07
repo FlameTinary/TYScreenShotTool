@@ -31,6 +31,7 @@ final class CaptureOverlayView: NSView {
     private let shadowToggle = NSButton(checkboxWithTitle: "阴影", target: nil, action: nil)
     private let toolbarContainerView = NSVisualEffectView()
     private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
+    private let undoButton = NSButton(title: "撤销", target: nil, action: nil)
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
@@ -270,7 +271,6 @@ final class CaptureOverlayView: NSView {
         shadowToggle.target = self
         shadowToggle.action = #selector(toggleShadow)
         shadowToggle.contentTintColor = .white
-        shadowToggle.state = .on
         topBarContainerView.addSubview(sizeLabel)
         topBarContainerView.addSubview(roundedToggle)
         topBarContainerView.addSubview(shadowToggle)
@@ -284,6 +284,8 @@ final class CaptureOverlayView: NSView {
         toolbarContainerView.wantsLayer = true
         toolbarContainerView.layer?.cornerRadius = 12
 
+        undoButton.target = self
+        undoButton.action = #selector(requestUndo)
         copyButton.target = self
         copyButton.action = #selector(requestCopy)
         saveButton.target = self
@@ -298,10 +300,11 @@ final class CaptureOverlayView: NSView {
             return button
         }
 
-        (annotationButtons + [copyButton, saveButton, cancelButton]).forEach { button in
+        (annotationButtons + [undoButton, copyButton, saveButton, cancelButton]).forEach { button in
             button.bezelStyle = .rounded
         }
         annotationButtons.forEach(toolbarContainerView.addSubview)
+        toolbarContainerView.addSubview(undoButton)
         toolbarContainerView.addSubview(copyButton)
         toolbarContainerView.addSubview(saveButton)
         toolbarContainerView.addSubview(cancelButton)
@@ -370,6 +373,7 @@ final class CaptureOverlayView: NSView {
 
         let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }
         annotationButtons.forEach { $0.sizeToFit() }
+        undoButton.sizeToFit()
         copyButton.sizeToFit()
         saveButton.sizeToFit()
         cancelButton.sizeToFit()
@@ -379,11 +383,12 @@ final class CaptureOverlayView: NSView {
         let toolbarSpacing: CGFloat = 12
         let toolbarContentHeight = max(
             annotationButtons.map(\.frame.height).max() ?? 0,
+            undoButton.frame.height,
             copyButton.frame.height,
             saveButton.frame.height,
             cancelButton.frame.height
         )
-        let toolbarButtons = annotationButtons + [copyButton, saveButton, cancelButton]
+        let toolbarButtons = annotationButtons + [undoButton, copyButton, saveButton, cancelButton]
         let toolbarWidth = toolbarPaddingX * 2
             + toolbarButtons.reduce(CGFloat(0)) { $0 + $1.frame.width }
             + (toolbarSpacing * CGFloat(max(toolbarButtons.count - 1, 0)))
@@ -429,6 +434,12 @@ final class CaptureOverlayView: NSView {
     private func toggleShadow() {
         previewStyle.showsShadow = shadowToggle.state == .on
         updatePreviewAppearance()
+    }
+
+    @objc
+    private func requestUndo() {
+        annotationCanvasView.undoLastAnnotation()
+        window?.makeFirstResponder(annotationCanvasView)
     }
 
     @objc

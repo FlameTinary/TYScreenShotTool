@@ -12,6 +12,7 @@ enum AnnotationTool: CaseIterable, Equatable {
     case ellipse
     case arrow
     case pen
+    case mosaic
     case text
 
     var title: String {
@@ -24,6 +25,8 @@ enum AnnotationTool: CaseIterable, Equatable {
             return "箭头"
         case .pen:
             return "画笔"
+        case .mosaic:
+            return "马赛克"
         case .text:
             return "文字"
         }

@@ -13,15 +13,18 @@ enum CaptureAnnotation: Equatable {
     case ellipse(CGRect)
     case arrow(start: CGPoint, end: CGPoint)
     case pen(points: [CGPoint])
+    case mosaic(CGRect)
     case text(value: String, origin: CGPoint)
 
     static let strokeColor = CGColor(red: 0.93, green: 0.24, blue: 0.21, alpha: 1)
     static let lineWidth: CGFloat = 3
     static let fontSize: CGFloat = 22
+    static let mosaicBlockSize: CGFloat = 12
+    static let mosaicBlurRadius: CGFloat = 18
 
     var bounds: CGRect {
         switch self {
-        case let .rectangle(rect), let .ellipse(rect):
+        case let .rectangle(rect), let .ellipse(rect), let .mosaic(rect):
             return rect.standardized
         case let .arrow(start, end):
             return CGRect(

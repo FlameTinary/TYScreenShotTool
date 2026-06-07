@@ -17,6 +17,7 @@ final class CaptureSessionService {
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
+    private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
 
@@ -383,6 +384,8 @@ final class CaptureSessionService {
                     context.addLine(to: point)
                 }
                 context.strokePath()
+            case let .mosaic(rect):
+                drawMosaic(in: rect.standardized, in: context)
             case let .text(value, origin):
                 drawText(value, at: origin, in: context)
             }
@@ -433,6 +436,59 @@ final class CaptureSessionService {
         context.textMatrix = .identity
         context.textPosition = origin
         CTLineDraw(line, context)
+        context.restoreGState()
+    }
+
+    private func drawMosaic(in rect: CGRect, in context: CGContext) {
+        guard rect.width > 0, rect.height > 0 else {
+            return
+        }
+
+        let sourceRect = rect.integral
+        guard sourceRect.width > 0, sourceRect.height > 0 else {
+            return
+        }
+
+        guard let sourceImage = context.makeImage() else {
+            return
+        }
+
+        let ciImage = CIImage(cgImage: sourceImage)
+
+        guard
+            let filter = CIFilter(name: "CIGaussianBlur"),
+            let maskFilter = CIFilter(name: "CIBlendWithMask")
+        else {
+            return
+        }
+
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(CaptureAnnotation.mosaicBlurRadius, forKey: kCIInputRadiusKey)
+
+        guard let blurredImage = filter.outputImage?.cropped(to: ciImage.extent) else {
+            return
+        }
+
+        let backgroundMask = CIImage(color: CIColor.black).cropped(to: ciImage.extent)
+        let regionMask = CIImage(color: CIColor.white).cropped(to: sourceRect)
+        let maskImage = regionMask.applyingFilter(
+            "CISourceOverCompositing",
+            parameters: [kCIInputBackgroundImageKey: backgroundMask]
+        )
+
+        maskFilter.setValue(blurredImage, forKey: kCIInputImageKey)
+        maskFilter.setValue(ciImage, forKey: kCIInputBackgroundImageKey)
+        maskFilter.setValue(maskImage, forKey: kCIInputMaskImageKey)
+
+        guard
+            let outputImage = maskFilter.outputImage,
+            let outputCGImage = ciContext.createCGImage(outputImage, from: sourceRect)
+        else {
+            return
+        }
+
+        context.saveGState()
+        context.draw(outputCGImage, in: sourceRect)
         context.restoreGState()
     }
 }
