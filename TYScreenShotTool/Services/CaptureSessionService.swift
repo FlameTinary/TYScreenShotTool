@@ -5,6 +5,7 @@
 //  Created by Codex on 2026/6/5.
 //
 
+import AppKit
 import CoreGraphics
 import CoreImage
 import Foundation
@@ -15,6 +16,7 @@ final class CaptureSessionService {
     private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
+    private let settingsOpenCoordinator: SettingsOpenCoordinator
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
 
@@ -23,13 +25,15 @@ final class CaptureSessionService {
         screenCaptureService: ScreenCaptureService,
         clipboardService: ClipboardService,
         imageSaveService: ImageSaveService,
-        ocrService: OCRService
+        ocrService: OCRService,
+        settingsOpenCoordinator: SettingsOpenCoordinator
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
         self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
         self.ocrService = ocrService
+        self.settingsOpenCoordinator = settingsOpenCoordinator
     }
 
     func startSession() {
@@ -117,13 +121,15 @@ final class CaptureSessionService {
         }
 
         Task {
+            var temporaryFileURL: URL?
+
             do {
                 overlayService.hideActiveOverlay()
                 try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
                 let exportedImage = try exportedImage(from: image, style: style)
-                let temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
-                let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL)
+                temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
+                let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
                 overlayService.dismissOverlay()
@@ -137,10 +143,17 @@ final class CaptureSessionService {
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
             } catch let error as ImageSaveError {
-                overlayService.restoreActiveOverlay()
+                if let temporaryFileURL {
+                    cleanupTemporaryImage(at: temporaryFileURL)
+                }
+                finishFailedSaveSession()
                 print("Save failed: \(error.localizedDescription)")
+                presentSaveAlertIfNeeded(for: error)
             } catch {
-                overlayService.restoreActiveOverlay()
+                if let temporaryFileURL {
+                    cleanupTemporaryImage(at: temporaryFileURL)
+                }
+                finishFailedSaveSession()
                 print("Save failed: \(error.localizedDescription)")
             }
         }
@@ -162,6 +175,73 @@ final class CaptureSessionService {
 
     private func clearPendingCapture() {
         pendingSelectionRect = nil
+    }
+
+    private func cleanupTemporaryImage(at url: URL) {
+        do {
+            try imageSaveService.removeImage(at: url)
+        } catch {
+            print("Temporary image cleanup failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func finishFailedSaveSession() {
+        overlayService.dismissOverlay()
+        clearPendingCapture()
+
+        if state != .idle {
+            transition(to: .idle)
+        }
+    }
+
+    @MainActor
+    private func presentSaveAlertIfNeeded(for error: ImageSaveError) {
+        guard let alertContent = saveAlertContent(for: error) else {
+            return
+        }
+
+        NSApplication.shared.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = alertContent.title
+        alert.informativeText = alertContent.message
+        alert.addButton(withTitle: "打开设置")
+        alert.addButton(withTitle: "取消")
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else {
+            return
+        }
+
+        openSettingsWindow()
+    }
+
+    private func saveAlertContent(for error: ImageSaveError) -> (title: String, message: String)? {
+        switch error {
+        case .saveDirectoryNotConfigured:
+            return (
+                title: "未配置保存目录",
+                message: "请前往 Settings 选择截图 PNG 的保存目录，然后再执行保存。"
+            )
+        case .directoryBookmarkResolutionFailed, .directoryBookmarkStale:
+            return (
+                title: "保存目录授权已失效",
+                message: "当前保存目录无法访问，请前往 Settings 重新选择保存目录。"
+            )
+        case .directoryAccessFailed, .configuredDirectoryNotFound, .configuredPathIsNotDirectory:
+            return (
+                title: "保存目录不可用",
+                message: "当前保存目录无法访问，请前往 Settings 检查或重新选择保存目录。"
+            )
+        case .destinationCreationFailed, .finalizeFailed, .fileWriteFailed, .moveToConfiguredDirectoryFailed, .removeFailed:
+            return nil
+        }
+    }
+
+    @MainActor
+    private func openSettingsWindow() {
+        settingsOpenCoordinator.openSettings()
     }
 
     private func exportedImage(from image: CGImage, style: CapturePreviewStyle) throws -> CGImage {

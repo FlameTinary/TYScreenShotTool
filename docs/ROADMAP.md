@@ -192,6 +192,23 @@ HotKey 配置
 
 ### Sprint 14
 
+上架适配
+
+状态：
+📌 Backlog
+
+目标：
+
+- 开启并适配 App Sandbox
+- 梳理 Screen Recording 权限与上架说明
+- 调整保存目录能力以兼容沙箱权限模型
+- 补齐最小上架所需的工程与隐私配置
+- 验证 Release 构建与上架可行性
+
+---
+
+### Sprint 15
+
 基础标注工具
 
 状态：
@@ -205,7 +222,7 @@ HotKey 配置
 
 ---
 
-### Sprint 15
+### Sprint 16
 
 标注增强
 
@@ -220,7 +237,7 @@ HotKey 配置
 
 ---
 
-### Sprint 16
+### Sprint 17
 
 截图动作扩展
 
@@ -235,7 +252,7 @@ HotKey 配置
 
 ---
 
-### Sprint 17
+### Sprint 18
 
 滚动长截图
 
@@ -250,7 +267,7 @@ HotKey 配置
 
 ---
 
-### Sprint 18
+### Sprint 19
 
 AI 分析
 

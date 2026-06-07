@@ -10,7 +10,7 @@ import Foundation
 
 final class GlobalHotKeyService {
     private var hotKey: ScreenshotHotKey
-    private let onHotKeyPressed: () -> Void
+    var onHotKeyPressed: () -> Void
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 

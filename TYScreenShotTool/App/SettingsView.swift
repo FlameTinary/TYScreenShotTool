@@ -17,6 +17,8 @@ struct SettingsView: View {
     private var selectedHotKeyStorageValue = AppSettings.screenshotHotKeyDefaultValue
     @AppStorage(AppSettings.saveDirectoryPathKey)
     private var saveDirectoryPath = ""
+    @AppStorage(AppSettings.saveDirectoryBookmarkDataKey)
+    private var saveDirectoryBookmarkData = Data()
 
     init(globalHotKeyService: GlobalHotKeyService) {
         self.globalHotKeyService = globalHotKeyService
@@ -30,6 +32,7 @@ struct SettingsView: View {
 
             Text("当前版本仅提供最小设置入口，以下配置项将在后续 Sprint 中逐步实现。")
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 12) {
                 hotKeyPicker
@@ -40,7 +43,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(24)
-        .frame(minWidth: 420, minHeight: 260, alignment: .topLeading)
+        .frame(minWidth: 460, minHeight: 360, alignment: .topLeading)
         .onChange(of: selectedHotKeyStorageValue) { _, newValue in
             guard let hotKey = ScreenshotHotKey(storageValue: newValue) else {
                 return
@@ -68,6 +71,7 @@ struct SettingsView: View {
             Text("仅支持少量预设快捷键，修改后立即生效。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -87,14 +91,16 @@ struct SettingsView: View {
                     chooseSaveDirectory()
                 }
 
-                Button("恢复默认桌面") {
+                Button("清空配置") {
                     saveDirectoryPath = ""
+                    saveDirectoryBookmarkData = Data()
                 }
             }
 
-            Text("仅支持选择单个目录，留空时默认保存到桌面。")
+            Text("仅支持选择单个目录。保存前必须先选择保存目录。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -106,20 +112,16 @@ struct SettingsView: View {
             Text(isOCREnabled ? "截图后将自动执行 OCR。" : "截图后将跳过 OCR。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var currentSaveDirectoryPath: String {
         if saveDirectoryPath.isEmpty {
-            return defaultDesktopPath
+            return "未配置保存目录"
         }
 
         return saveDirectoryPath
-    }
-
-    private var defaultDesktopPath: String {
-        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first?.path
-            ?? "Desktop directory unavailable"
     }
 
     private func chooseSaveDirectory() {
@@ -131,16 +133,26 @@ struct SettingsView: View {
         panel.prompt = "选择"
         panel.message = "选择截图 PNG 的保存目录"
 
-        if saveDirectoryPath.isEmpty {
-            panel.directoryURL = URL(fileURLWithPath: defaultDesktopPath, isDirectory: true)
-        } else {
+        if !saveDirectoryPath.isEmpty {
             panel.directoryURL = URL(fileURLWithPath: saveDirectoryPath, isDirectory: true)
+        } else {
+            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         }
 
         guard panel.runModal() == .OK, let selectedDirectoryURL = panel.url else {
             return
         }
 
-        saveDirectoryPath = selectedDirectoryURL.path
+        do {
+            let bookmarkData = try selectedDirectoryURL.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            saveDirectoryBookmarkData = bookmarkData
+            saveDirectoryPath = selectedDirectoryURL.path
+        } catch {
+            print("Save directory bookmark creation failed: \(error.localizedDescription)")
+        }
     }
 }

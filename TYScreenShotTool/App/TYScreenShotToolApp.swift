@@ -16,18 +16,28 @@ struct TYScreenShotToolApp: App {
     private let imageSaveService: ImageSaveService
     private let screenCaptureService: ScreenCaptureService
     private let globalHotKeyService: GlobalHotKeyService
+    private let settingsOpenCoordinator: SettingsOpenCoordinator
 
     init() {
         let overlayService = CaptureOverlayService()
         let screenCaptureService = ScreenCaptureService()
         let clipboardService = ClipboardService()
         let imageSaveService = ImageSaveService()
+        let hotKeyService = GlobalHotKeyService(
+            hotKey: Self.loadConfiguredHotKey(),
+            onHotKeyPressed: {}
+        )
+        let settingsOpenCoordinator = SettingsOpenCoordinator()
+        settingsOpenCoordinator.configure {
+            SettingsView(globalHotKeyService: hotKeyService)
+        }
         let sessionService = CaptureSessionService(
             overlayService: overlayService,
             screenCaptureService: screenCaptureService,
             clipboardService: clipboardService,
             imageSaveService: imageSaveService,
-            ocrService: OCRService()
+            ocrService: OCRService(),
+            settingsOpenCoordinator: settingsOpenCoordinator
         )
 
         overlayService.onCancel = {
@@ -46,13 +56,10 @@ struct TYScreenShotToolApp: App {
             sessionService.savePendingCapture(style: style)
         }
 
-        let hotKeyService = GlobalHotKeyService(
-            hotKey: Self.loadConfiguredHotKey(),
-            onHotKeyPressed: {
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                sessionService.startSession()
-            }
-        )
+        hotKeyService.onHotKeyPressed = {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            sessionService.startSession()
+        }
 
         _ = hotKeyService.register()
 
@@ -62,17 +69,14 @@ struct TYScreenShotToolApp: App {
         self.imageSaveService = imageSaveService
         self.screenCaptureService = screenCaptureService
         self.globalHotKeyService = hotKeyService
+        self.settingsOpenCoordinator = settingsOpenCoordinator
     }
 
     var body: some Scene {
         MenuBarExtra("ScreenshotTool", systemImage: "camera.viewfinder") {
-            MenuBarContentView()
+            MenuBarContentView(settingsOpenCoordinator: settingsOpenCoordinator)
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            SettingsView(globalHotKeyService: globalHotKeyService)
-        }
     }
 
     private static func loadConfiguredHotKey() -> ScreenshotHotKey {

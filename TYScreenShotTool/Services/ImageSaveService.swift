@@ -12,10 +12,15 @@ import UniformTypeIdentifiers
 
 final class ImageSaveService {
     private let fileManager: FileManager
+    private let userDefaults: UserDefaults
     private let dateFormatter: DateFormatter
 
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        userDefaults: UserDefaults = .standard
+    ) {
         self.fileManager = fileManager
+        self.userDefaults = userDefaults
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -32,6 +37,22 @@ final class ImageSaveService {
 
     func moveImageToConfiguredDirectory(from temporaryURL: URL) throws -> URL {
         let destinationDirectoryURL = try configuredDirectoryURL()
+        guard destinationDirectoryURL.startAccessingSecurityScopedResource() else {
+            throw ImageSaveError.directoryAccessFailed(destinationDirectoryURL)
+        }
+        defer {
+            destinationDirectoryURL.stopAccessingSecurityScopedResource()
+        }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: destinationDirectoryURL.path, isDirectory: &isDirectory) else {
+            throw ImageSaveError.configuredDirectoryNotFound(destinationDirectoryURL)
+        }
+
+        guard isDirectory.boolValue else {
+            throw ImageSaveError.configuredPathIsNotDirectory(destinationDirectoryURL)
+        }
+
         let destinationURL = destinationDirectoryURL.appendingPathComponent(temporaryURL.lastPathComponent)
 
         do {
@@ -80,32 +101,31 @@ final class ImageSaveService {
         }
     }
 
-    private func desktopDirectoryURL() throws -> URL {
-        guard let desktopURL = fileManager.urls(for: .desktopDirectory, in: .userDomainMask).first else {
-            throw ImageSaveError.desktopDirectoryUnavailable
-        }
-
-        return desktopURL
-    }
-
     private func configuredDirectoryURL() throws -> URL {
-        guard let configuredPath = UserDefaults.standard.string(forKey: AppSettings.saveDirectoryPathKey),
-              !configuredPath.isEmpty else {
-            return try desktopDirectoryURL()
+        guard let bookmarkData = userDefaults.data(forKey: AppSettings.saveDirectoryBookmarkDataKey),
+              !bookmarkData.isEmpty else {
+            throw ImageSaveError.saveDirectoryNotConfigured
         }
 
-        let configuredURL = URL(fileURLWithPath: configuredPath, isDirectory: true)
-        var isDirectory: ObjCBool = false
+        var isStale = false
+        do {
+            let resolvedURL = try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
 
-        guard fileManager.fileExists(atPath: configuredURL.path, isDirectory: &isDirectory) else {
-            throw ImageSaveError.configuredDirectoryNotFound(configuredURL)
+            guard !isStale else {
+                throw ImageSaveError.directoryBookmarkStale
+            }
+
+            return resolvedURL
+        } catch let error as ImageSaveError {
+            throw error
+        } catch {
+            throw ImageSaveError.directoryBookmarkResolutionFailed
         }
-
-        guard isDirectory.boolValue else {
-            throw ImageSaveError.configuredPathIsNotDirectory(configuredURL)
-        }
-
-        return configuredURL
     }
 
     private func temporaryDirectoryURL() -> URL {
@@ -118,7 +138,10 @@ final class ImageSaveService {
 }
 
 enum ImageSaveError: LocalizedError {
-    case desktopDirectoryUnavailable
+    case saveDirectoryNotConfigured
+    case directoryBookmarkResolutionFailed
+    case directoryBookmarkStale
+    case directoryAccessFailed(URL)
     case configuredDirectoryNotFound(URL)
     case configuredPathIsNotDirectory(URL)
     case destinationCreationFailed(URL)
@@ -129,8 +152,14 @@ enum ImageSaveError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .desktopDirectoryUnavailable:
-            return "Desktop directory unavailable."
+        case .saveDirectoryNotConfigured:
+            return "Save directory not configured. Please choose a save directory in Settings first."
+        case .directoryBookmarkResolutionFailed:
+            return "Failed to resolve the configured save directory bookmark."
+        case .directoryBookmarkStale:
+            return "Configured save directory bookmark is stale. Please choose the save directory again."
+        case let .directoryAccessFailed(url):
+            return "Failed to access the configured save directory at \(url.path)."
         case let .configuredDirectoryNotFound(url):
             return "Configured save directory not found at \(url.path)."
         case let .configuredPathIsNotDirectory(url):

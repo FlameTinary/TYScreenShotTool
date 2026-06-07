@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 13 Completed
+Sprint 14 Planned
 
 ## Principles
 
@@ -33,12 +33,13 @@ Shared
 - HotKey Settings
 - Save Directory Settings
 - Toolbar Editing Foundation
+- Preparing App Store Readiness
 
 ## Current Next Sprint
 
-Pending Planning
-
 Sprint 14
+
+App Store Readiness
 
 ## Source Of Truth
 

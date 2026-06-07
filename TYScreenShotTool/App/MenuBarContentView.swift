@@ -9,7 +9,11 @@ import AppKit
 import SwiftUI
 
 struct MenuBarContentView: View {
-    @Environment(\.openSettings) private var openSettings
+    private let settingsOpenCoordinator: SettingsOpenCoordinator
+
+    init(settingsOpenCoordinator: SettingsOpenCoordinator) {
+        self.settingsOpenCoordinator = settingsOpenCoordinator
+    }
 
     var body: some View {
         Button("ScreenshotTool") {
@@ -18,8 +22,7 @@ struct MenuBarContentView: View {
         Divider()
 
         Button("Settings") {
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            openSettings()
+            settingsOpenCoordinator.openSettings()
         }
 
         Divider()
