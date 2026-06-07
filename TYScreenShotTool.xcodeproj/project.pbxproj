@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		08E7B3A42FD276F200BC7687 /* TYScreenShotTool.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TYScreenShotTool.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		08E7B3A42FD276F200BC7687 /* TYScreenShotTool.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TYScreenShotTool.app; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */

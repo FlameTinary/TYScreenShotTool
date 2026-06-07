@@ -73,8 +73,12 @@ struct TYScreenShotToolApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("TShot", systemImage: "camera.viewfinder") {
+        MenuBarExtra {
             MenuBarContentView(settingsOpenCoordinator: settingsOpenCoordinator)
+        } label: {
+            Image("MenuBarIcon")
+                .renderingMode(.template)
+                .accessibilityLabel("TShot")
         }
         .menuBarExtraStyle(.menu)
     }

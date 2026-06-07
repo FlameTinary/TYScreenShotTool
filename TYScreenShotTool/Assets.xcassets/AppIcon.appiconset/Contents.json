@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "shot_image.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -12,6 +13,7 @@
           "value" : "dark"
         }
       ],
+      "filename" : "shot_image 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -23,21 +25,25 @@
           "value" : "tinted"
         }
       ],
+      "filename" : "shot_image 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
     },
     {
+      "filename" : "shot_image@16px.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
     },
     {
+      "filename" : "shot_image@32px.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "16x16"
     },
     {
+      "filename" : "shot_image@32px 1.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "32x32"
@@ -73,6 +79,7 @@
       "size" : "512x512"
     },
     {
+      "filename" : "shot_image 3.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"
