@@ -15,14 +15,20 @@ final class CaptureOverlayView: NSView {
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
 
+    private static let edgeHitThickness: CGFloat = 8
+    private static let cornerHitSize: CGFloat = 12
+    private static let minimumSelectionWidth: CGFloat = 40
+    private static let minimumSelectionHeight: CGFloat = 40
+
     private var dragStartPoint: CGPoint?
     private var currentPoint: CGPoint?
     private var isDragging = false
-    private var isMovingPreviewSelection = false
-    private var movingStartMousePoint: CGPoint?
-    private var movingStartSelectionRect: CGRect?
     private var previewSelectionLocked = false
     private var cursorTrackingArea: NSTrackingArea?
+    private var hoverInteractionTarget: PreviewInteractionTarget = .none
+    private var activeInteractionTarget: PreviewInteractionTarget = .none
+    private var interactionStartMousePoint: CGPoint?
+    private var interactionStartSelectionRect: CGRect?
     private var mode: Mode = .selection
     private var previewSelectionRect: CGRect?
     private var previewStyle = CapturePreviewStyle.default
@@ -250,9 +256,10 @@ final class CaptureOverlayView: NSView {
         dragStartPoint = nil
         currentPoint = nil
         isDragging = false
-        isMovingPreviewSelection = false
-        movingStartMousePoint = nil
-        movingStartSelectionRect = nil
+        hoverInteractionTarget = .none
+        activeInteractionTarget = .none
+        interactionStartMousePoint = nil
+        interactionStartSelectionRect = nil
         previewSelectionLocked = false
         previewSelectionRect = nil
         previewImageView.image = nil
@@ -278,7 +285,7 @@ final class CaptureOverlayView: NSView {
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
-    private var canMovePreviewSelection: Bool {
+    private var canEditPreviewSelection: Bool {
         guard mode == .preview else {
             return false
         }
@@ -347,52 +354,52 @@ final class CaptureOverlayView: NSView {
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
 
-        guard
-            canMovePreviewSelection,
-            let previewSelectionRect,
-            previewSelectionRect.contains(point)
-        else {
+        let interactionTarget = interactionTarget(for: point)
+        guard interactionTarget != .none else {
             super.mouseDown(with: event)
             return
         }
 
-        isMovingPreviewSelection = true
-        movingStartMousePoint = point
-        movingStartSelectionRect = previewSelectionRect
+        activeInteractionTarget = interactionTarget
+        interactionStartMousePoint = point
+        interactionStartSelectionRect = previewSelectionRect
         needsDisplay = true
         updateCursor(for: point)
     }
 
     private func handlePreviewMouseDragged(with event: NSEvent) {
         guard
-            isMovingPreviewSelection,
-            let startMousePoint = movingStartMousePoint,
-            let startSelectionRect = movingStartSelectionRect
+            activeInteractionTarget != .none,
+            let startMousePoint = interactionStartMousePoint,
+            let startSelectionRect = interactionStartSelectionRect
         else {
             super.mouseDragged(with: event)
             return
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let deltaX = point.x - startMousePoint.x
-        let deltaY = point.y - startMousePoint.y
-        previewSelectionRect = constrainedPreviewSelectionRect(
-            startSelectionRect.offsetBy(dx: deltaX, dy: deltaY)
+        previewSelectionRect = updatedPreviewSelectionRect(
+            from: startSelectionRect,
+            startPoint: startMousePoint,
+            currentPoint: point,
+            interactionTarget: activeInteractionTarget
         )
+        updateSizeLabel()
         needsLayout = true
         needsDisplay = true
         updateCursor(for: point)
     }
 
     private func handlePreviewMouseUp(with event: NSEvent) {
-        guard isMovingPreviewSelection else {
+        guard activeInteractionTarget != .none else {
             super.mouseUp(with: event)
             return
         }
 
-        isMovingPreviewSelection = false
-        movingStartMousePoint = nil
-        movingStartSelectionRect = nil
+        activeInteractionTarget = .none
+        interactionStartMousePoint = nil
+        interactionStartSelectionRect = nil
+        hoverInteractionTarget = interactionTarget(for: convert(event.locationInWindow, from: nil))
 
         if let previewSelectionRect {
             onPreviewSelectionChanged?(previewSelectionRect)
@@ -402,7 +409,51 @@ final class CaptureOverlayView: NSView {
         updateCursor(for: convert(event.locationInWindow, from: nil))
     }
 
-    private func constrainedPreviewSelectionRect(_ rect: CGRect) -> CGRect {
+    private func updatedPreviewSelectionRect(
+        from rect: CGRect,
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        interactionTarget: PreviewInteractionTarget
+    ) -> CGRect {
+        let deltaX = currentPoint.x - startPoint.x
+        let deltaY = currentPoint.y - startPoint.y
+
+        var minX = rect.minX
+        var maxX = rect.maxX
+        var minY = rect.minY
+        var maxY = rect.maxY
+
+        switch interactionTarget {
+        case .move:
+            return constrainedMoveRect(rect.offsetBy(dx: deltaX, dy: deltaY))
+        case .resizeTop:
+            maxY += deltaY
+        case .resizeBottom:
+            minY += deltaY
+        case .resizeLeft:
+            minX += deltaX
+        case .resizeRight:
+            maxX += deltaX
+        case .resizeTopLeft:
+            minX += deltaX
+            maxY += deltaY
+        case .resizeTopRight:
+            maxX += deltaX
+            maxY += deltaY
+        case .resizeBottomLeft:
+            minX += deltaX
+            minY += deltaY
+        case .resizeBottomRight:
+            maxX += deltaX
+            minY += deltaY
+        case .none:
+            return rect
+        }
+
+        return constrainedResizeRect(minX: minX, maxX: maxX, minY: minY, maxY: maxY, target: interactionTarget)
+    }
+
+    private func constrainedMoveRect(_ rect: CGRect) -> CGRect {
         let constrainedX = min(max(rect.minX, bounds.minX), bounds.maxX - rect.width)
         let constrainedY = min(max(rect.minY, bounds.minY), bounds.maxY - rect.height)
 
@@ -411,6 +462,55 @@ final class CaptureOverlayView: NSView {
             y: constrainedY,
             width: rect.width,
             height: rect.height
+        )
+    }
+
+    private func constrainedResizeRect(
+        minX: CGFloat,
+        maxX: CGFloat,
+        minY: CGFloat,
+        maxY: CGFloat,
+        target: PreviewInteractionTarget
+    ) -> CGRect {
+        var adjustedMinX = minX
+        var adjustedMaxX = maxX
+        var adjustedMinY = minY
+        var adjustedMaxY = maxY
+
+        switch target {
+        case .resizeLeft, .resizeTopLeft, .resizeBottomLeft:
+            adjustedMinX = min(adjustedMinX, adjustedMaxX - Self.minimumSelectionWidth)
+            adjustedMinX = max(adjustedMinX, bounds.minX)
+            adjustedMaxX = max(adjustedMaxX, adjustedMinX + Self.minimumSelectionWidth)
+        case .resizeRight, .resizeTopRight, .resizeBottomRight:
+            adjustedMaxX = max(adjustedMaxX, adjustedMinX + Self.minimumSelectionWidth)
+            adjustedMaxX = min(adjustedMaxX, bounds.maxX)
+            adjustedMinX = min(adjustedMinX, adjustedMaxX - Self.minimumSelectionWidth)
+        case .resizeTop, .resizeBottom, .move, .none:
+            break
+        }
+
+        switch target {
+        case .resizeBottom, .resizeBottomLeft, .resizeBottomRight:
+            adjustedMinY = min(adjustedMinY, adjustedMaxY - Self.minimumSelectionHeight)
+            adjustedMinY = max(adjustedMinY, bounds.minY)
+            adjustedMaxY = max(adjustedMaxY, adjustedMinY + Self.minimumSelectionHeight)
+        case .resizeTop, .resizeTopLeft, .resizeTopRight:
+            adjustedMaxY = max(adjustedMaxY, adjustedMinY + Self.minimumSelectionHeight)
+            adjustedMaxY = min(adjustedMaxY, bounds.maxY)
+            adjustedMinY = min(adjustedMinY, adjustedMaxY - Self.minimumSelectionHeight)
+        case .resizeLeft, .resizeRight, .move, .none:
+            break
+        }
+
+        let width = max(adjustedMaxX - adjustedMinX, Self.minimumSelectionWidth)
+        let height = max(adjustedMaxY - adjustedMinY, Self.minimumSelectionHeight)
+
+        return CGRect(
+            x: adjustedMinX,
+            y: adjustedMinY,
+            width: width,
+            height: height
         )
     }
 
@@ -430,16 +530,131 @@ final class CaptureOverlayView: NSView {
             return
         }
 
-        guard canMovePreviewSelection, let previewSelectionRect, previewSelectionRect.contains(point) else {
+        let interactionTarget = activeInteractionTarget != .none ? activeInteractionTarget : interactionTarget(for: point)
+        hoverInteractionTarget = interactionTarget
+
+        guard interactionTarget != .none else {
             NSCursor.crosshair.set()
             return
         }
 
-        if isMovingPreviewSelection {
-            NSCursor.closedHand.set()
-        } else {
-            NSCursor.openHand.set()
+        switch interactionTarget {
+        case .move:
+            if activeInteractionTarget == .move {
+                NSCursor.closedHand.set()
+            } else {
+                NSCursor.openHand.set()
+            }
+        case .resizeLeft, .resizeRight:
+            NSCursor.resizeLeftRight.set()
+        case .resizeTop, .resizeBottom:
+            NSCursor.resizeUpDown.set()
+        case .resizeTopLeft, .resizeBottomRight:
+            NSCursor._windowResizeNorthWestSouthEast.set()
+        case .resizeTopRight, .resizeBottomLeft:
+            NSCursor._windowResizeNorthEastSouthWest.set()
+        case .none:
+            NSCursor.crosshair.set()
         }
+    }
+
+    private func interactionTarget(for point: CGPoint) -> PreviewInteractionTarget {
+        guard canEditPreviewSelection, let previewSelectionRect else {
+            return .none
+        }
+
+        let cornerSize = Self.cornerHitSize
+        let edgeThickness = Self.edgeHitThickness
+
+        let topLeftCorner = CGRect(
+            x: previewSelectionRect.minX - cornerSize / 2,
+            y: previewSelectionRect.maxY - cornerSize / 2,
+            width: cornerSize,
+            height: cornerSize
+        )
+        let topRightCorner = CGRect(
+            x: previewSelectionRect.maxX - cornerSize / 2,
+            y: previewSelectionRect.maxY - cornerSize / 2,
+            width: cornerSize,
+            height: cornerSize
+        )
+        let bottomLeftCorner = CGRect(
+            x: previewSelectionRect.minX - cornerSize / 2,
+            y: previewSelectionRect.minY - cornerSize / 2,
+            width: cornerSize,
+            height: cornerSize
+        )
+        let bottomRightCorner = CGRect(
+            x: previewSelectionRect.maxX - cornerSize / 2,
+            y: previewSelectionRect.minY - cornerSize / 2,
+            width: cornerSize,
+            height: cornerSize
+        )
+
+        if topLeftCorner.contains(point) {
+            return .resizeTopLeft
+        }
+        if topRightCorner.contains(point) {
+            return .resizeTopRight
+        }
+        if bottomLeftCorner.contains(point) {
+            return .resizeBottomLeft
+        }
+        if bottomRightCorner.contains(point) {
+            return .resizeBottomRight
+        }
+
+        let leftEdge = CGRect(
+            x: previewSelectionRect.minX - edgeThickness / 2,
+            y: previewSelectionRect.minY + cornerSize / 2,
+            width: edgeThickness,
+            height: max(previewSelectionRect.height - cornerSize, 0)
+        )
+        let rightEdge = CGRect(
+            x: previewSelectionRect.maxX - edgeThickness / 2,
+            y: previewSelectionRect.minY + cornerSize / 2,
+            width: edgeThickness,
+            height: max(previewSelectionRect.height - cornerSize, 0)
+        )
+        let topEdge = CGRect(
+            x: previewSelectionRect.minX + cornerSize / 2,
+            y: previewSelectionRect.maxY - edgeThickness / 2,
+            width: max(previewSelectionRect.width - cornerSize, 0),
+            height: edgeThickness
+        )
+        let bottomEdge = CGRect(
+            x: previewSelectionRect.minX + cornerSize / 2,
+            y: previewSelectionRect.minY - edgeThickness / 2,
+            width: max(previewSelectionRect.width - cornerSize, 0),
+            height: edgeThickness
+        )
+
+        if leftEdge.contains(point) {
+            return .resizeLeft
+        }
+        if rightEdge.contains(point) {
+            return .resizeRight
+        }
+        if topEdge.contains(point) {
+            return .resizeTop
+        }
+        if bottomEdge.contains(point) {
+            return .resizeBottom
+        }
+
+        if previewSelectionRect.contains(point) {
+            return .move
+        }
+
+        return .none
+    }
+
+    private func updateSizeLabel() {
+        guard let previewSelectionRect else {
+            return
+        }
+
+        sizeLabel.stringValue = "\(Int(previewSelectionRect.width)) x \(Int(previewSelectionRect.height))"
     }
 
     private func configureTopBar() {
@@ -686,5 +901,28 @@ final class CaptureOverlayView: NSView {
     private enum Mode {
         case selection
         case preview
+    }
+
+    private enum PreviewInteractionTarget {
+        case none
+        case move
+        case resizeTop
+        case resizeBottom
+        case resizeLeft
+        case resizeRight
+        case resizeTopLeft
+        case resizeTopRight
+        case resizeBottomLeft
+        case resizeBottomRight
+    }
+}
+
+private extension NSCursor {
+    static var _windowResizeNorthWestSouthEast: NSCursor {
+        NSCursor(image: NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil) ?? NSImage(), hotSpot: NSPoint(x: 8, y: 8))
+    }
+
+    static var _windowResizeNorthEastSouthWest: NSCursor {
+        NSCursor(image: NSImage(systemSymbolName: "arrow.up.right.and.arrow.down.left", accessibilityDescription: nil) ?? NSImage(), hotSpot: NSPoint(x: 8, y: 8))
     }
 }
