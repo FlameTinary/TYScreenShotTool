@@ -19,8 +19,9 @@ enum CaptureAnnotation: Equatable {
     static let strokeColor = CGColor(red: 0.93, green: 0.24, blue: 0.21, alpha: 1)
     static let lineWidth: CGFloat = 3
     static let fontSize: CGFloat = 22
-    static let mosaicBlockSize: CGFloat = 12
     static let mosaicBlurRadius: CGFloat = 18
+    static let mosaicOverlayAlpha: CGFloat = 0.10
+    static let mosaicCornerRadius: CGFloat = 6
 
     var bounds: CGRect {
         switch self {

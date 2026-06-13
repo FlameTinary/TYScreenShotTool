@@ -20,6 +20,8 @@ final class CaptureSessionService {
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
+    private var pendingScreenImages: [CGDirectDisplayID: CGImage] = [:]
+    private var isPreparingSession = false
 
     init(
         overlayService: CaptureOverlayService,
@@ -38,12 +40,32 @@ final class CaptureSessionService {
     }
 
     func startSession() {
-        guard state == .idle else {
+        guard state == .idle, isPreparingSession == false else {
             return
         }
 
-        transition(to: .overlayPresented)
-        overlayService.presentOverlay()
+        isPreparingSession = true
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            defer {
+                self.isPreparingSession = false
+            }
+
+            do {
+                self.pendingScreenImages = try await self.screenCaptureService.captureScreenImages()
+                self.transition(to: .overlayPresented)
+                self.overlayService.presentOverlay()
+            } catch ScreenCaptureError.permissionRequired {
+                print("Screen Recording permission required.")
+                print("Please restart the app after granting permission.")
+            } catch {
+                print("Capture prepare failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     func beginDragging() {
@@ -70,7 +92,7 @@ final class CaptureSessionService {
         transition(to: .selectionCompleted)
         logSelection(rect)
         pendingSelectionRect = rect
-        overlayService.showSelectionPreview(selectionRect: rect)
+        overlayService.showSelectionPreview(selectionRect: rect, screenImages: pendingScreenImages)
     }
 
     func updatePendingSelection(_ rect: CGRect) {
@@ -218,6 +240,7 @@ final class CaptureSessionService {
 
     private func clearPendingCapture() {
         pendingSelectionRect = nil
+        pendingScreenImages.removeAll()
     }
 
     private func cleanupTemporaryImage(at url: URL) {

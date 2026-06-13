@@ -12,6 +12,32 @@ import AppKit
 import ScreenCaptureKit
 
 final class ScreenCaptureService {
+    func captureScreenImages() async throws -> [CGDirectDisplayID: CGImage] {
+        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            throw ScreenCaptureError.permissionRequired
+        }
+
+        let shareableContent = try await SCShareableContent.current
+        var images: [CGDirectDisplayID: CGImage] = [:]
+
+        for screen in NSScreen.screens {
+            let displayID = try displayID(for: screen)
+            guard let display = shareableContent.displays.first(where: { $0.displayID == displayID }) else {
+                throw ScreenCaptureError.displayNotFound
+            }
+
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let configuration = SCStreamConfiguration()
+            configuration.width = Int(screen.frame.width * CGFloat(filter.pointPixelScale))
+            configuration.height = Int(screen.frame.height * CGFloat(filter.pointPixelScale))
+
+            let image = try await captureImage(contentFilter: filter, configuration: configuration)
+            images[displayID] = image
+        }
+
+        return images
+    }
+
     func captureImage(in rect: CGRect) async throws -> CGImage {
         guard rect.width > 1, rect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -28,6 +54,24 @@ final class ScreenCaptureService {
         }
 
         return try await captureImageWithContentFilter(in: rect)
+    }
+
+    func cropImage(_ image: CGImage, in screenFrame: CGRect, to screenRect: CGRect) throws -> CGImage {
+        guard screenRect.width > 1, screenRect.height > 1 else {
+            throw ScreenCaptureError.invalidSelection
+        }
+        let cropRect = CGRect(
+            x: (screenRect.minX - screenFrame.minX) * (CGFloat(image.width) / screenFrame.width),
+            y: (screenFrame.maxY - screenRect.maxY) * (CGFloat(image.height) / screenFrame.height),
+            width: screenRect.width * (CGFloat(image.width) / screenFrame.width),
+            height: screenRect.height * (CGFloat(image.height) / screenFrame.height)
+        ).integral
+
+        guard let croppedImage = image.cropping(to: cropRect) else {
+            throw ScreenCaptureError.captureFailed
+        }
+
+        return croppedImage
     }
 
     @available(macOS 15.2, *)
@@ -74,6 +118,27 @@ final class ScreenCaptureService {
 
         return try await withCheckedThrowingContinuation { continuation in
             SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let image else {
+                    continuation.resume(throwing: ScreenCaptureError.captureFailed)
+                    return
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    private func captureImage(
+        contentFilter: SCContentFilter,
+        configuration: SCStreamConfiguration
+    ) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            SCScreenshotManager.captureImage(contentFilter: contentFilter, configuration: configuration) { image, error in
                 if let error {
                     continuation.resume(throwing: error)
                     return

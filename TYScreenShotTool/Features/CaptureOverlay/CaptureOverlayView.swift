@@ -34,6 +34,8 @@ final class CaptureOverlayView: NSView {
     private var mode: Mode = .selection
     private var previewSelectionRect: CGRect?
     private var previewStyle = CapturePreviewStyle.default
+    private var previewSourceScreenImage: CGImage?
+    private var previewSourceScreenFrame: CGRect?
 
     private let previewContainerView = NSView()
     private let previewClipView = NSView()
@@ -231,9 +233,11 @@ final class CaptureOverlayView: NSView {
         layoutPreviewInterface()
     }
 
-    func showSelectionPreview(selectionRect: CGRect) {
+    func showSelectionPreview(selectionRect: CGRect, sourceScreenImage: CGImage?, screenFrame: CGRect) {
         mode = .preview
         previewSelectionRect = selectionRect
+        previewSourceScreenImage = sourceScreenImage
+        previewSourceScreenFrame = screenFrame
         previewImageView.image = nil
         sizeLabel.stringValue = "\(Int(selectionRect.width)) x \(Int(selectionRect.height))"
         previewStyle = .default
@@ -247,6 +251,7 @@ final class CaptureOverlayView: NSView {
         topBarContainerView.isHidden = false
         toolbarContainerView.isHidden = false
 
+        updateAnnotationSourceImage()
         updatePreviewAppearance()
         needsLayout = true
         needsDisplay = true
@@ -265,9 +270,12 @@ final class CaptureOverlayView: NSView {
         interactionStartSelectionRect = nil
         previewSelectionLocked = false
         previewSelectionRect = nil
+        previewSourceScreenImage = nil
+        previewSourceScreenFrame = nil
         previewImageView.image = nil
         currentAnnotationTool = nil
         annotationCanvasView.resetAnnotations()
+        annotationCanvasView.sourceImage = nil
         previewContainerView.isHidden = true
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
@@ -389,6 +397,7 @@ final class CaptureOverlayView: NSView {
             currentPoint: point,
             interactionTarget: activeInteractionTarget
         )
+        updateAnnotationSourceImage()
         updateSizeLabel()
         needsLayout = true
         needsDisplay = true
@@ -532,6 +541,10 @@ final class CaptureOverlayView: NSView {
     private func updateCursor(for point: CGPoint) {
         guard mode == .preview else {
             NSCursor.crosshair.set()
+            return
+        }
+
+        if let previewSelectionRect, currentAnnotationTool != nil, previewSelectionRect.contains(point) {
             return
         }
 
@@ -904,6 +917,28 @@ final class CaptureOverlayView: NSView {
         for (tool, button) in annotationToolButtons {
             button.state = tool == currentAnnotationTool ? .on : .off
         }
+    }
+
+    private func updateAnnotationSourceImage() {
+        guard
+            let previewSelectionRect,
+            let previewSourceScreenImage,
+            let previewSourceScreenFrame,
+            let window
+        else {
+            annotationCanvasView.sourceImage = nil
+            return
+        }
+
+        let screenRect = window.convertToScreen(previewSelectionRect)
+        let cropRect = CGRect(
+            x: (screenRect.minX - previewSourceScreenFrame.minX) * (CGFloat(previewSourceScreenImage.width) / previewSourceScreenFrame.width),
+            y: (previewSourceScreenFrame.maxY - screenRect.maxY) * (CGFloat(previewSourceScreenImage.height) / previewSourceScreenFrame.height),
+            width: screenRect.width * (CGFloat(previewSourceScreenImage.width) / previewSourceScreenFrame.width),
+            height: screenRect.height * (CGFloat(previewSourceScreenImage.height) / previewSourceScreenFrame.height)
+        ).integral
+
+        annotationCanvasView.sourceImage = previewSourceScreenImage.cropping(to: cropRect)
     }
 
     private func cutoutPath(for rect: CGRect) -> NSBezierPath {

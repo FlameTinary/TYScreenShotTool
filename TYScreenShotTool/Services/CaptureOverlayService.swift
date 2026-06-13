@@ -61,7 +61,7 @@ final class CaptureOverlayService {
         overlayWindows.forEach { $0.showOverlay() }
     }
 
-    func showSelectionPreview(selectionRect: CGRect) {
+    func showSelectionPreview(selectionRect: CGRect, screenImages: [CGDirectDisplayID: CGImage]) {
         guard let activeScreen = screen(containing: selectionRect) else {
             return
         }
@@ -79,7 +79,12 @@ final class CaptureOverlayService {
 
         activeOverlayWindow = window
         activeOverlayView = overlayView
-        overlayView.showSelectionPreview(selectionRect: window.convertFromScreen(selectionRect))
+        let displayID = try? displayID(for: activeScreen)
+        overlayView.showSelectionPreview(
+            selectionRect: window.convertFromScreen(selectionRect),
+            sourceScreenImage: displayID.flatMap { screenImages[$0] },
+            screenFrame: activeScreen.frame
+        )
         window.showOverlay()
     }
 
@@ -102,5 +107,15 @@ final class CaptureOverlayService {
 
     private func screen(containing rect: CGRect) -> NSScreen? {
         NSScreen.screens.first { $0.frame.contains(CGPoint(x: rect.midX, y: rect.midY)) }
+    }
+
+    private func displayID(for screen: NSScreen) throws -> CGDirectDisplayID {
+        guard
+            let value = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        return CGDirectDisplayID(value.uint32Value)
     }
 }

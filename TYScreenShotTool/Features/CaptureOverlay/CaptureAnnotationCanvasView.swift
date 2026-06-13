@@ -6,28 +6,48 @@
 //
 
 import AppKit
+import CoreImage
 import CoreText
 
 final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     var annotationsDidChange: (([CaptureAnnotation]) -> Void)?
+    var sourceImage: CGImage? {
+        didSet {
+            needsDisplay = true
+        }
+    }
 
     var currentTool: AnnotationTool? {
         didSet {
             if oldValue != currentTool {
                 cancelActiveTextInput()
                 temporaryAnnotation = nil
+                hoverMosaicTarget = .none
+                activeMosaicTarget = .none
                 needsDisplay = true
+                applyCursorForCurrentState()
             }
         }
     }
 
     private(set) var annotations: [CaptureAnnotation] = []
 
+    private let ciContext = CIContext()
+    private static let mosaicEdgeHitThickness: CGFloat = 8
+    private static let mosaicCornerHitSize: CGFloat = 12
+    private static let minimumMosaicSize: CGFloat = 12
+
     private var dragStartPoint: CGPoint?
     private var currentPoint: CGPoint?
     private var temporaryAnnotation: CaptureAnnotation?
     private var activeTextField: NSTextField?
     private var activeTextOrigin: CGPoint?
+    private var hoverMosaicTarget: MosaicInteractionTarget = .none
+    private var activeMosaicTarget: MosaicInteractionTarget = .none
+    private var activeMosaicIndex: Int?
+    private var interactionStartMousePoint: CGPoint?
+    private var interactionStartMosaicRect: CGRect?
+    private var trackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool {
         true
@@ -43,6 +63,23 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         return super.hitTest(point)
+    }
+
+    override func updateTrackingAreas() {
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .cursorUpdate, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        self.trackingArea = trackingArea
+
+        super.updateTrackingAreas()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -67,7 +104,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         switch currentTool {
-        case .rectangle, .ellipse, .arrow, .mosaic:
+        case .mosaic:
+            if beginMosaicInteraction(at: point) {
+                needsDisplay = true
+                applyCursorForCurrentState()
+                return
+            }
+
+            dragStartPoint = point
+            currentPoint = point
+            temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point))
+            needsDisplay = true
+        case .rectangle, .ellipse, .arrow:
             dragStartPoint = point
             currentPoint = point
             temporaryAnnotation = makeDragAnnotation(from: point, to: point)
@@ -89,7 +137,22 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         let point = convert(event.locationInWindow, from: nil)
 
         switch currentTool {
-        case .rectangle, .ellipse, .arrow, .mosaic:
+        case .mosaic:
+            if activeMosaicTarget != .none {
+                updateActiveMosaic(with: point)
+                needsDisplay = true
+                applyCursorForCurrentState()
+                return
+            }
+
+            guard let dragStartPoint else {
+                return
+            }
+
+            currentPoint = point
+            temporaryAnnotation = .mosaic(normalizedRect(from: dragStartPoint, to: point))
+            needsDisplay = true
+        case .rectangle, .ellipse, .arrow:
             guard let dragStartPoint else {
                 return
             }
@@ -115,13 +178,34 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         currentPoint = point
 
         switch currentTool {
-        case .rectangle, .ellipse, .arrow, .mosaic:
+        case .mosaic:
+            if activeMosaicTarget != .none {
+                finishMosaicInteraction(at: point)
+                applyCursorForCurrentState()
+                return
+            }
+
+            finalizeDragAnnotation()
+        case .rectangle, .ellipse, .arrow:
             finalizeDragAnnotation()
         case .pen:
             finalizePenAnnotation()
         case .text, .none:
             break
         }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        updateMosaicHover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        updateMosaicHover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hoverMosaicTarget = .none
+        applyCursorForCurrentState()
     }
 
     func resetAnnotations() {
@@ -132,6 +216,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         temporaryAnnotation = nil
         annotationsDidChange?(annotations)
         needsDisplay = true
+        applyCursorForCurrentState()
     }
 
     func undoLastAnnotation() {
@@ -144,6 +229,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         _ = annotations.removeLast()
         annotationsDidChange?(annotations)
         needsDisplay = true
+        applyCursorForCurrentState()
     }
 
     var hasActiveTextInput: Bool {
@@ -223,6 +309,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
         annotations.append(annotation)
         annotationsDidChange?(annotations)
+        applyCursorForCurrentState()
     }
 
     private func finalizePenAnnotation() {
@@ -239,6 +326,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
         annotations.append(.pen(points: points))
         annotationsDidChange?(annotations)
+        applyCursorForCurrentState()
     }
 
     private func makeDragAnnotation(from start: CGPoint, to end: CGPoint) -> CaptureAnnotation? {
@@ -351,19 +439,273 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
-        let path = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
-        NSColor.white.withAlphaComponent(0.14).setFill()
-        path.fill()
+        guard let sourceImage else {
+            drawMosaicFallback(in: rect)
+            return
+        }
 
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.white.withAlphaComponent(0.22)
-        shadow.shadowBlurRadius = 10
-        shadow.shadowOffset = .zero
-        shadow.set()
-        NSColor.white.withAlphaComponent(0.18).setFill()
+        guard bounds.width > 0, bounds.height > 0 else {
+            drawMosaicFallback(in: rect)
+            return
+        }
+
+        let imageScaleX = CGFloat(sourceImage.width) / bounds.width
+        let imageScaleY = CGFloat(sourceImage.height) / bounds.height
+        let imageRect = CGRect(
+            x: rect.minX * imageScaleX,
+            y: rect.minY * imageScaleY,
+            width: rect.width * imageScaleX,
+            height: rect.height * imageScaleY
+        ).integral
+        guard imageRect.width > 0, imageRect.height > 0 else {
+            return
+        }
+
+        let fullImage = CIImage(cgImage: sourceImage)
+        guard
+            let filter = CIFilter(name: "CIGaussianBlur"),
+            let outputContext = NSGraphicsContext.current?.cgContext
+        else {
+            drawMosaicFallback(in: rect)
+            return
+        }
+
+        filter.setValue(fullImage, forKey: kCIInputImageKey)
+        filter.setValue(CaptureAnnotation.mosaicBlurRadius, forKey: kCIInputRadiusKey)
+
+        guard
+            let blurredImage = filter.outputImage?.cropped(to: fullImage.extent),
+            let blurredCGImage = ciContext.createCGImage(blurredImage, from: imageRect)
+        else {
+            drawMosaicFallback(in: rect)
+            return
+        }
+
+        let path = NSBezierPath(
+            roundedRect: rect,
+            xRadius: CaptureAnnotation.mosaicCornerRadius,
+            yRadius: CaptureAnnotation.mosaicCornerRadius
+        )
+        outputContext.saveGState()
+        path.addClip()
+        outputContext.draw(blurredCGImage, in: rect)
+        outputContext.setFillColor(NSColor.white.withAlphaComponent(CaptureAnnotation.mosaicOverlayAlpha).cgColor)
+        outputContext.fill(rect)
+        outputContext.restoreGState()
+    }
+
+    private func drawMosaicFallback(in rect: CGRect) {
+        let path = NSBezierPath(
+            roundedRect: rect,
+            xRadius: CaptureAnnotation.mosaicCornerRadius,
+            yRadius: CaptureAnnotation.mosaicCornerRadius
+        )
+        NSColor.white.withAlphaComponent(0.16).setFill()
         path.fill()
-        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private var hoverOrActiveMosaicTarget: MosaicInteractionTarget {
+        activeMosaicTarget != .none ? activeMosaicTarget : hoverMosaicTarget
+    }
+
+    private func beginMosaicInteraction(at point: CGPoint) -> Bool {
+        guard let result = mosaicInteraction(at: point) else {
+            return false
+        }
+
+        activeMosaicIndex = result.index
+        activeMosaicTarget = result.target
+        interactionStartMousePoint = point
+        interactionStartMosaicRect = result.rect
+        hoverMosaicTarget = result.target
+        return true
+    }
+
+    private func finishMosaicInteraction(at point: CGPoint) {
+        updateActiveMosaic(with: point)
+        activeMosaicIndex = nil
+        activeMosaicTarget = .none
+        interactionStartMousePoint = nil
+        interactionStartMosaicRect = nil
+        updateMosaicHover(at: point)
+        annotationsDidChange?(annotations)
+        applyCursorForCurrentState()
+    }
+
+    private func updateActiveMosaic(with point: CGPoint) {
+        guard
+            let activeMosaicIndex,
+            let startPoint = interactionStartMousePoint,
+            let startRect = interactionStartMosaicRect,
+            annotations.indices.contains(activeMosaicIndex),
+            case .mosaic = annotations[activeMosaicIndex]
+        else {
+            return
+        }
+
+        let updatedRect = updatedMosaicRect(
+            from: startRect,
+            startPoint: startPoint,
+            currentPoint: point,
+            target: activeMosaicTarget
+        )
+        annotations[activeMosaicIndex] = .mosaic(updatedRect)
+    }
+
+    private func updateMosaicHover(at point: CGPoint) {
+        let previous = hoverMosaicTarget
+        hoverMosaicTarget = mosaicInteraction(at: point)?.target ?? .none
+        if previous != hoverMosaicTarget || activeMosaicTarget != .none {
+            applyCursorForCurrentState()
+        }
+    }
+
+    private func applyCursorForCurrentState() {
+        cursor(for: hoverOrActiveMosaicTarget).set()
+    }
+
+    private func cursor(for target: MosaicInteractionTarget) -> NSCursor {
+        guard currentTool == .mosaic else {
+            return .crosshair
+        }
+
+        switch target {
+        case .move:
+            return activeMosaicTarget == .move ? .closedHand : .openHand
+        case .resizeLeft, .resizeRight:
+            return .resizeLeftRight
+        case .resizeTop, .resizeBottom:
+            return .resizeUpDown
+        case .resizeTopLeft, .resizeBottomRight:
+            return ._windowResizeNorthWestSouthEast
+        case .resizeTopRight, .resizeBottomLeft:
+            return ._windowResizeNorthEastSouthWest
+        case .none:
+            return .crosshair
+        }
+    }
+
+    private func updatedMosaicRect(
+        from rect: CGRect,
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        target: MosaicInteractionTarget
+    ) -> CGRect {
+        let deltaX = currentPoint.x - startPoint.x
+        let deltaY = currentPoint.y - startPoint.y
+
+        var minX = rect.minX
+        var maxX = rect.maxX
+        var minY = rect.minY
+        var maxY = rect.maxY
+
+        switch target {
+        case .move:
+            return constrainedRect(rect.offsetBy(dx: deltaX, dy: deltaY))
+        case .resizeTop:
+            maxY += deltaY
+        case .resizeBottom:
+            minY += deltaY
+        case .resizeLeft:
+            minX += deltaX
+        case .resizeRight:
+            maxX += deltaX
+        case .resizeTopLeft:
+            minX += deltaX
+            maxY += deltaY
+        case .resizeTopRight:
+            maxX += deltaX
+            maxY += deltaY
+        case .resizeBottomLeft:
+            minX += deltaX
+            minY += deltaY
+        case .resizeBottomRight:
+            maxX += deltaX
+            minY += deltaY
+        case .none:
+            return rect
+        }
+
+        return constrainedResizeRect(minX: minX, maxX: maxX, minY: minY, maxY: maxY)
+    }
+
+    private func constrainedRect(_ rect: CGRect) -> CGRect {
+        CGRect(
+            x: min(max(rect.minX, bounds.minX), bounds.maxX - rect.width),
+            y: min(max(rect.minY, bounds.minY), bounds.maxY - rect.height),
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    private func constrainedResizeRect(minX: CGFloat, maxX: CGFloat, minY: CGFloat, maxY: CGFloat) -> CGRect {
+        var adjustedMinX = max(minX, bounds.minX)
+        var adjustedMaxX = min(maxX, bounds.maxX)
+        var adjustedMinY = max(minY, bounds.minY)
+        var adjustedMaxY = min(maxY, bounds.maxY)
+
+        if adjustedMaxX - adjustedMinX < Self.minimumMosaicSize {
+            adjustedMaxX = min(bounds.maxX, adjustedMinX + Self.minimumMosaicSize)
+            adjustedMinX = max(bounds.minX, adjustedMaxX - Self.minimumMosaicSize)
+        }
+
+        if adjustedMaxY - adjustedMinY < Self.minimumMosaicSize {
+            adjustedMaxY = min(bounds.maxY, adjustedMinY + Self.minimumMosaicSize)
+            adjustedMinY = max(bounds.minY, adjustedMaxY - Self.minimumMosaicSize)
+        }
+
+        return CGRect(
+            x: adjustedMinX,
+            y: adjustedMinY,
+            width: adjustedMaxX - adjustedMinX,
+            height: adjustedMaxY - adjustedMinY
+        )
+    }
+
+    private func mosaicInteraction(at point: CGPoint) -> (index: Int, rect: CGRect, target: MosaicInteractionTarget)? {
+        guard currentTool == .mosaic else {
+            return nil
+        }
+
+        for index in annotations.indices.reversed() {
+            guard case let .mosaic(rect) = annotations[index] else {
+                continue
+            }
+
+            let target = mosaicInteractionTarget(for: point, in: rect.standardized)
+            if target != .none {
+                return (index, rect.standardized, target)
+            }
+        }
+
+        return nil
+    }
+
+    private func mosaicInteractionTarget(for point: CGPoint, in rect: CGRect) -> MosaicInteractionTarget {
+        let cornerSize = Self.mosaicCornerHitSize
+        let edgeThickness = Self.mosaicEdgeHitThickness
+
+        let topLeftCorner = CGRect(x: rect.minX - cornerSize / 2, y: rect.maxY - cornerSize / 2, width: cornerSize, height: cornerSize)
+        let topRightCorner = CGRect(x: rect.maxX - cornerSize / 2, y: rect.maxY - cornerSize / 2, width: cornerSize, height: cornerSize)
+        let bottomLeftCorner = CGRect(x: rect.minX - cornerSize / 2, y: rect.minY - cornerSize / 2, width: cornerSize, height: cornerSize)
+        let bottomRightCorner = CGRect(x: rect.maxX - cornerSize / 2, y: rect.minY - cornerSize / 2, width: cornerSize, height: cornerSize)
+
+        if topLeftCorner.contains(point) { return .resizeTopLeft }
+        if topRightCorner.contains(point) { return .resizeTopRight }
+        if bottomLeftCorner.contains(point) { return .resizeBottomLeft }
+        if bottomRightCorner.contains(point) { return .resizeBottomRight }
+
+        let leftEdge = CGRect(x: rect.minX - edgeThickness / 2, y: rect.minY + cornerSize / 2, width: edgeThickness, height: max(rect.height - cornerSize, 0))
+        let rightEdge = CGRect(x: rect.maxX - edgeThickness / 2, y: rect.minY + cornerSize / 2, width: edgeThickness, height: max(rect.height - cornerSize, 0))
+        let topEdge = CGRect(x: rect.minX + cornerSize / 2, y: rect.maxY - edgeThickness / 2, width: max(rect.width - cornerSize, 0), height: edgeThickness)
+        let bottomEdge = CGRect(x: rect.minX + cornerSize / 2, y: rect.minY - edgeThickness / 2, width: max(rect.width - cornerSize, 0), height: edgeThickness)
+
+        if leftEdge.contains(point) { return .resizeLeft }
+        if rightEdge.contains(point) { return .resizeRight }
+        if topEdge.contains(point) { return .resizeTop }
+        if bottomEdge.contains(point) { return .resizeBottom }
+        if rect.contains(point) { return .move }
+        return .none
     }
 
     @objc
@@ -373,5 +715,34 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
     func controlTextDidEndEditing(_ obj: Notification) {
         commitActiveTextIfNeeded()
+    }
+
+    private enum MosaicInteractionTarget: Equatable {
+        case none
+        case move
+        case resizeTop
+        case resizeBottom
+        case resizeLeft
+        case resizeRight
+        case resizeTopLeft
+        case resizeTopRight
+        case resizeBottomLeft
+        case resizeBottomRight
+    }
+}
+
+private extension NSCursor {
+    static var _windowResizeNorthWestSouthEast: NSCursor {
+        NSCursor(
+            image: NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil) ?? NSImage(),
+            hotSpot: NSPoint(x: 8, y: 8)
+        )
+    }
+
+    static var _windowResizeNorthEastSouthWest: NSCursor {
+        NSCursor(
+            image: NSImage(systemSymbolName: "arrow.up.right.and.arrow.down.left", accessibilityDescription: nil) ?? NSImage(),
+            hotSpot: NSPoint(x: 8, y: 8)
+        )
     }
 }

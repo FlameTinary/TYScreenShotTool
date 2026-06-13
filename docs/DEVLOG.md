@@ -889,3 +889,84 @@ HotKey
 Menu Bar
 → Settings Entry
 → Settings Window
+
+---
+
+# 2026-06-13
+
+## Sprint 21 完成
+
+### 马赛克毛玻璃与交互
+
+实现：
+
+- 编辑态马赛克预览改为基于 `CIGaussianBlur` 的局部毛玻璃效果
+- 导出 PNG 与复制结果继续使用 `CIGaussianBlur`，与编辑态保持一致方向
+- 马赛克区域支持在编辑态中继续拖动与缩放
+- 预览态底图改为通过 `ScreenCaptureKit` 抓取当前屏幕图像
+
+修改：
+
+- `CaptureAnnotationCanvasView`
+- `CaptureOverlayView`
+- `CaptureOverlayService`
+- `CaptureSessionService`
+- `ScreenCaptureService`
+- `CaptureAnnotation`
+
+结果：
+
+- 马赛克预览不再只是浅色遮罩
+- 编辑态与导出态的马赛克视觉方向保持一致
+- 马赛克区域可继续微调位置和大小
+
+---
+
+### Bug Fix
+
+#### 马赛克保存时崩溃
+
+问题：
+
+- 在截图编辑态添加马赛克后点击保存，应用崩溃
+- 控制台报错为 `NSGenericException`
+- 调用栈定位到马赛克 hover 的光标刷新路径
+
+原因：
+
+- 在 `cursorUpdate` 回调中递归触发了 `invalidateCursorRects`
+- 导致 AppKit 重复进行 Window Structural Regions 更新并最终抛出异常
+
+修复：
+
+- 去掉马赛克 hover 中的递归光标刷新
+- 改为直接根据当前命中目标设置手型或缩放光标
+
+结果：
+
+- 点击保存不再导致应用崩溃
+
+---
+
+#### 马赛克光标反馈延迟
+
+问题：
+
+- 鼠标进入马赛克内部时，未按下鼠标前仍显示十字
+- 鼠标移动到边缘和角时，未按下鼠标前不显示双向箭头
+- 只有开始拖动后才显示正确光标
+
+原因：
+
+- 内层标注 canvas 已计算出正确光标
+- 但外层 overlay 在预览态持续把截图区域内光标覆盖为十字
+
+修复：
+
+- 在标注工具激活且鼠标位于截图选区内时，停止由外层 overlay 接管光标
+- 改由标注 canvas 独立管理马赛克的 hover / move / resize 光标
+
+结果：
+
+- 马赛克内部可直接显示手型
+- 马赛克边缘和角可直接显示双向箭头
