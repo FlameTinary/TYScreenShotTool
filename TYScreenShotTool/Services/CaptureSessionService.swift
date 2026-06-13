@@ -102,7 +102,9 @@ final class CaptureSessionService {
 
         Task {
             do {
-                overlayService.hideActiveOverlay()
+                await MainActor.run {
+                    overlayService.hideActiveOverlay()
+                }
                 try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
                 let exportedImage = try exportedImage(
@@ -113,21 +115,31 @@ final class CaptureSessionService {
                 )
                 try clipboardService.copyImage(exportedImage)
                 print("Clipboard Copy Success")
-                overlayService.dismissOverlay()
+                await MainActor.run {
+                    overlayService.dismissOverlay()
+                }
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
-                overlayService.restoreActiveOverlay()
+                await MainActor.run {
+                    overlayService.restoreActiveOverlay()
+                }
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
-                overlayService.restoreActiveOverlay()
+                await MainActor.run {
+                    overlayService.restoreActiveOverlay()
+                }
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
             } catch let error as ClipboardError {
-                overlayService.restoreActiveOverlay()
+                await MainActor.run {
+                    overlayService.restoreActiveOverlay()
+                }
                 print("Clipboard copy failed: \(error.localizedDescription)")
             } catch {
-                overlayService.restoreActiveOverlay()
+                await MainActor.run {
+                    overlayService.restoreActiveOverlay()
+                }
                 print("Clipboard copy failed: \(error.localizedDescription)")
             }
         }
@@ -142,7 +154,9 @@ final class CaptureSessionService {
             var temporaryFileURL: URL?
 
             do {
-                overlayService.hideActiveOverlay()
+                await MainActor.run {
+                    overlayService.hideActiveOverlay()
+                }
                 try await Task.sleep(nanoseconds: 120_000_000)
                 let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
                 let exportedImage = try exportedImage(
@@ -155,14 +169,20 @@ final class CaptureSessionService {
                 let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
-                overlayService.dismissOverlay()
+                await MainActor.run {
+                    overlayService.dismissOverlay()
+                }
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
-                overlayService.restoreActiveOverlay()
+                await MainActor.run {
+                    overlayService.restoreActiveOverlay()
+                }
                 print("Capture skipped: invalid selection")
             } catch ScreenCaptureError.permissionRequired {
-                overlayService.restoreActiveOverlay()
+                await MainActor.run {
+                    overlayService.restoreActiveOverlay()
+                }
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
             } catch let error as ImageSaveError {
@@ -304,12 +324,21 @@ final class CaptureSessionService {
         context.setAllowsAntialiasing(true)
         context.setShouldAntialias(true)
 
+        let previewToImageScale = min(
+            imageRect.width / max(previewSize.width, 1),
+            imageRect.height / max(previewSize.height, 1)
+        )
+        let exportCornerRadius = min(
+            style.cornerRadius * previewToImageScale,
+            min(imageRect.width, imageRect.height) / 2
+        )
+
         let path: CGPath
-        if style.showsRoundedCorners {
+        if exportCornerRadius > 0 {
             path = CGPath(
                 roundedRect: imageRect,
-                cornerWidth: 18,
-                cornerHeight: 18,
+                cornerWidth: exportCornerRadius,
+                cornerHeight: exportCornerRadius,
                 transform: nil
             )
         } else {

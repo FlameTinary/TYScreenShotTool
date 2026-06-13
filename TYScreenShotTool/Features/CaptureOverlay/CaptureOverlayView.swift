@@ -8,6 +8,8 @@
 import AppKit
 
 final class CaptureOverlayView: NSView {
+    private static let maximumCornerRadius: Double = 100
+
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
     var onSelection: ((CGRect) -> Void)?
@@ -39,7 +41,8 @@ final class CaptureOverlayView: NSView {
     private let annotationCanvasView = CaptureAnnotationCanvasView()
     private let topBarContainerView = NSVisualEffectView()
     private let sizeLabel = NSTextField(labelWithString: "")
-    private let roundedToggle = NSButton(checkboxWithTitle: "圆角", target: nil, action: nil)
+    private let cornerRadiusLabel = NSTextField(labelWithString: "圆角")
+    private let cornerRadiusSlider = NSSlider(value: 0, minValue: 0, maxValue: maximumCornerRadius, target: nil, action: nil)
     private let shadowToggle = NSButton(checkboxWithTitle: "阴影", target: nil, action: nil)
     private let toolbarContainerView = NSVisualEffectView()
     private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
@@ -234,7 +237,7 @@ final class CaptureOverlayView: NSView {
         previewImageView.image = nil
         sizeLabel.stringValue = "\(Int(selectionRect.width)) x \(Int(selectionRect.height))"
         previewStyle = .default
-        roundedToggle.state = .off
+        cornerRadiusSlider.doubleValue = 0
         shadowToggle.state = .off
         currentAnnotationTool = nil
         annotationCanvasView.resetAnnotations()
@@ -323,9 +326,11 @@ final class CaptureOverlayView: NSView {
         previewContainerView.layer?.borderWidth = 2
         previewContainerView.layer?.borderColor = NSColor.white.cgColor
         previewContainerView.layer?.backgroundColor = NSColor.clear.cgColor
+        previewContainerView.layer?.cornerCurve = .continuous
 
         previewClipView.wantsLayer = true
         previewClipView.layer?.masksToBounds = true
+        previewClipView.layer?.cornerCurve = .continuous
         previewClipView.autoresizingMask = [.width, .height]
 
         previewImageView.imageScaling = .scaleAxesIndependently
@@ -666,16 +671,19 @@ final class CaptureOverlayView: NSView {
 
         sizeLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
         sizeLabel.textColor = .white
+        cornerRadiusLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        cornerRadiusLabel.textColor = .white
 
-        roundedToggle.target = self
-        roundedToggle.action = #selector(toggleRoundedCorners)
-        roundedToggle.contentTintColor = .white
+        cornerRadiusSlider.target = self
+        cornerRadiusSlider.action = #selector(adjustCornerRadius)
+        cornerRadiusSlider.controlSize = .small
 
         shadowToggle.target = self
         shadowToggle.action = #selector(toggleShadow)
         shadowToggle.contentTintColor = .white
         topBarContainerView.addSubview(sizeLabel)
-        topBarContainerView.addSubview(roundedToggle)
+        topBarContainerView.addSubview(cornerRadiusLabel)
+        topBarContainerView.addSubview(cornerRadiusSlider)
         topBarContainerView.addSubview(shadowToggle)
         addSubview(topBarContainerView)
     }
@@ -725,21 +733,28 @@ final class CaptureOverlayView: NSView {
         annotationCanvasView.frame = previewClipView.bounds
 
         sizeLabel.sizeToFit()
-        roundedToggle.sizeToFit()
+        cornerRadiusLabel.sizeToFit()
         shadowToggle.sizeToFit()
+
+        let sliderWidth: CGFloat = 120
+        let sliderHeight: CGFloat = 20
+        cornerRadiusSlider.frame.size = CGSize(width: sliderWidth, height: sliderHeight)
 
         let topBarPaddingX: CGFloat = 12
         let topBarPaddingY: CGFloat = 6
         let topBarSpacing: CGFloat = 10
         let topBarContentHeight = max(
             sizeLabel.frame.height,
-            roundedToggle.frame.height,
+            cornerRadiusLabel.frame.height,
+            cornerRadiusSlider.frame.height,
             shadowToggle.frame.height
         )
         let topBarWidth = topBarPaddingX * 2
             + sizeLabel.frame.width
             + topBarSpacing
-            + roundedToggle.frame.width
+            + cornerRadiusLabel.frame.width
+            + topBarSpacing
+            + cornerRadiusSlider.frame.width
             + topBarSpacing
             + shadowToggle.frame.width
         let topBarHeight = topBarPaddingY * 2 + topBarContentHeight
@@ -764,11 +779,16 @@ final class CaptureOverlayView: NSView {
             y: (topBarHeight - sizeLabel.frame.height) / 2
         )
         currentTopBarX += sizeLabel.frame.width + topBarSpacing
-        roundedToggle.frame.origin = CGPoint(
+        cornerRadiusLabel.frame.origin = CGPoint(
             x: currentTopBarX,
-            y: (topBarHeight - roundedToggle.frame.height) / 2
+            y: (topBarHeight - cornerRadiusLabel.frame.height) / 2
         )
-        currentTopBarX += roundedToggle.frame.width + topBarSpacing
+        currentTopBarX += cornerRadiusLabel.frame.width + topBarSpacing
+        cornerRadiusSlider.frame.origin = CGPoint(
+            x: currentTopBarX,
+            y: (topBarHeight - cornerRadiusSlider.frame.height) / 2
+        )
+        currentTopBarX += cornerRadiusSlider.frame.width + topBarSpacing
         shadowToggle.frame.origin = CGPoint(
             x: currentTopBarX,
             y: (topBarHeight - shadowToggle.frame.height) / 2
@@ -819,7 +839,7 @@ final class CaptureOverlayView: NSView {
     }
 
     private func updatePreviewAppearance() {
-        previewClipView.layer?.cornerRadius = previewStyle.showsRoundedCorners ? 12 : 0
+        previewClipView.layer?.cornerRadius = previewStyle.cornerRadius
         previewContainerView.layer?.shadowColor = NSColor.black.cgColor
         previewContainerView.layer?.shadowOpacity = previewStyle.showsShadow ? 0.25 : 0
         previewContainerView.layer?.shadowRadius = previewStyle.showsShadow ? 12 : 0
@@ -828,8 +848,8 @@ final class CaptureOverlayView: NSView {
     }
 
     @objc
-    private func toggleRoundedCorners() {
-        previewStyle.showsRoundedCorners = roundedToggle.state == .on
+    private func adjustCornerRadius() {
+        previewStyle.cornerRadius = CGFloat(cornerRadiusSlider.doubleValue)
         updatePreviewAppearance()
     }
 
@@ -887,11 +907,11 @@ final class CaptureOverlayView: NSView {
     }
 
     private func cutoutPath(for rect: CGRect) -> NSBezierPath {
-        if mode == .preview && previewStyle.showsRoundedCorners {
+        if mode == .preview && previewStyle.cornerRadius > 0 {
             return NSBezierPath(
                 roundedRect: rect,
-                xRadius: 12,
-                yRadius: 12
+                xRadius: previewStyle.cornerRadius,
+                yRadius: previewStyle.cornerRadius
             )
         }
 

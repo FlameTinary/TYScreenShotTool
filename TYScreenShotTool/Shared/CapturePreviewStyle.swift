@@ -8,11 +8,11 @@
 import Foundation
 
 struct CapturePreviewStyle {
-    var showsRoundedCorners: Bool
+    var cornerRadius: CGFloat
     var showsShadow: Bool
 
     static let `default` = CapturePreviewStyle(
-        showsRoundedCorners: false,
+        cornerRadius: 0,
         showsShadow: false
     )
 }
