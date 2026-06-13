@@ -58,7 +58,7 @@ final class CaptureSessionService {
             do {
                 self.pendingScreenImages = try await self.screenCaptureService.captureScreenImages()
                 self.transition(to: .overlayPresented)
-                self.overlayService.presentOverlay()
+                self.overlayService.presentOverlay(screenImages: self.pendingScreenImages)
             } catch ScreenCaptureError.permissionRequired {
                 print("Screen Recording permission required.")
                 print("Please restart the app after granting permission.")
@@ -124,11 +124,7 @@ final class CaptureSessionService {
 
         Task {
             do {
-                await MainActor.run {
-                    overlayService.hideActiveOverlay()
-                }
-                try await Task.sleep(nanoseconds: 120_000_000)
-                let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
+                let image = try frozenSelectionImage(for: pendingSelectionRect)
                 let exportedImage = try exportedImage(
                     from: image,
                     style: style,
@@ -143,25 +139,10 @@ final class CaptureSessionService {
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
-                await MainActor.run {
-                    overlayService.restoreActiveOverlay()
-                }
                 print("Capture skipped: invalid selection")
-            } catch ScreenCaptureError.permissionRequired {
-                await MainActor.run {
-                    overlayService.restoreActiveOverlay()
-                }
-                print("Screen Recording permission required.")
-                print("Please restart the app after granting permission.")
             } catch let error as ClipboardError {
-                await MainActor.run {
-                    overlayService.restoreActiveOverlay()
-                }
                 print("Clipboard copy failed: \(error.localizedDescription)")
             } catch {
-                await MainActor.run {
-                    overlayService.restoreActiveOverlay()
-                }
                 print("Clipboard copy failed: \(error.localizedDescription)")
             }
         }
@@ -176,11 +157,7 @@ final class CaptureSessionService {
             var temporaryFileURL: URL?
 
             do {
-                await MainActor.run {
-                    overlayService.hideActiveOverlay()
-                }
-                try await Task.sleep(nanoseconds: 120_000_000)
-                let image = try await screenCaptureService.captureImage(in: pendingSelectionRect)
+                let image = try frozenSelectionImage(for: pendingSelectionRect)
                 let exportedImage = try exportedImage(
                     from: image,
                     style: style,
@@ -197,16 +174,7 @@ final class CaptureSessionService {
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
-                await MainActor.run {
-                    overlayService.restoreActiveOverlay()
-                }
                 print("Capture skipped: invalid selection")
-            } catch ScreenCaptureError.permissionRequired {
-                await MainActor.run {
-                    overlayService.restoreActiveOverlay()
-                }
-                print("Screen Recording permission required.")
-                print("Please restart the app after granting permission.")
             } catch let error as ImageSaveError {
                 if let temporaryFileURL {
                     cleanupTemporaryImage(at: temporaryFileURL)
@@ -222,6 +190,35 @@ final class CaptureSessionService {
                 print("Save failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func frozenSelectionImage(for selectionRect: CGRect) throws -> CGImage {
+        guard selectionRect.width > 1, selectionRect.height > 1 else {
+            throw ScreenCaptureError.invalidSelection
+        }
+
+        guard let screen = screenContaining(selectionRect) else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        guard screen.frame.minX <= selectionRect.minX,
+              screen.frame.maxX >= selectionRect.maxX,
+              screen.frame.minY <= selectionRect.minY,
+              screen.frame.maxY >= selectionRect.maxY else {
+            throw FrozenCaptureExportError.selectionSpansMultipleDisplays
+        }
+
+        let displayID = try displayID(for: screen)
+
+        guard let screenImage = pendingScreenImages[displayID] else {
+            throw FrozenCaptureExportError.cachedScreenImageMissing
+        }
+
+        return try screenCaptureService.cropImage(
+            screenImage,
+            in: screen.frame,
+            to: selectionRect
+        )
     }
 
     private func transition(to newState: CaptureState) {
@@ -241,6 +238,22 @@ final class CaptureSessionService {
     private func clearPendingCapture() {
         pendingSelectionRect = nil
         pendingScreenImages.removeAll()
+    }
+
+    private func screenContaining(_ rect: CGRect) -> NSScreen? {
+        NSScreen.screens.first { screen in
+            screen.frame.contains(CGPoint(x: rect.midX, y: rect.midY))
+        }
+    }
+
+    private func displayID(for screen: NSScreen) throws -> CGDirectDisplayID {
+        guard
+            let value = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+        else {
+            throw ScreenCaptureError.displayNotFound
+        }
+
+        return CGDirectDisplayID(value.uint32Value)
     }
 
     private func cleanupTemporaryImage(at url: URL) {
@@ -567,6 +580,20 @@ enum ExportRenderError: LocalizedError {
             return "Failed to create export render context."
         case .imageCreationFailed:
             return "Failed to create rendered export image."
+        }
+    }
+}
+
+enum FrozenCaptureExportError: LocalizedError {
+    case selectionSpansMultipleDisplays
+    case cachedScreenImageMissing
+
+    var errorDescription: String? {
+        switch self {
+        case .selectionSpansMultipleDisplays:
+            return "Frozen capture export only supports selections fully contained within a single display."
+        case .cachedScreenImageMissing:
+            return "Failed to locate the frozen screen image for the current selection."
         }
     }
 }

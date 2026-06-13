@@ -20,13 +20,16 @@ final class CaptureOverlayService {
     private weak var activeOverlayView: CaptureOverlayView?
     private weak var activeOverlayWindow: CaptureOverlayWindow?
 
-    func presentOverlay() {
+    func presentOverlay(screenImages: [CGDirectDisplayID: CGImage]) {
         guard overlayWindows.isEmpty else {
             return
         }
 
         for screen in NSScreen.screens {
             let overlayView = CaptureOverlayView(frame: screen.frame)
+            if let displayID = try? displayID(for: screen) {
+                overlayView.selectionSourceScreenImage = screenImages[displayID]
+            }
             overlayView.onCancel = { [weak self] in
                 self?.onCancel?()
             }

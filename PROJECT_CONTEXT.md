@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 14 Planned
+Sprint 22 Completed
 
 ## Principles
 
@@ -33,13 +33,17 @@ Shared
 - HotKey Settings
 - Save Directory Settings
 - Toolbar Editing Foundation
-- Preparing App Store Readiness
+- Basic Annotations
+- Mosaic
+- Selection Move/Resize
+- Corner Radius Slider
+- Frosted Mosaic Preview
 
 ## Current Next Sprint
 
-Sprint 14
+Sprint 23
 
-App Store Readiness
+Screenshot Action Extension
 
 ## Source Of Truth
 

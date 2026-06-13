@@ -34,6 +34,11 @@ final class CaptureOverlayView: NSView {
     private var mode: Mode = .selection
     private var previewSelectionRect: CGRect?
     private var previewStyle = CapturePreviewStyle.default
+    var selectionSourceScreenImage: CGImage? {
+        didSet {
+            needsDisplay = true
+        }
+    }
     private var previewSourceScreenImage: CGImage?
     private var previewSourceScreenFrame: CGRect?
 
@@ -99,6 +104,10 @@ final class CaptureOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if selectionSourceScreenImage != nil {
+            drawSelectionBackground(in: dirtyRect)
+        }
+
         let activeRect: CGRect?
         switch mode {
         case .selection:
@@ -270,6 +279,7 @@ final class CaptureOverlayView: NSView {
         interactionStartSelectionRect = nil
         previewSelectionLocked = false
         previewSelectionRect = nil
+        selectionSourceScreenImage = nil
         previewSourceScreenImage = nil
         previewSourceScreenFrame = nil
         previewImageView.image = nil
@@ -939,6 +949,18 @@ final class CaptureOverlayView: NSView {
         ).integral
 
         annotationCanvasView.sourceImage = previewSourceScreenImage.cropping(to: cropRect)
+    }
+
+    private func drawSelectionBackground(in dirtyRect: NSRect) {
+        guard let selectionSourceScreenImage else {
+            return
+        }
+
+        guard let context = NSGraphicsContext.current?.cgContext else {
+            return
+        }
+
+        context.draw(selectionSourceScreenImage, in: bounds)
     }
 
     private func cutoutPath(for rect: CGRect) -> NSBezierPath {

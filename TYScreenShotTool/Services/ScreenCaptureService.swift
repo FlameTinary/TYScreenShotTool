@@ -30,6 +30,7 @@ final class ScreenCaptureService {
             let configuration = SCStreamConfiguration()
             configuration.width = Int(screen.frame.width * CGFloat(filter.pointPixelScale))
             configuration.height = Int(screen.frame.height * CGFloat(filter.pointPixelScale))
+            configuration.showsCursor = false
 
             let image = try await captureImage(contentFilter: filter, configuration: configuration)
             images[displayID] = image
