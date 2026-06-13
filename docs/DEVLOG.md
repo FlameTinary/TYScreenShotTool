@@ -1,104 +1,87 @@
 # Development Log
 
+按 `Sprint` 顺序记录已完成迭代，作为阶段性开发摘要。
+
 ---
 
 # 2026-06-05
 
 ## Sprint 01 完成
 
-### Menu Bar App
+### 主题
 
-实现：
+Menu Bar App 骨架
 
-- SwiftUI MenuBarExtra
-- 菜单栏运行模式
+### 实现
+
+- 使用 `SwiftUI MenuBarExtra` 搭建菜单栏应用
 - 隐藏 Dock 图标
-- Quit 菜单
+- 提供 `Quit` 菜单项
+- 建立 `App / Features / Services / Shared / Resources` 基础目录结构
 
-新增：
+### 结果
 
-- App 目录
-- Features 目录
-- Services 目录
-- Shared 目录
-- Resources 目录
-
-项目从普通 SwiftUI App 转换为 Menu Bar App。
+项目从普通 `SwiftUI App` 转为菜单栏截图工具骨架。
 
 ---
 
 ## Sprint 02 完成
 
-### Global Hotkey
+### 主题
 
-实现：
+全局快捷键
 
-- Carbon RegisterEventHotKey
-- 全局快捷键注册
-- ⌘⇧2
+### 实现
 
-输出：
+- 基于 `Carbon RegisterEventHotKey` 注册全局快捷键
+- 默认快捷键为 `⌘⇧2`
+- 触发时输出 `Screenshot shortcut triggered`
 
-Screenshot shortcut triggered
+### 结果
 
-新增：
-
-- ScreenshotHotKey
-- GlobalHotKeyService
-
-项目具备全局唤起能力。
+项目具备全局唤起截图流程的能力。
 
 ---
 
 ## Sprint 03 完成
 
-### Capture Overlay
+### 主题
 
-实现：
+Capture Overlay
 
-- Overlay Window
-- Overlay View
-- 多显示器支持
-- 十字光标
-- ESC退出
-- 拖拽选区
-- Selection Rect 输出
+### 实现
 
-新增：
+- 增加 `Overlay Window`
+- 增加 `Overlay View`
+- 支持多显示器遮罩
+- 支持十字光标
+- 支持拖拽选区
+- 支持 `ESC` 取消
+- 松开鼠标输出 `Selection Rect`
 
-- CaptureOverlayWindow
-- CaptureOverlayView
-- CaptureOverlayService
+### 结果
 
-项目具备完整截图交互壳层。
+项目具备最小截图交互外壳。
 
 ---
 
 ## Sprint 04 完成
 
-### Capture Session State Machine
+### 主题
 
-实现：
+Capture Session State Machine
 
-状态：
+### 实现
 
-- Idle
-- OverlayPresented
-- Dragging
-- SelectionCompleted
-
-新增：
-
-- CaptureState
-- CaptureSessionService
-
-统一管理：
-
-- 热键
-- Overlay
-- Session 生命周期
-
----
+- 新增 `CaptureState`
+- 新增 `CaptureSessionService`
+- 建立统一状态流转：
+  - `Idle`
+  - `OverlayPresented`
+  - `Dragging`
+  - `SelectionCompleted`
+  - `Idle`
+- 统一管理热键、Overlay 与 Session 生命周期
 
 ### Bug Fix
 
@@ -106,299 +89,466 @@ Screenshot shortcut triggered
 
 问题：
 
-Borderless Window 默认无法成为 Key Window。
-
-导致：
-
-ESC 无法响应。
+- `Borderless Window` 默认无法成为 `Key Window`
 
 修复：
 
-CaptureOverlayWindow：
+- 在 `CaptureOverlayWindow` 中开启：
+  - `canBecomeKey = true`
+  - `canBecomeMain = true`
 
-canBecomeKey = true
+### 结果
 
-canBecomeMain = true
-
-修复后：
-
-ESC 正常退出。
+截图状态流转被统一收敛，`ESC` 退出恢复正常。
 
 ---
 
-## Sprint 05
+## Sprint 05 完成
 
-日期：2026-06-05
+### 主题
 
-### Goal
+ScreenCaptureKit 集成
 
-接入真实截图能力。
+### 实现
 
-### Completed
+- 新增 `ScreenCaptureService`
+- 接入 `ScreenCaptureKit`
+- 支持获取真实 `CGImage`
+- 支持屏幕录制权限检查
+- 支持多显示器截图
+- 支持 Retina 显示器
+- 兼容：
+  - macOS 15.2+ `captureImage(in:)`
+  - macOS 15.0 ~ 15.1 `captureImage(contentFilter:)`
+- 使用 `window.convertRectToScreen(...)` 统一选区坐标转换
 
-#### ScreenCaptureService
+### 验证
 
-新增独立截图服务：
+- 单显示器验证通过
+- 双显示器验证通过
+- Retina 验证通过
+- `ESC` 取消验证通过
 
-- 权限检查
-- ScreenCaptureKit 封装
-- 返回 CGImage
+### 结果
 
----
+MVP 首次具备真实截图能力：
 
-#### ScreenCaptureKit
-
-实现双路径支持：
-
-macOS 15.2+
-
-- captureImage(in:)
-
-macOS 15.0~15.1
-
-- SCShareableContent
-- SCContentFilter
-- SCStreamConfiguration
-- captureImage(contentFilter:)
+`HotKey → Overlay → Selection Rect → ScreenCaptureKit → CGImage`
 
 ---
 
-#### 坐标转换
+## Sprint 06 完成
 
-改用：
+### 主题
 
-window.convertRectToScreen(...)
+PNG 自动保存
 
-统一转换到全局屏幕坐标。
+### 实现
 
----
+- 新增 `ImageSaveService`
+- 使用 `ImageIO + CGImageDestination` 输出 PNG
+- 自动生成毫秒级文件名：
+  - `Screenshot-yyyy-MM-dd-HH-mm-ss-SSS.png`
+- 保存到桌面目录
+- 成功后输出：
+  - `Save Success`
+  - `path: ...`
 
-#### 生命周期
+### Bug Fix
 
-保持 Sprint 04 四状态：
+#### Desktop 写入失败
 
-Idle
-OverlayPresented
-Dragging
-SelectionCompleted
+问题：
 
-未新增截图相关状态。
-
----
-
-### Validation
-
-#### 单显示器
-
-验证通过。
-
-成功输出：
-
-Capture Success
-
----
-
-#### 双显示器
-
-验证通过。
-
-副显示器坐标：
-
-x = -1440
-
-截图成功。
-
----
-
-#### Retina
-
-验证通过。
-
-截图尺寸约为选区尺寸 2 倍。
-
----
-
-# 2026-06-07
-
-## Sprint 15 完成
-
-### 基础标注工具
-
-实现：
-
-- 在截图工具栏中增加矩形、圆形、箭头、画笔、文字 5 类基础标注能力
-- 标注内容能够实时显示在截图编辑态预览中
-- 复制与保存导出结果均包含已添加的标注内容
-
-新增：
-
-- AnnotationTool
-- CaptureAnnotation
-- CaptureAnnotationCanvasView
-
-修改：
-
-- CaptureOverlayView
-- CaptureOverlayService
-- CaptureSessionService
-- TYScreenShotToolApp
-
-关键修复：
-
-- 修复预览标注与最终导出 PNG 位置不一致问题
-- 导出阶段按预览尺寸统一缩放标注坐标，保证预览与最终结果一致
-
-验证结果：
-
-- 工程编译通过
-- 5 类标注工具均可正常使用
-- 保存后的 PNG 与预览标注位置一致
-- 复制结果包含标注内容
-- 圆角、阴影、复制、保存、取消主链路保持正常
-
-#### ESC
-
-验证通过。
-
-Overlay 可正常退出。
-
----
-
-### Outcome
-
-项目首次具备真实截图能力。
-
-MVP 已完成：
-
-HotKey
-→ Overlay
-→ Selection
-→ ScreenCaptureKit
-→ CGImage
-
----
-
-## 当前项目能力
-
-已完成：
-
-✓ Menu Bar App
-
-✓ Global Hotkey
-
-✓ Capture Overlay
-
-✓ Capture Session
-
-✓ 多显示器支持
-
-✓ ESC取消
-
-✓ Selection Rect
-
----
-
-# 2026-06-06
-
-## Sprint 13 补充修复
-
-### 工具栏截图交互收紧
+- 开启 `App Sandbox` 后无法直接写入真实桌面
 
 修复：
 
-- 热键唤起 overlay 后可直接开始拖拽
-- 连续多次热键截图时无需先额外点击一次
-- 拖拽完成后仅保留选区，不再立刻执行真实截图
-- 点击复制或保存时才真正调用截图能力
-- 导出前临时隐藏 overlay，避免白色选区边框被截入结果图
-- 导出失败时恢复当前 overlay，保留用户操作上下文
+- 关闭 target 的 `App Sandbox`
 
-调整：
+#### 选区与截图内容不一致
 
-- `TYScreenShotToolApp`
-- `CaptureOverlayService`
-- `CaptureOverlayView`
-- `CaptureOverlayWindow`
-- `CaptureSessionService`
+问题：
 
-验证：
+- `AppKit` 选区坐标与 `ScreenCaptureKit` 显示空间坐标不一致
+
+修复：
+
+- 增加显示空间坐标转换
+- 修正 `sourceRect.y`
+- 使用 `NSScreen + displayID` 匹配实际显示器
+
+### 验证
 
 - 编译通过
-- 连续多次热键截图验证通过
-- 工具栏复制与保存触发时机符合预期
-- 最终导出 PNG 白边问题修复通过
+- `⌘⇧2` 截图通过
+- 桌面成功生成 PNG
+- `Console` 输出保存路径
+- Retina 正常
+- 多显示器正常
+- 选区与截图内容一致
+
+### 结果
+
+MVP 链路扩展为：
+
+`HotKey → Overlay → Selection Rect → ScreenCaptureKit → CGImage → PNG → Desktop`
 
 ---
 
 # 2026-06-06
+
+## Sprint 07 完成
+
+### 主题
+
+Clipboard 支持
+
+### 实现
+
+- 新增 `ClipboardService`
+- 将 `CGImage` 转为 `NSImage` 写入系统剪贴板
+- 引入临时 PNG 流程：
+  - `CGImage → Temp PNG → Clipboard → Desktop PNG`
+- 满足“复制失败则本次截图整体失败且不保留桌面 PNG”的要求
+- 成功后输出：
+  - `Save Success`
+  - `path: ...`
+  - `Clipboard Copy Success`
+
+### 验证
+
+- 编译通过
+- 可正常粘贴到聊天框
+- 桌面最终生成 PNG
+- `Console` 输出保存路径
+- `Console` 输出复制成功
+
+### 结果
+
+主链路扩展为：
+
+`HotKey → Overlay → Selection Rect → ScreenCaptureKit → Temp PNG → Clipboard → Desktop PNG`
+
+---
+
+## Sprint 08 完成
+
+### 主题
+
+OCR
+
+### 实现
+
+- 新增 `OCRService`
+- 使用 `Vision + VNRecognizeTextRequest`
+- 在 PNG 保存与剪贴板复制成功后执行 OCR
+- 成功后输出：
+  - `OCR Success`
+  - `text: ...`
+
+### 验证
+
+- 构建通过
+- PNG 保存正常
+- 剪贴板复制正常
+- `Console` 输出 `OCR Success`
+- `Console` 输出 `text: ...`
+- 可识别实际界面中的英文文字
+
+### 结果
+
+主链路扩展为：
+
+`HotKey → Overlay → Selection Rect → ScreenCaptureKit → Temp PNG → Clipboard → Desktop PNG → OCR → Text`
+
+---
+
+## Sprint 09 完成
+
+### 主题
+
+设置页面
+
+### 实现
+
+- 增加原生 `Settings` scene
+- 增加最小 `SettingsView`
+- 在菜单栏中增加 `Settings` 入口
+- 页面中展示 3 个最小占位项：
+  - `HotKey 配置`
+  - `保存目录配置`
+  - `OCR 开关`
+
+### Bug Fix
+
+#### Settings 首次无法打开
+
+修复：
+
+- 改为使用 SwiftUI 原生设置打开动作
+
+#### 中文 OCR 乱码
+
+修复：
+
+- 在 `OCRService` 中增加识别语言：
+  - `zh-Hans`
+  - `zh-Hant`
+  - `en-US`
+- 启用自动语言检测
+
+### 验证
+
+- 构建通过
+- 菜单栏 `Settings` 可正常打开
+- 设置页可正常显示
+- 中文 OCR 识别恢复正常
+- 截图、PNG、Clipboard、OCR 主链路正常
+
+### 结果
+
+项目新增最小设置入口，为后续真实配置能力提供稳定 UI 落点。
+
+---
+
+## Sprint 10 完成
+
+### 主题
+
+OCR 开关
+
+### 实现
+
+- 将 `OCR 开关` 从占位项升级为真实可操作控件
+- 开关状态可持久化保存
+- 截图流程根据开关状态决定是否执行 OCR
+- OCR 关闭时输出：
+  - `OCR skipped: disabled in settings`
+
+### 验证
+
+- 可以在 `Settings` 页面切换 `OCR 开关`
+- OCR 开启时输出 `OCR Success`
+- OCR 关闭时输出跳过日志
+- PNG 保存与剪贴板复制保持正常
+
+### 结果
+
+设置页首次具备真实生效配置项。
+
+---
+
+## Sprint 11 完成
+
+### 主题
+
+HotKey 配置
+
+### 实现
+
+- 将 `HotKey 配置` 从占位项升级为真实配置项
+- 支持少量预设快捷键：
+  - `⌘⇧2`
+  - `⌘⇧8`
+  - `⌘⇧9`
+- 配置可持久化保存
+- 修改后立即重新注册并生效
+
+### 验证
+
+- 可在设置页查看并修改快捷键
+- 新快捷键可正常触发截图
+- 旧快捷键不再触发
+- PNG、Clipboard、OCR 主链路保持正常
+
+### 结果
+
+用户可以真实修改截图唤起快捷键。
+
+---
+
+## Sprint 12 完成
+
+### 主题
+
+保存目录配置
+
+### 实现
+
+- 将 `保存目录配置` 从占位项升级为真实配置项
+- 展示当前保存目录
+- 支持通过原生目录选择器修改保存目录
+- 支持恢复默认桌面
+- 保存目录配置可持久化保存
+
+### 验证
+
+- 可在设置页查看并修改保存目录
+- PNG 会保存到新目录
+- 重启应用后配置仍保留
+- 恢复默认桌面后可重新保存到桌面
+- 剪贴板复制与 OCR 保持正常
+
+### 结果
+
+截图保存路径从固定桌面升级为可配置目录。
+
+---
 
 ## Sprint 13 完成
 
-### 截图工具栏基础
+### 主题
 
-实现：
+截图工具栏基础
+
+### 实现
 
 - 框选完成后不再自动复制、保存或 OCR
-- 截图进入预览编辑态
-- 增加底部工具栏：复制、保存、取消
-- 增加顶部悬浮设置栏：尺寸、圆角、阴影
+- 进入截图预览编辑态
+- 增加底部工具栏：
+  - 复制
+  - 保存
+  - 取消
+- 增加顶部悬浮设置栏：
+  - 尺寸显示
+  - 圆角
+  - 阴影
 - 保存与复制前按当前样式重新导出图片
 
-新增：
+### 补充修复
 
-- `CapturePreviewStyle`
+- 热键唤起 overlay 后可直接开始拖拽
+- 连续多次热键截图时无需额外点击一次
+- 真实截图生成时机后移到复制或保存动作触发时
+- 导出前临时隐藏 overlay，避免白色选区边框进入最终图片
+- 导出失败时恢复当前 overlay，保留用户操作上下文
 
-调整：
-
-- `CaptureOverlayView`
-- `CaptureOverlayService`
-- `CaptureSessionService`
-- `TYScreenShotToolApp`
-
-验证：
+### 验证
 
 - 编译通过
 - 工具栏交互正常
 - 保存后的 PNG 正常生成
 - 剪贴板复制正常
 - 圆角、阴影在最终导出 PNG 中生效
-- 控制台输出保存成功日志
+- 连续多次热键截图无需额外点击
+- 最终导出 PNG 不再包含白色选区边框
 
-结果：
+### 结果
 
-项目完成最小截图工具栏主链路，为后续标注与动作扩展提供交互基础。
+截图流程从“自动后处理”转为“用户在工具栏手动触发后处理”。
 
-✓ PNG 自动保存到桌面
+---
+
+# 2026-06-07
+
+## Sprint 14 阻塞
+
+### 主题
+
+上架适配
+
+### 实现
+
+- 开启并适配 `App Sandbox`
+- 调整保存目录模型以适配沙箱权限
+- 支持保存目录权限恢复
+- 补齐最小隐私与工程配置
+- 验证项目具备继续执行 `Release / Archive / Upload` 的基础条件
+
+### 当前状态
+
+- 保存目录权限模型已完成适配
+- 未配置目录时失败链路已可控
+- 主链路已具备上架前的最小功能条件
+- 当前阻塞点为开发者账号尚未完成申请
+
+### 结果
+
+`Sprint 14` 保持 `Blocked`，待开发者账号可用后恢复。
+
+---
+
+# 2026-06-08
+
+## Sprint 15 完成
+
+### 主题
+
+基础标注工具
+
+### 实现
+
+- 增加矩形标注
+- 增加圆形标注
+- 增加箭头标注
+- 增加自由画笔
+- 增加文字标注
+- 标注内容可实时显示在截图编辑态预览中
+- 标注内容可进入复制与保存导出结果
+
+### Bug Fix
+
+#### 预览标注与导出位置不一致
+
+修复：
+
+- 导出阶段按预览尺寸统一缩放标注坐标
+
+### 验证
+
+- 工程编译通过
+- 5 类基础标注均可正常使用
+- 保存后的 PNG 与预览标注位置一致
+- 复制结果包含标注内容
+- 圆角、阴影、复制、保存、取消主链路正常
+
+### 结果
+
+截图工具进入最小可用标注阶段。
+
+---
+
+## Sprint 16 完成
+
+### 主题
+
+标注增强
+
+### 实现
+
+- 增加马赛克标注
+- 增加最小撤销体验
+- 复制与保存导出结果接入马赛克与撤销链路
+- 将马赛克效果调整为局部模糊遮挡
+
+### 结果
+
+截图编辑态具备了基础标注之外的第一类增强标注能力。
 
 ---
 
 ## Sprint 17 完成
 
-### 截图区域微调
+### 主题
 
-实现：
+截图区域微调
+
+### 实现
 
 - 在截图预览态支持截图区域整体拖动微调
 - 鼠标进入可拖动截图区域时显示手型
 - 拖动过程中显示握手态
-- 拖动结束后复制与保存基于新的最终截图区域导出
+- 拖动后复制与保存基于新的最终截图区域导出
 - 产生任意标注后锁定截图区域，不再允许继续拖动
 
-修改：
-
-- `CaptureOverlayView`
-- `CaptureAnnotationCanvasView`
-- `CaptureOverlayService`
-- `CaptureSessionService`
-- `TYScreenShotToolApp`
-
-关键修复：
+### Bug Fix
 
 - 修复只能抓取截图白边才能拖动的问题
 - 修复鼠标移出截图区域后仍保持手型的问题
 - 修复进入标注态后鼠标未恢复十字的问题
 
-验证结果：
+### 验证
 
 - 工程编译通过
 - 截图区域内部可直接拖动
@@ -406,26 +556,28 @@ HotKey
 - 拖动后复制与保存结果与最终区域一致
 - 产生任意标注后截图区域锁定
 
+### 结果
+
+用户可以在导出前对截图位置做最小微调。
+
 ---
 
 ## Sprint 18 完成
 
-### 截图区域缩放微调
+### 主题
 
-实现：
+截图区域缩放微调
 
-- 在截图预览态支持拖拽四边调整截图区域尺寸
-- 在截图预览态支持拖拽四角调整截图区域尺寸
+### 实现
+
+- 支持拖拽四边调整截图区域尺寸
+- 支持拖拽四角调整截图区域尺寸
 - 根据边和角的位置显示对应方向的双向箭头光标
 - 缩放过程中实时更新截图尺寸显示
 - 缩放后复制与保存基于最终截图区域导出
-- 保持产生任意标注后锁定截图区域的既有约束
+- 保持“产生任意标注后锁定截图区域”的既有约束
 
-修改：
-
-- `CaptureOverlayView`
-
-验证结果：
+### 验证
 
 - 工程编译通过
 - 截图区域内部拖动正常
@@ -436,459 +588,78 @@ HotKey
 - 复制与保存结果基于最终调整后的区域
 - 产生任意标注后截图区域锁定
 
+### 结果
+
+截图区域在预览态具备完整的最小移动与缩放微调能力。
+
 ---
 
 ## Sprint 19 完成
 
-### 应用命名调整
+### 主题
 
-实现：
+应用命名调整
 
-- 将应用构建产物名称从 `TShot.app` 调整为 `SmartShot.app`
+### 实现
+
+- 将应用构建产物名称统一为 `SmartShot.app`
 - 将 `CFBundleDisplayName` 调整为 `SmartShot`
 - 将 `CFBundleName` 调整为 `SmartShot`
 - 将菜单栏文案调整为 `SmartShot`
-- 将菜单栏图标的辅助功能名称调整为 `SmartShot`
+- 将菜单栏图标辅助功能名称调整为 `SmartShot`
 
-修改：
-
-- `TYScreenShotTool.xcodeproj/project.pbxproj`
-- `MenuBarContentView`
-- `TYScreenShotToolApp`
-
-验证结果：
+### 验证
 
 - 工程编译通过
 - 构建产物名称确认为 `SmartShot.app`
 - 用户可见命名入口已统一为 `SmartShot`
 
+### 结果
+
+应用面向用户的名称完成统一。
+
 ---
 
 ## Sprint 20 完成
 
-### 圆角样式滑块
+### 主题
 
-实现：
+圆角样式滑块
+
+### 实现
 
 - 将截图编辑态顶部的圆角开关改为圆角滑块
-- 将圆角样式从布尔值升级为单一 `cornerRadius` 数值
+- 将圆角样式升级为单一 `cornerRadius` 数值驱动
 - 滑块值为 `0` 时无圆角
 - 滑块值增大时预览圆角半径同步增大
 - 导出 PNG 与复制结果中的圆角半径与预览保持一致
 - 圆角滑块最大值提升到 `100`
 
-修改：
+### Bug Fix
 
-- `CapturePreviewStyle`
-- `CaptureOverlayView`
-- `CaptureSessionService`
+#### 预览圆角与导出圆角不一致
 
-关键修复：
+修复：
 
-- 修复导出圆角与预览圆角不一致的问题
 - 导出阶段按预览尺寸与实际图像尺寸比例换算圆角半径
 - 预览层改为连续圆角曲线，提升大圆角时的视觉平滑度
 
-验证结果：
+### 补充说明
+
+- 验证过程中排查到一次双遮罩问题
+- 根因是系统中同时运行了两个截图应用实例
+- 关闭重复实例后，遮罩残留问题消失
+
+### 验证
 
 - 工程编译通过
 - 圆角滑块交互正常
 - 预览圆角与导出圆角一致
 - 阴影、标注、复制、保存主链路正常
 
-补充说明：
+### 结果
 
-- 验证过程中排查到一次双遮罩问题，最终确认为系统中同时运行了两个截图应用实例所致
-- 关闭重复实例后，遮罩残留问题消失
-
----
-
-## Sprint 06
-
-日期：2026-06-05
-
-### Goal
-
-实现：
-
-CGImage
-→ PNG
-→ Desktop
-
----
-
-### Completed
-
-#### ImageSaveService
-
-新增独立保存服务：
-
-- `CGImage` 编码 PNG
-- 自动生成毫秒级文件名
-- 保存到桌面
-- 返回最终保存路径
-
----
-
-#### Capture Session Integration
-
-在 `CaptureSessionService` 中完成：
-
-- 截图成功后调用 `ImageSaveService`
-- 控制台输出 `Save Success`
-- 控制台输出实际保存路径
-
----
-
-#### File Naming
-
-使用：
-
-`Screenshot-yyyy-MM-dd-HH-mm-ss-SSS.png`
-
-避免连续截图重名。
-
----
-
-### Bug Fix
-
-#### Desktop 写入失败
-
-问题：
-
-应用开启 `App Sandbox`，
-无法直接写入真实桌面。
-
-修复：
-
-关闭 target 的 `App Sandbox`。
-
-结果：
-
-PNG 可正常保存到真实桌面目录。
-
----
-
-#### 选区与截图内容不一致
-
-问题：
-
-AppKit 选区坐标与 ScreenCaptureKit 坐标系不一致。
-
-导致：
-
-截图位置偏移。
-
-修复：
-
-- 增加显示空间坐标转换
-- 修正 `sourceRect.y`
-- 使用 `NSScreen + displayID` 匹配实际显示器
-
-结果：
-
-选区与最终截图内容一致。
-
----
-
-### Validation
-
-验证通过：
-
-- 编译通过
-- ⌘⇧2 可触发截图
-- 桌面成功生成 PNG
-- Console 输出保存路径
-- Retina 正常
-- 多显示器正常
-- 选区与截图内容一致
-
----
-
-### Outcome
-
-Sprint 06 完成。
-
-当前 MVP 链路已具备：
-
-HotKey
-→ Overlay
-→ Selection Rect
-→ ScreenCaptureKit
-→ CGImage
-→ PNG
-→ Desktop
-
-✓ ScreenCaptureKit
-
-下一阶段：
-
----
-
-## Sprint 07
-
-日期：2026-06-06
-
-### Goal
-
-实现：
-
-CGImage
-→ Clipboard
-
-并保持 PNG 保存链路成立。
-
----
-
-### Completed
-
-#### ClipboardService
-
-新增独立剪贴板服务：
-
-- `CGImage` 转换为 `NSImage`
-- 写入 `NSPasteboard`
-- 输出复制成功结果
-
----
-
-#### Temp PNG Workflow
-
-为满足失败回滚要求，
-调整保存链路为：
-
-CGImage
-→ Temp PNG
-→ Clipboard
-→ Desktop PNG
-
-这样在复制失败时，
-桌面不会残留本次截图文件。
-
----
-
-#### Capture Session Integration
-
-在 `CaptureSessionService` 中完成：
-
-- 截图成功后先生成临时 PNG
-- 剪贴板复制成功后再移动到桌面
-- 成功后输出：
-  - `Save Success`
-  - `path: ...`
-  - `Clipboard Copy Success`
-
----
-
-### Validation
-
-已验证通过：
-
-- 编译通过
-- ⌘⇧2 可触发截图
-- 可正常粘贴到聊天框
-- 桌面最终生成 PNG
-- Console 输出保存路径
-- Console 输出复制成功
-
-未验证：
-
-- 人工制造复制失败时的回滚分支
-
----
-
-### Outcome
-
-Sprint 07 完成。
-
-当前 MVP 链路已具备：
-
-HotKey
-→ Overlay
-→ Selection Rect
-→ ScreenCaptureKit
-→ Temp PNG
-→ Clipboard
-→ Desktop PNG
-
----
-
-## Sprint 08
-
-日期：2026-06-06
-
-### Goal
-
-实现：
-
-CGImage
-→ OCR
-→ Text
-
-并保持 PNG 保存与剪贴板复制链路正常。
-
----
-
-### Completed
-
-#### OCRService
-
-新增独立 OCR 服务：
-
-- 使用 `Vision`
-- 使用 `VNRecognizeTextRequest`
-- 接收 `CGImage`
-- 返回识别文本
-- 明确处理空结果与请求失败
-
----
-
-#### Capture Session Integration
-
-在 `CaptureSessionService` 中完成：
-
-- 截图成功后保持原有保存与剪贴板链路
-- 在 `Save Success` 与 `Clipboard Copy Success` 后执行 OCR
-- 成功后输出：
-  - `OCR Success`
-  - `text: ...`
-- 失败时输出：
-  - `OCR failed: ...`
-
----
-
-### Validation
-
-已验证通过：
-
-- 构建通过
-- `⌘⇧2` 可触发截图
-- 桌面 PNG 保存正常
-- 剪贴板复制正常
-- Console 输出 `OCR Success`
-- Console 输出 `text: ...`
-- OCR 可识别实际界面中的英文代码文字
-
-未验证：
-
-- 人工制造 OCR 失败分支
-- 中文文本识别效果
-- `fopen failed for data file: errno = 2 (No such file or directory)` 日志来源
-
----
-
-### Outcome
-
-Sprint 08 完成。
-
-当前 MVP 链路已具备：
-
-HotKey
-→ Overlay
-→ Selection Rect
-→ ScreenCaptureKit
-→ Temp PNG
-→ Clipboard
-→ Desktop PNG
-→ OCR
-→ Text
-
----
-
-## Sprint 09
-
-日期：2026-06-06
-
-### Goal
-
-实现：
-
-Menu Bar
-→ Settings Entry
-→ Settings Window
-
-并提供最小设置页面入口。
-
----
-
-### Completed
-
-#### Settings Scene
-
-在 `App` 层增加：
-
-- 原生 `Settings` scene
-- 最小 `SettingsView`
-- 设置页占位内容
-
-页面中展示：
-
-- `HotKey 配置`
-- `保存目录配置`
-- `OCR 开关`
-
----
-
-#### Menu Bar Integration
-
-在菜单栏中增加：
-
-- `Settings` 入口
-
-并修复：
-
-- 首次点击 `Settings` 无法打开页面的问题
-
-最终改为通过 SwiftUI 原生设置打开动作触发设置窗口。
-
----
-
-#### OCR Fix
-
-在 `OCRService` 中补充识别语言配置：
-
-- `zh-Hans`
-- `zh-Hant`
-- `en-US`
-
-并启用自动语言检测，
-修复中文识别乱码问题。
-
----
-
-### Validation
-
-已验证通过：
-
-- 构建通过
-- 菜单栏 `Settings` 可正常打开
-- `Settings` 页面可正常显示
-- 页面包含 3 个最小占位项
-- 中文 OCR 识别恢复正常
-- 现有截图、PNG、Clipboard、OCR 链路正常
-
----
-
-### Outcome
-
-Sprint 09 完成。
-
-当前 MVP 链路已具备：
-
-HotKey
-→ Overlay
-→ Selection Rect
-→ ScreenCaptureKit
-→ Temp PNG
-→ Clipboard
-→ Desktop PNG
-→ OCR
-
-并新增：
-
-Menu Bar
-→ Settings Entry
-→ Settings Window
+顶部样式控制从布尔开关升级为更细粒度的圆角调节。
 
 ---
 
@@ -896,31 +667,17 @@ Menu Bar
 
 ## Sprint 21 完成
 
-### 马赛克毛玻璃与交互
+### 主题
 
-实现：
+马赛克毛玻璃预览与交互修复
+
+### 实现
 
 - 编辑态马赛克预览改为基于 `CIGaussianBlur` 的局部毛玻璃效果
 - 导出 PNG 与复制结果继续使用 `CIGaussianBlur`，与编辑态保持一致方向
 - 马赛克区域支持在编辑态中继续拖动与缩放
-- 预览态底图改为通过 `ScreenCaptureKit` 抓取当前屏幕图像
-
-修改：
-
-- `CaptureAnnotationCanvasView`
-- `CaptureOverlayView`
-- `CaptureOverlayService`
-- `CaptureSessionService`
-- `ScreenCaptureService`
-- `CaptureAnnotation`
-
-结果：
-
-- 马赛克预览不再只是浅色遮罩
-- 编辑态与导出态的马赛克视觉方向保持一致
-- 马赛克区域可继续微调位置和大小
-
----
+- 为兼容新版 macOS SDK，预览态底图改为基于 `ScreenCaptureKit` 的整屏抓取
+- 保持 `SelectionCompleted` 后截图区域仍然是现有 `Overlay / 选区编辑模型`
 
 ### Bug Fix
 
@@ -930,12 +687,12 @@ Menu Bar
 
 - 在截图编辑态添加马赛克后点击保存，应用崩溃
 - 控制台报错为 `NSGenericException`
-- 调用栈定位到马赛克 hover 的光标刷新路径
+- 调用栈定位到 `CaptureAnnotationCanvasView.cursorUpdate(with:)`
 
 原因：
 
 - 在 `cursorUpdate` 回调中递归触发了 `invalidateCursorRects`
-- 导致 AppKit 重复进行 Window Structural Regions 更新并最终抛出异常
+- 导致 `AppKit` 重复进行 `Window Structural Regions` 更新并最终抛出异常
 
 修复：
 
@@ -945,8 +702,6 @@ Menu Bar
 结果：
 
 - 点击保存不再导致应用崩溃
-
----
 
 #### 马赛克光标反馈延迟
 
@@ -958,15 +713,30 @@ Menu Bar
 
 原因：
 
-- 内层标注 canvas 已计算出正确光标
-- 但外层 overlay 在预览态持续把截图区域内光标覆盖为十字
+- 内层标注画布已计算出正确光标
+- 但外层 `Overlay` 在预览态持续把截图区域内光标覆盖为十字
 
 修复：
 
-- 在标注工具激活且鼠标位于截图选区内时，停止由外层 overlay 接管光标
-- 改由标注 canvas 独立管理马赛克的 hover / move / resize 光标
+- 在标注工具激活且鼠标位于截图选区内时，停止由外层 `Overlay` 接管光标
+- 改由标注画布独立管理马赛克的 `hover / move / resize` 光标
 
 结果：
 
 - 马赛克内部可直接显示手型
 - 马赛克边缘和角可直接显示双向箭头
+
+### 验证
+
+- `xcodebuild` 无签名构建通过
+- 编辑态马赛克预览已不再是浅色遮罩
+- 保存后的 PNG 中马赛克效果与编辑态方向一致
+- 复制结果中的马赛克效果与编辑态方向一致
+- 马赛克区域支持拖动与缩放
+- 马赛克保存崩溃问题已修复
+- 马赛克内部手型与边角双向箭头反馈已修复
+- 其他标注、圆角、阴影、复制、保存主链路经人工验证保持正常
+
+### 结果
+
+马赛克能力从“基础可用”升级为“预览、导出、交互一致”的可编辑状态。
