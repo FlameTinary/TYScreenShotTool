@@ -438,6 +438,32 @@ HotKey
 
 ---
 
+## Sprint 19 完成
+
+### 应用命名调整
+
+实现：
+
+- 将应用构建产物名称从 `TShot.app` 调整为 `SmartShot.app`
+- 将 `CFBundleDisplayName` 调整为 `SmartShot`
+- 将 `CFBundleName` 调整为 `SmartShot`
+- 将菜单栏文案调整为 `SmartShot`
+- 将菜单栏图标的辅助功能名称调整为 `SmartShot`
+
+修改：
+
+- `TYScreenShotTool.xcodeproj/project.pbxproj`
+- `MenuBarContentView`
+- `TYScreenShotToolApp`
+
+验证结果：
+
+- 工程编译通过
+- 构建产物名称确认为 `SmartShot.app`
+- 用户可见命名入口已统一为 `SmartShot`
+
+---
+
 ## Sprint 06
 
 日期：2026-06-05

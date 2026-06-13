@@ -81,7 +81,7 @@ struct TYScreenShotToolApp: App {
         } label: {
             Image("MenuBarIcon")
                 .renderingMode(.template)
-                .accessibilityLabel("TShot")
+                .accessibilityLabel("SmartShot")
         }
         .menuBarExtraStyle(.menu)
     }
