@@ -162,6 +162,31 @@ AI解释错误
 
 ---
 
+## 构建
+
+在受限沙箱环境里，`xcodebuild` 默认会把 `DerivedData` 写到系统目录，
+这可能导致先看到权限错误，而不是实际编译结果。
+
+项目内提供了统一构建脚本：
+
+```bash
+./scripts/build.sh
+```
+
+这个脚本会：
+
+* 将 `DerivedData` 固定到仓库内的 `./DerivedData`
+* 默认构建 `TYScreenShotTool` 的 `Debug` 配置
+* 关闭签名要求，便于本地和自动化环境验证编译结果
+
+如需切换配置，可使用：
+
+```bash
+CONFIGURATION=Release ./scripts/build.sh
+```
+
+---
+
 ## 项目结构
 
 ScreenshotTool/
