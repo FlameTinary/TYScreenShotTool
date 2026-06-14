@@ -57,6 +57,21 @@ final class ScreenCaptureService {
         return try await captureImageWithContentFilter(in: rect)
     }
 
+    func captureImageExcludingCurrentApplication(in rect: CGRect) async throws -> CGImage {
+        guard rect.width > 1, rect.height > 1 else {
+            throw ScreenCaptureError.invalidSelection
+        }
+
+        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            throw ScreenCaptureError.permissionRequired
+        }
+
+        return try await captureImageWithContentFilter(
+            in: rect,
+            excludingBundleIdentifier: Bundle.main.bundleIdentifier
+        )
+    }
+
     func cropImage(_ image: CGImage, in screenFrame: CGRect, to screenRect: CGRect) throws -> CGImage {
         guard screenRect.width > 1, screenRect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -94,7 +109,10 @@ final class ScreenCaptureService {
         }
     }
 
-    private func captureImageWithContentFilter(in rect: CGRect) async throws -> CGImage {
+    private func captureImageWithContentFilter(
+        in rect: CGRect,
+        excludingBundleIdentifier: String? = nil
+    ) async throws -> CGImage {
         let shareableContent = try await SCShareableContent.current
 
         guard let screen = screen(containing: rect) else {
@@ -106,7 +124,13 @@ final class ScreenCaptureService {
             throw ScreenCaptureError.displayNotFound
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let filter: SCContentFilter
+        if let excludingBundleIdentifier,
+           let application = shareableContent.applications.first(where: { $0.bundleIdentifier == excludingBundleIdentifier }) {
+            filter = SCContentFilter(display: display, excludingApplications: [application], exceptingWindows: [])
+        } else {
+            filter = SCContentFilter(display: display, excludingWindows: [])
+        }
         let configuration = SCStreamConfiguration()
         configuration.sourceRect = CGRect(
             x: rect.origin.x - display.frame.origin.x,
@@ -116,6 +140,7 @@ final class ScreenCaptureService {
         )
         configuration.width = Int(rect.width * CGFloat(filter.pointPixelScale))
         configuration.height = Int(rect.height * CGFloat(filter.pointPixelScale))
+        configuration.showsCursor = false
 
         return try await withCheckedThrowingContinuation { continuation in
             SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration) { image, error in

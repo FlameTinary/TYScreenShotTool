@@ -43,4 +43,8 @@ final class CaptureOverlayWindow: NSWindow {
         }
         NSCursor.crosshair.set()
     }
+
+    func setMousePassthrough(_ enabled: Bool) {
+        ignoresMouseEvents = enabled
+    }
 }

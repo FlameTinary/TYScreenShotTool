@@ -17,6 +17,7 @@ final class CaptureOverlayService {
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
 
     private var overlayWindows: [CaptureOverlayWindow] = []
     private weak var activeOverlayView: CaptureOverlayView?
@@ -64,6 +65,9 @@ final class CaptureOverlayService {
             overlayView.onPinRequested = { [weak self] in
                 self?.onPinRequested?($0, $1)
             }
+            overlayView.onLongCaptureRequested = { [weak self] annotations in
+                self?.onLongCaptureRequested?(annotations)
+            }
 
             let window = CaptureOverlayWindow(screen: screen, contentView: overlayView)
             overlayWindows.append(window)
@@ -107,8 +111,21 @@ final class CaptureOverlayService {
         activeOverlayWindow?.showOverlay()
     }
 
+    func enterLongCaptureGuideMode() {
+        activeOverlayView?.enterLongCaptureGuideMode()
+        activeOverlayWindow?.setMousePassthrough(true)
+        activeOverlayWindow?.orderFrontRegardless()
+    }
+
+    func exitLongCaptureGuideMode() {
+        activeOverlayWindow?.setMousePassthrough(false)
+        activeOverlayView?.exitLongCaptureGuideMode()
+        activeOverlayWindow?.showOverlay()
+    }
+
     func dismissOverlay() {
         overlayWindows.forEach { window in
+            window.setMousePassthrough(false)
             window.orderOut(nil)
         }
         overlayWindows.removeAll()

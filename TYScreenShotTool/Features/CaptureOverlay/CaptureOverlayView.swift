@@ -18,6 +18,7 @@ final class CaptureOverlayView: NSView {
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
 
     private static let edgeHitThickness: CGFloat = 8
     private static let cornerHitSize: CGFloat = 12
@@ -34,6 +35,8 @@ final class CaptureOverlayView: NSView {
     private var interactionStartMousePoint: CGPoint?
     private var interactionStartSelectionRect: CGRect?
     private var mode: Mode = .selection
+    private var isLongCaptureGuideMode = false
+    private var suppressFrozenBackground = false
     private var previewSelectionRect: CGRect?
     private var previewStyle = CapturePreviewStyle.default
     var selectionSourceScreenImage: CGImage? {
@@ -56,6 +59,7 @@ final class CaptureOverlayView: NSView {
     private let toolbarContainerView = NSVisualEffectView()
     private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
     private let undoButton = NSButton(title: "撤销", target: nil, action: nil)
+    private let longCaptureButton = NSButton(title: "长截图", target: nil, action: nil)
     private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
     private let pinButton = NSButton(title: "Pin", target: nil, action: nil)
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
@@ -108,7 +112,7 @@ final class CaptureOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if selectionSourceScreenImage != nil {
+        if selectionSourceScreenImage != nil, suppressFrozenBackground == false {
             drawSelectionBackground(in: dirtyRect)
         }
 
@@ -120,16 +124,18 @@ final class CaptureOverlayView: NSView {
             activeRect = previewSelectionRect
         }
 
-        if let activeRect {
-            let overlayPath = NSBezierPath(rect: bounds)
-            let cutoutPath = cutoutPath(for: activeRect)
-            overlayPath.append(cutoutPath)
-            overlayPath.windingRule = .evenOdd
-            NSColor.black.withAlphaComponent(0.35).setFill()
-            overlayPath.fill()
-        } else {
-            NSColor.black.withAlphaComponent(0.35).setFill()
-            bounds.fill()
+        if isLongCaptureGuideMode == false {
+            if let activeRect {
+                let overlayPath = NSBezierPath(rect: bounds)
+                let cutoutPath = cutoutPath(for: activeRect)
+                overlayPath.append(cutoutPath)
+                overlayPath.windingRule = .evenOdd
+                NSColor.black.withAlphaComponent(0.35).setFill()
+                overlayPath.fill()
+            } else {
+                NSColor.black.withAlphaComponent(0.35).setFill()
+                bounds.fill()
+            }
         }
 
         switch mode {
@@ -248,6 +254,8 @@ final class CaptureOverlayView: NSView {
 
     func showSelectionPreview(selectionRect: CGRect, sourceScreenImage: CGImage?, screenFrame: CGRect) {
         mode = .preview
+        isLongCaptureGuideMode = false
+        suppressFrozenBackground = false
         previewSelectionRect = selectionRect
         previewSourceScreenImage = sourceScreenImage
         previewSourceScreenFrame = screenFrame
@@ -272,8 +280,37 @@ final class CaptureOverlayView: NSView {
         updateCursor(for: selectionRect.origin)
     }
 
+    func enterLongCaptureGuideMode() {
+        guard mode == .preview, previewSelectionRect != nil else {
+            return
+        }
+
+        isLongCaptureGuideMode = true
+        suppressFrozenBackground = true
+        previewContainerView.isHidden = true
+        topBarContainerView.isHidden = true
+        toolbarContainerView.isHidden = true
+        needsDisplay = true
+    }
+
+    func exitLongCaptureGuideMode() {
+        guard mode == .preview else {
+            return
+        }
+
+        isLongCaptureGuideMode = false
+        suppressFrozenBackground = false
+        previewContainerView.isHidden = false
+        topBarContainerView.isHidden = false
+        toolbarContainerView.isHidden = false
+        needsLayout = true
+        needsDisplay = true
+    }
+
     func resetToSelectionMode() {
         mode = .selection
+        isLongCaptureGuideMode = false
+        suppressFrozenBackground = false
         dragStartPoint = nil
         currentPoint = nil
         isDragging = false
@@ -553,6 +590,10 @@ final class CaptureOverlayView: NSView {
     }
 
     private func updateCursor(for point: CGPoint) {
+        if isLongCaptureGuideMode {
+            return
+        }
+
         guard mode == .preview else {
             NSCursor.crosshair.set()
             return
@@ -724,6 +765,8 @@ final class CaptureOverlayView: NSView {
 
         undoButton.target = self
         undoButton.action = #selector(requestUndo)
+        longCaptureButton.target = self
+        longCaptureButton.action = #selector(requestLongCapture)
         ocrButton.target = self
         ocrButton.action = #selector(requestOCR)
         pinButton.target = self
@@ -742,11 +785,12 @@ final class CaptureOverlayView: NSView {
             return button
         }
 
-        (annotationButtons + [undoButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]).forEach { button in
+        (annotationButtons + [undoButton, longCaptureButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]).forEach { button in
             button.bezelStyle = .rounded
         }
         annotationButtons.forEach(toolbarContainerView.addSubview)
         toolbarContainerView.addSubview(undoButton)
+        toolbarContainerView.addSubview(longCaptureButton)
         toolbarContainerView.addSubview(ocrButton)
         toolbarContainerView.addSubview(pinButton)
         toolbarContainerView.addSubview(copyButton)
@@ -830,6 +874,7 @@ final class CaptureOverlayView: NSView {
         let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }
         annotationButtons.forEach { $0.sizeToFit() }
         undoButton.sizeToFit()
+        longCaptureButton.sizeToFit()
         ocrButton.sizeToFit()
         pinButton.sizeToFit()
         copyButton.sizeToFit()
@@ -842,13 +887,14 @@ final class CaptureOverlayView: NSView {
         let toolbarContentHeight = max(
             annotationButtons.map(\.frame.height).max() ?? 0,
             undoButton.frame.height,
+            longCaptureButton.frame.height,
             ocrButton.frame.height,
             pinButton.frame.height,
             copyButton.frame.height,
             saveButton.frame.height,
             cancelButton.frame.height
         )
-        let toolbarButtons = annotationButtons + [undoButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]
+        let toolbarButtons = annotationButtons + [undoButton, longCaptureButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]
         let toolbarWidth = toolbarPaddingX * 2
             + toolbarButtons.reduce(CGFloat(0)) { $0 + $1.frame.width }
             + (toolbarSpacing * CGFloat(max(toolbarButtons.count - 1, 0)))
@@ -900,6 +946,12 @@ final class CaptureOverlayView: NSView {
     private func requestUndo() {
         annotationCanvasView.undoLastAnnotation()
         window?.makeFirstResponder(annotationCanvasView)
+    }
+
+    @objc
+    private func requestLongCapture() {
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onLongCaptureRequested?(annotationCanvasView.annotations)
     }
 
     @objc

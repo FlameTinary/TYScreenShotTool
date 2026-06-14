@@ -19,11 +19,17 @@ final class CaptureSessionService {
     private let pinWindowService: PinWindowService
     private let toastService: ToastService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
+    private let scrollingCaptureService: ScrollingCaptureService
+    private let scrollingCapturePanelService: ScrollingCapturePanelService
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
     private var pendingScreenImages: [CGDirectDisplayID: CGImage] = [:]
+    private var sourceApplication: NSRunningApplication?
     private var isPreparingSession = false
+    private var isInScrollingCaptureMode = false
+    private var scrollingCaptureFrames: [CGImage] = []
+    private var scrollingCaptureResultImage: CGImage?
 
     init(
         overlayService: CaptureOverlayService,
@@ -33,7 +39,9 @@ final class CaptureSessionService {
         ocrService: OCRService,
         pinWindowService: PinWindowService,
         toastService: ToastService,
-        settingsOpenCoordinator: SettingsOpenCoordinator
+        settingsOpenCoordinator: SettingsOpenCoordinator,
+        scrollingCaptureService: ScrollingCaptureService,
+        scrollingCapturePanelService: ScrollingCapturePanelService
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
@@ -43,6 +51,8 @@ final class CaptureSessionService {
         self.pinWindowService = pinWindowService
         self.toastService = toastService
         self.settingsOpenCoordinator = settingsOpenCoordinator
+        self.scrollingCaptureService = scrollingCaptureService
+        self.scrollingCapturePanelService = scrollingCapturePanelService
     }
 
     func startSession() {
@@ -72,6 +82,16 @@ final class CaptureSessionService {
                 print("Capture prepare failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    func setSourceApplication(_ application: NSRunningApplication?) {
+        guard let application,
+              application.bundleIdentifier != Bundle.main.bundleIdentifier else {
+            sourceApplication = nil
+            return
+        }
+
+        sourceApplication = application
     }
 
     func beginDragging() {
@@ -114,6 +134,11 @@ final class CaptureSessionService {
     }
 
     func cancelSession() {
+        if isInScrollingCaptureMode {
+            cancelScrollingCapture()
+            return
+        }
+
         guard state == .overlayPresented || state == .dragging || state == .selectionCompleted else {
             return
         }
@@ -248,6 +273,134 @@ final class CaptureSessionService {
         }
     }
 
+    func startScrollingCapture(annotations: [CaptureAnnotation]) {
+        guard state == .selectionCompleted, isInScrollingCaptureMode == false, let pendingSelectionRect else {
+            return
+        }
+
+        guard annotations.isEmpty else {
+            print("Scrolling capture failed: current selection contains annotations.")
+            toastService.showToast(message: "长截图暂不支持标注后进入")
+            return
+        }
+
+        scrollingCaptureFrames.removeAll()
+        scrollingCaptureResultImage = nil
+        isInScrollingCaptureMode = true
+        overlayService.enterLongCaptureGuideMode()
+
+        if let screen = screenContaining(pendingSelectionRect) {
+            scrollingCapturePanelService.presentCapturePanel(on: screen)
+        } else {
+            scrollingCapturePanelService.presentCapturePanel(on: NSScreen.main ?? NSScreen.screens[0])
+        }
+
+        pendingScreenImages.removeAll()
+        reactivateSourceApplicationForScrolling()
+
+        print("Scrolling Capture Started")
+    }
+
+    func appendScrollingCaptureFrame() {
+        guard isInScrollingCaptureMode, let pendingSelectionRect else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let frame = try await self.screenCaptureService.captureImageExcludingCurrentApplication(in: pendingSelectionRect)
+                if let previousFrame = self.scrollingCaptureFrames.last,
+                   try self.scrollingCaptureService.hasVisualChange(between: previousFrame, and: frame) == false {
+                    throw ScrollingCaptureError.noScrollChange
+                }
+
+                self.scrollingCaptureFrames.append(frame)
+                print("Scrolling Capture Frame Appended")
+                print("count: \(self.scrollingCaptureFrames.count)")
+                self.toastService.showToast(message: "已追加当前屏")
+            } catch {
+                print("Scrolling capture append failed: \(error.localizedDescription)")
+                self.toastService.showToast(message: "追加当前屏失败")
+            }
+        }
+    }
+
+    func finishScrollingCapture() {
+        guard isInScrollingCaptureMode else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let stitchedImage = try self.scrollingCaptureService.stitchVertically(self.scrollingCaptureFrames)
+                self.scrollingCaptureResultImage = stitchedImage
+                self.scrollingCapturePanelService.showResultPanel()
+                print("Scrolling Capture Stitched")
+                print("frames: \(self.scrollingCaptureFrames.count)")
+                self.toastService.showToast(message: "长截图已生成")
+            } catch {
+                self.failScrollingCapture(message: "Scrolling capture finish failed", error: error)
+            }
+        }
+    }
+
+    func copyScrollingCaptureResult() {
+        guard isInScrollingCaptureMode, let image = scrollingCaptureResultImage else {
+            return
+        }
+
+        do {
+            try clipboardService.copyImage(image)
+            print("Scrolling Capture Copy Success")
+            toastService.showToast(message: "已复制长截图到剪贴板")
+            finishScrollingCaptureSession()
+        } catch {
+            print("Scrolling capture copy failed: \(error.localizedDescription)")
+        }
+    }
+
+    func saveScrollingCaptureResult() {
+        guard isInScrollingCaptureMode, let image = scrollingCaptureResultImage else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            var temporaryFileURL: URL?
+
+            do {
+                temporaryFileURL = try self.imageSaveService.saveTemporaryPNG(image)
+                let savedFileURL = try self.imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
+                print("Scrolling Capture Save Success")
+                print("path: \(savedFileURL.path)")
+                self.toastService.showToast(message: "长截图已保存")
+                self.finishScrollingCaptureSession()
+            } catch let error as ImageSaveError {
+                if let temporaryFileURL {
+                    self.cleanupTemporaryImage(at: temporaryFileURL)
+                }
+                print("Scrolling capture save failed: \(error.localizedDescription)")
+                self.presentSaveAlertIfNeeded(for: error)
+            } catch {
+                if let temporaryFileURL {
+                    self.cleanupTemporaryImage(at: temporaryFileURL)
+                }
+                print("Scrolling capture save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func frozenSelectionImage(for selectionRect: CGRect) throws -> CGImage {
         guard selectionRect.width > 1, selectionRect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -308,6 +461,9 @@ final class CaptureSessionService {
     private func clearPendingCapture() {
         pendingSelectionRect = nil
         pendingScreenImages.removeAll()
+        scrollingCaptureFrames.removeAll()
+        scrollingCaptureResultImage = nil
+        isInScrollingCaptureMode = false
     }
 
     private func screenContaining(_ rect: CGRect) -> NSScreen? {
@@ -336,6 +492,7 @@ final class CaptureSessionService {
 
     private func finishFailedSaveSession() {
         overlayService.dismissOverlay()
+        scrollingCapturePanelService.dismissPanel()
         clearPendingCapture()
 
         if state != .idle {
@@ -391,6 +548,45 @@ final class CaptureSessionService {
     @MainActor
     private func openSettingsWindow() {
         settingsOpenCoordinator.openSettings()
+    }
+
+    private func cancelScrollingCapture() {
+        scrollingCapturePanelService.dismissPanel()
+        print("Scrolling Capture Cancelled")
+        overlayService.dismissOverlay()
+        clearPendingCapture()
+        if state != .idle {
+            transition(to: .idle)
+        }
+    }
+
+    @MainActor
+    private func finishScrollingCaptureSession() {
+        scrollingCapturePanelService.dismissPanel()
+        overlayService.dismissOverlay()
+        clearPendingCapture()
+        if state != .idle {
+            transition(to: .idle)
+        }
+    }
+
+    @MainActor
+    private func failScrollingCapture(message: String, error: Error) {
+        print("\(message): \(error.localizedDescription)")
+        scrollingCapturePanelService.dismissPanel()
+        scrollingCaptureFrames.removeAll()
+        scrollingCaptureResultImage = nil
+        isInScrollingCaptureMode = false
+        overlayService.exitLongCaptureGuideMode()
+        toastService.showToast(message: "长截图失败，请调整滚动步进后重试")
+    }
+
+    private func reactivateSourceApplicationForScrolling() {
+        guard let sourceApplication else {
+            return
+        }
+
+        sourceApplication.activate(options: [])
     }
 
     private func exportedImage(

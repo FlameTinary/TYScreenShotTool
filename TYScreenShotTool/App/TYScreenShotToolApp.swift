@@ -27,6 +27,8 @@ struct TYScreenShotToolApp: App {
         let imageSaveService = ImageSaveService()
         let pinWindowService = PinWindowService()
         let toastService = ToastService()
+        let scrollingCaptureService = ScrollingCaptureService()
+        let scrollingCapturePanelService = ScrollingCapturePanelService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -43,7 +45,9 @@ struct TYScreenShotToolApp: App {
             ocrService: OCRService(),
             pinWindowService: pinWindowService,
             toastService: toastService,
-            settingsOpenCoordinator: settingsOpenCoordinator
+            settingsOpenCoordinator: settingsOpenCoordinator,
+            scrollingCaptureService: scrollingCaptureService,
+            scrollingCapturePanelService: scrollingCapturePanelService
         )
 
         overlayService.onCancel = {
@@ -70,8 +74,28 @@ struct TYScreenShotToolApp: App {
         overlayService.onPinRequested = { style, annotations in
             sessionService.pinPendingCapture(style: style, annotations: annotations)
         }
+        overlayService.onLongCaptureRequested = { annotations in
+            sessionService.startScrollingCapture(annotations: annotations)
+        }
+        scrollingCapturePanelService.onAppendRequested = {
+            sessionService.appendScrollingCaptureFrame()
+        }
+        scrollingCapturePanelService.onFinishRequested = {
+            sessionService.finishScrollingCapture()
+        }
+        scrollingCapturePanelService.onCopyRequested = {
+            sessionService.copyScrollingCaptureResult()
+        }
+        scrollingCapturePanelService.onSaveRequested = {
+            sessionService.saveScrollingCaptureResult()
+        }
+        scrollingCapturePanelService.onCancelRequested = {
+            sessionService.cancelSession()
+        }
 
         hotKeyService.onHotKeyPressed = {
+            let sourceApplication = NSWorkspace.shared.frontmostApplication
+            sessionService.setSourceApplication(sourceApplication)
             NSApplication.shared.activate(ignoringOtherApps: true)
             sessionService.startSession()
         }
