@@ -607,12 +607,34 @@ HotKey 配置
 - 将 `CFBundleName` 调整为 `SmartShot`
 - 将菜单栏文案调整为 `SmartShot`
 - 将菜单栏图标辅助功能名称调整为 `SmartShot`
+- 将 `Bundle Identifier` 调整为 `com.sheldon.SmartShot`
+
+### Bug Fix
+
+#### 系统权限页面仍显示旧工程名
+
+问题：
+
+- 在 macOS 屏幕录制权限页面中，应用名称仍显示为 `TYScreenShotTool`
+- 与菜单栏、设置页、构建产物中的 `SmartShot` 命名不一致
+
+修复：
+
+- 补齐应用身份配置
+- 将 `Bundle Identifier` 调整为 `com.sheldon.SmartShot`
 
 ### 验证
 
 - 工程编译通过
 - 构建产物名称确认为 `SmartShot.app`
 - 用户可见命名入口已统一为 `SmartShot`
+- 系统权限授权页面中显示为 `SmartShot`
+- 使用 `Archive` 导出的 app 安装后，权限授权与截图主链路验证通过
+
+### 补充说明
+
+- Xcode 直接运行的调试版在屏幕录制授权复用上存在环境差异
+- 本次 Sprint 的权限验证以 `Archive` 导出的 app 为准
 
 ### 结果
 

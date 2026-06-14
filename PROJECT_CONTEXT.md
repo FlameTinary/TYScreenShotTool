@@ -7,7 +7,7 @@ TYScreenShotTool
 macOS 截图工具
 
 ## Current Sprint
-Sprint 22 Completed
+Sprint 19 Completed
 
 ## Principles
 
@@ -41,9 +41,9 @@ Shared
 
 ## Current Next Sprint
 
-Sprint 23
+Sprint 20
 
-Screenshot Action Extension
+Corner Radius Slider
 
 ## Source Of Truth
 

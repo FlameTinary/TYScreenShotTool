@@ -8,10 +8,16 @@ Completed
 
 将截图应用面向用户展示的名称统一从 `TShot` 调整为 `SmartShot`。
 
-本次目标仅限于用户可见命名统一，
-不进行工程目录重命名、
-不修改 Bundle Identifier、
-不引入额外品牌系统或视觉改版。
+补充修复：
+
+在 macOS 系统权限授权页面中，
+应用名称仍显示为旧工程名 `TYScreenShotTool`，
+未与 `SmartShot` 保持一致。
+
+本次目标是：
+
+补齐系统权限授权页面相关的命名一致性，
+让用户在屏幕录制等系统权限界面中看到的应用名称也统一为 `SmartShot`。
 
 ---
 
@@ -23,12 +29,12 @@ Completed
 - 更新菜单栏文案中的应用名称为 `SmartShot`
 - 更新菜单栏图标的可访问名称为 `SmartShot`
 - 更新其他当前已存在的用户可见名称文本，使其与 `SmartShot` 一致
+- 修复系统权限授权页面中仍显示旧工程名的问题
 
 ### Out of Scope
 
 - 修改工程目录名 `TYScreenShotTool`
 - 修改 Target 名称
-- 修改 Bundle Identifier
 - 修改截图文件命名规则
 - 修改应用图标视觉设计
 - 调整功能逻辑
@@ -41,10 +47,10 @@ Completed
 
 优先采用最小改动方案：
 
-1. 只调整用户可见名称
-2. 保持工程结构与代码组织不变
-3. 优先修改 Xcode Build Settings 中的 App 显示名称
-4. 同步修正代码中的菜单栏与可访问名称文本
+1. 优先保持 `SmartShot` 作为统一用户可见名称
+2. 在最小范围内补齐权限页命名一致性
+3. 优先检查并修正会影响系统权限页显示的应用身份配置
+4. 不为了命名问题扩散到无关功能改动
 
 ### 约束
 
@@ -76,19 +82,33 @@ Completed
 
 截图、设置、保存、复制等现有主链路不受影响。
 
+### 场景 5
+
+在 macOS 屏幕录制等系统权限页面中，
+应用名称应显示为 `SmartShot`，
+不应再显示 `TYScreenShotTool`。
+
+### 场景 6
+
+使用 `Archive` 导出的 app 安装并运行后，
+系统权限授权与截图主链路应正常工作。
+
 ---
 
 ## Result
 
-已完成用户可见应用命名统一。
+已完成。
 
-当前应用构建产物名称、
-Bundle 显示名称、
-菜单栏文案、
-菜单栏图标可访问名称
-均已统一调整为 `SmartShot`。
+本次最终结果：
 
-本次未修改工程目录名、
-Target 名称、
-Bundle Identifier，
-保持了最小改动原则。
+- 构建产物名称统一为 `SmartShot`
+- Bundle 显示名称统一为 `SmartShot`
+- 菜单栏文案统一为 `SmartShot`
+- 菜单栏图标可访问名称统一为 `SmartShot`
+- `Bundle Identifier` 调整为 `com.sheldon.SmartShot`
+- 系统权限授权页面中的应用名称已统一为 `SmartShot`
+
+补充说明：
+
+- 通过 `Archive` 导出的 app 安装后，权限授权与截图主链路验证通过
+- Xcode 直接运行的调试版在屏幕录制授权复用上存在环境差异，不作为本次 Sprint 通过依据

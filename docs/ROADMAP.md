@@ -300,8 +300,10 @@ HotKey 配置
 成果：
 
 - 将应用面向用户展示的名称统一从 `TShot` 调整为 `SmartShot`
-- 保持 Bundle Identifier、工程目录与核心代码结构不做不必要调整
-- 保持菜单栏、设置页、归档产物中的用户可见名称一致
+- 补齐系统权限授权页面中的 `SmartShot` 命名一致性
+- 将 `Bundle Identifier` 调整为 `com.sheldon.SmartShot`
+- 保持菜单栏、设置页、归档产物与系统权限页中的用户可见名称一致
+- 使用 `Archive` 导出的 app 验证通过
 
 ---
 

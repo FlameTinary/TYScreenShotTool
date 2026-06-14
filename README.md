@@ -185,6 +185,30 @@ AI解释错误
 CONFIGURATION=Release ./scripts/build.sh
 ```
 
+归档也使用项目内统一脚本：
+
+```bash
+./scripts/archive.sh
+```
+
+这个脚本会：
+
+* 将 `DerivedData` 固定到仓库内的 `./DerivedData`
+* 默认执行 `Release` 配置归档
+* 将归档结果输出到仓库内的 `./archived`
+
+如需自定义归档输出路径，可使用：
+
+```bash
+ARCHIVE_PATH=/your/path/SmartShot.xcarchive ./scripts/archive.sh
+```
+
+约定：
+
+* 后续 `build` 默认使用 `./scripts/build.sh`
+* 后续 `archive` 默认使用 `./scripts/archive.sh`
+* 非必要不直接手写 `xcodebuild`
+
 ---
 
 ## 项目结构
