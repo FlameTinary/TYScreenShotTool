@@ -183,8 +183,11 @@ final class ScrollingCaptureService {
             return nil
         }
 
-        let overlapHeight = current.height - match.shift
-        let segmentHeight = match.shift
+        let overlapHeight = refinedSeamRow(
+            around: current.height - match.shift,
+            in: current
+        )
+        let segmentHeight = current.height - overlapHeight
 
         guard overlapHeight > 0, segmentHeight > 0 else {
             return nil
@@ -263,6 +266,32 @@ final class ScrollingCaptureService {
         }
 
         return totalDifference / testedRows
+    }
+
+    private func refinedSeamRow(around proposedRow: Int, in pixels: ImagePixels) -> Int {
+        let searchRadius = min(28, max(pixels.height / 18, 12))
+        let minimumRow = max(6, proposedRow - searchRadius)
+        let maximumRow = min(pixels.height - 6, proposedRow + searchRadius)
+
+        guard minimumRow <= maximumRow else {
+            return proposedRow
+        }
+
+        var bestRow = proposedRow
+        var bestScore = Int.max
+
+        for candidateRow in minimumRow...maximumRow {
+            let activityScore = pixels.bandActivityScore(centeredAt: candidateRow, radius: 2)
+            let distancePenalty = abs(candidateRow - proposedRow) * 6
+            let candidateScore = activityScore + distancePenalty
+
+            if candidateScore < bestScore {
+                bestScore = candidateScore
+                bestRow = candidateRow
+            }
+        }
+
+        return bestRow
     }
 
     private struct ScrollMatch {
@@ -380,5 +409,58 @@ private nonisolated struct ImagePixels {
         }
 
         return totalDifference / comparedSamples
+    }
+
+    func bandActivityScore(centeredAt row: Int, radius: Int) -> Int {
+        let lowerBound = max(0, row - radius)
+        let upperBound = min(height - 1, row + radius)
+        var totalScore = 0
+        var sampledRows = 0
+
+        for currentRow in lowerBound...upperBound {
+            totalScore += rowActivityScore(at: currentRow)
+            sampledRows += 1
+        }
+
+        guard sampledRows > 0 else {
+            return Int.max
+        }
+
+        return totalScore / sampledRows
+    }
+
+    private func rowActivityScore(at row: Int) -> Int {
+        guard row >= 0, row < height else {
+            return Int.max
+        }
+
+        let step = max(width / 48, 1)
+        var previousLuminance: Int?
+        var totalDifference = 0
+        var samples = 0
+        var x = 0
+
+        while x < width {
+            let index = row * bytesPerRow + (x * 4)
+            let luminance = (
+                Int(data[index]) * 299
+                + Int(data[index + 1]) * 587
+                + Int(data[index + 2]) * 114
+            ) / 1000
+
+            if let previousLuminance {
+                totalDifference += abs(luminance - previousLuminance)
+                samples += 1
+            }
+
+            previousLuminance = luminance
+            x += step
+        }
+
+        guard samples > 0 else {
+            return Int.max
+        }
+
+        return totalDifference / samples
     }
 }
