@@ -17,6 +17,7 @@ final class CaptureSessionService {
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
     private let pinWindowService: PinWindowService
+    private let toastService: ToastService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
@@ -31,6 +32,7 @@ final class CaptureSessionService {
         imageSaveService: ImageSaveService,
         ocrService: OCRService,
         pinWindowService: PinWindowService,
+        toastService: ToastService,
         settingsOpenCoordinator: SettingsOpenCoordinator
     ) {
         self.overlayService = overlayService
@@ -39,6 +41,7 @@ final class CaptureSessionService {
         self.imageSaveService = imageSaveService
         self.ocrService = ocrService
         self.pinWindowService = pinWindowService
+        self.toastService = toastService
         self.settingsOpenCoordinator = settingsOpenCoordinator
     }
 
@@ -137,6 +140,7 @@ final class CaptureSessionService {
                 try clipboardService.copyImage(exportedImage)
                 print("Clipboard Copy Success")
                 await MainActor.run {
+                    toastService.showToast(message: "已复制截图到剪贴板")
                     overlayService.dismissOverlay()
                 }
                 clearPendingCapture()
@@ -172,6 +176,7 @@ final class CaptureSessionService {
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
                 await MainActor.run {
+                    toastService.showToast(message: "截图已保存")
                     overlayService.dismissOverlay()
                 }
                 clearPendingCapture()
@@ -209,6 +214,7 @@ final class CaptureSessionService {
                 print("text: \(text)")
                 print("Clipboard Copy Success")
                 await MainActor.run {
+                    toastService.showToast(message: "OCR 已复制到剪贴板")
                     overlayService.dismissOverlay()
                 }
                 clearPendingCapture()
@@ -231,7 +237,7 @@ final class CaptureSessionService {
                     style: style,
                     annotations: annotations
                 )
-                pinWindowService.presentPinnedImage(exportedImage)
+                pinWindowService.presentPinnedImage(exportedImage, sourceRect: pendingSelectionRect)
                 print("Pin Success")
                 overlayService.dismissOverlay()
                 clearPendingCapture()

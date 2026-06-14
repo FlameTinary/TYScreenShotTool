@@ -18,6 +18,7 @@ struct TYScreenShotToolApp: App {
     private let globalHotKeyService: GlobalHotKeyService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
     private let pinWindowService: PinWindowService
+    private let toastService: ToastService
 
     init() {
         let overlayService = CaptureOverlayService()
@@ -25,6 +26,7 @@ struct TYScreenShotToolApp: App {
         let clipboardService = ClipboardService()
         let imageSaveService = ImageSaveService()
         let pinWindowService = PinWindowService()
+        let toastService = ToastService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -40,6 +42,7 @@ struct TYScreenShotToolApp: App {
             imageSaveService: imageSaveService,
             ocrService: OCRService(),
             pinWindowService: pinWindowService,
+            toastService: toastService,
             settingsOpenCoordinator: settingsOpenCoordinator
         )
 
@@ -83,6 +86,7 @@ struct TYScreenShotToolApp: App {
         self.globalHotKeyService = hotKeyService
         self.settingsOpenCoordinator = settingsOpenCoordinator
         self.pinWindowService = pinWindowService
+        self.toastService = toastService
     }
 
     var body: some Scene {

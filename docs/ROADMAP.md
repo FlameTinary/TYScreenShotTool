@@ -386,9 +386,9 @@ HotKey 配置
 截图反馈与 Pin 窗口增强
 
 状态：
-📌 Current
+✅ Done
 
-目标：
+成果：
 
 - 增加 Toast 提示反馈
 - 在 OCR、复制、保存结束后弹出对应提示
@@ -402,7 +402,7 @@ HotKey 配置
 滚动长截图
 
 状态：
-📌 Backlog
+📌 Current
 
 目标：
 

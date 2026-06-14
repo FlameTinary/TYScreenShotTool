@@ -7,7 +7,7 @@ SmartShot
 macOS 截图工具
 
 ## Current Sprint
-Sprint 24 Planned
+Sprint 25 Planned
 
 ## Principles
 
@@ -30,6 +30,8 @@ Shared
 - OCR
 - OCR Toolbar Action
 - Pin Toolbar Action
+- Toast Feedback
+- Pin Window Enhancement
 - Settings Entry
 - OCR Toggle
 - HotKey Settings
@@ -43,9 +45,9 @@ Shared
 
 ## Current Next Sprint
 
-Sprint 24
+Sprint 25
 
-Screenshot Feedback And Pin Window Enhancement
+Scrolling Screenshot
 
 ## Source Of Truth
 
