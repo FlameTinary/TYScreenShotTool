@@ -15,6 +15,8 @@ final class CaptureOverlayService {
     var onPreviewSelectionChanged: ((CGRect) -> Void)?
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
 
     private var overlayWindows: [CaptureOverlayWindow] = []
     private weak var activeOverlayView: CaptureOverlayView?
@@ -55,6 +57,12 @@ final class CaptureOverlayService {
             }
             overlayView.onSaveRequested = { [weak self] in
                 self?.onSaveRequested?($0, $1)
+            }
+            overlayView.onOCRRequested = { [weak self] in
+                self?.onOCRRequested?($0, $1)
+            }
+            overlayView.onPinRequested = { [weak self] in
+                self?.onPinRequested?($0, $1)
             }
 
             let window = CaptureOverlayWindow(screen: screen, contentView: overlayView)

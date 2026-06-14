@@ -16,6 +16,8 @@ final class CaptureOverlayView: NSView {
     var onPreviewSelectionChanged: ((CGRect) -> Void)?
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
 
     private static let edgeHitThickness: CGFloat = 8
     private static let cornerHitSize: CGFloat = 12
@@ -54,6 +56,8 @@ final class CaptureOverlayView: NSView {
     private let toolbarContainerView = NSVisualEffectView()
     private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
     private let undoButton = NSButton(title: "撤销", target: nil, action: nil)
+    private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
+    private let pinButton = NSButton(title: "Pin", target: nil, action: nil)
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
@@ -720,6 +724,10 @@ final class CaptureOverlayView: NSView {
 
         undoButton.target = self
         undoButton.action = #selector(requestUndo)
+        ocrButton.target = self
+        ocrButton.action = #selector(requestOCR)
+        pinButton.target = self
+        pinButton.action = #selector(requestPin)
         copyButton.target = self
         copyButton.action = #selector(requestCopy)
         saveButton.target = self
@@ -734,11 +742,13 @@ final class CaptureOverlayView: NSView {
             return button
         }
 
-        (annotationButtons + [undoButton, copyButton, saveButton, cancelButton]).forEach { button in
+        (annotationButtons + [undoButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]).forEach { button in
             button.bezelStyle = .rounded
         }
         annotationButtons.forEach(toolbarContainerView.addSubview)
         toolbarContainerView.addSubview(undoButton)
+        toolbarContainerView.addSubview(ocrButton)
+        toolbarContainerView.addSubview(pinButton)
         toolbarContainerView.addSubview(copyButton)
         toolbarContainerView.addSubview(saveButton)
         toolbarContainerView.addSubview(cancelButton)
@@ -820,6 +830,8 @@ final class CaptureOverlayView: NSView {
         let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }
         annotationButtons.forEach { $0.sizeToFit() }
         undoButton.sizeToFit()
+        ocrButton.sizeToFit()
+        pinButton.sizeToFit()
         copyButton.sizeToFit()
         saveButton.sizeToFit()
         cancelButton.sizeToFit()
@@ -830,11 +842,13 @@ final class CaptureOverlayView: NSView {
         let toolbarContentHeight = max(
             annotationButtons.map(\.frame.height).max() ?? 0,
             undoButton.frame.height,
+            ocrButton.frame.height,
+            pinButton.frame.height,
             copyButton.frame.height,
             saveButton.frame.height,
             cancelButton.frame.height
         )
-        let toolbarButtons = annotationButtons + [undoButton, copyButton, saveButton, cancelButton]
+        let toolbarButtons = annotationButtons + [undoButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]
         let toolbarWidth = toolbarPaddingX * 2
             + toolbarButtons.reduce(CGFloat(0)) { $0 + $1.frame.width }
             + (toolbarSpacing * CGFloat(max(toolbarButtons.count - 1, 0)))
@@ -898,6 +912,18 @@ final class CaptureOverlayView: NSView {
     private func requestSave() {
         annotationCanvasView.commitActiveTextIfNeeded()
         onSaveRequested?(previewStyle, annotationCanvasView.annotations)
+    }
+
+    @objc
+    private func requestOCR() {
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onOCRRequested?(previewStyle, annotationCanvasView.annotations)
+    }
+
+    @objc
+    private func requestPin() {
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onPinRequested?(previewStyle, annotationCanvasView.annotations)
     }
 
     @objc

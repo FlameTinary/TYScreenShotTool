@@ -17,12 +17,14 @@ struct TYScreenShotToolApp: App {
     private let screenCaptureService: ScreenCaptureService
     private let globalHotKeyService: GlobalHotKeyService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
+    private let pinWindowService: PinWindowService
 
     init() {
         let overlayService = CaptureOverlayService()
         let screenCaptureService = ScreenCaptureService()
         let clipboardService = ClipboardService()
         let imageSaveService = ImageSaveService()
+        let pinWindowService = PinWindowService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -37,6 +39,7 @@ struct TYScreenShotToolApp: App {
             clipboardService: clipboardService,
             imageSaveService: imageSaveService,
             ocrService: OCRService(),
+            pinWindowService: pinWindowService,
             settingsOpenCoordinator: settingsOpenCoordinator
         )
 
@@ -58,6 +61,12 @@ struct TYScreenShotToolApp: App {
         overlayService.onSaveRequested = { style, annotations in
             sessionService.savePendingCapture(style: style, annotations: annotations)
         }
+        overlayService.onOCRRequested = { style, annotations in
+            sessionService.ocrPendingCapture(style: style, annotations: annotations)
+        }
+        overlayService.onPinRequested = { style, annotations in
+            sessionService.pinPendingCapture(style: style, annotations: annotations)
+        }
 
         hotKeyService.onHotKeyPressed = {
             NSApplication.shared.activate(ignoringOtherApps: true)
@@ -73,6 +82,7 @@ struct TYScreenShotToolApp: App {
         self.screenCaptureService = screenCaptureService
         self.globalHotKeyService = hotKeyService
         self.settingsOpenCoordinator = settingsOpenCoordinator
+        self.pinWindowService = pinWindowService
     }
 
     var body: some Scene {

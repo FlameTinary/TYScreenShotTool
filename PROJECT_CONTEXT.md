@@ -1,13 +1,13 @@
 # Project Context
 
 ## Project
-TYScreenShotTool
+SmartShot
 
 ## Goal
 macOS 截图工具
 
 ## Current Sprint
-Sprint 19 Completed
+Sprint 24 Planned
 
 ## Principles
 
@@ -28,6 +28,8 @@ Shared
 - PNG Save
 - Clipboard Copy
 - OCR
+- OCR Toolbar Action
+- Pin Toolbar Action
 - Settings Entry
 - OCR Toggle
 - HotKey Settings
@@ -41,9 +43,9 @@ Shared
 
 ## Current Next Sprint
 
-Sprint 20
+Sprint 24
 
-Corner Radius Slider
+Screenshot Feedback And Pin Window Enhancement
 
 ## Source Of Truth
 

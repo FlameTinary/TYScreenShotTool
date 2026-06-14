@@ -20,6 +20,16 @@ final class ClipboardService {
             throw ClipboardError.writeFailed
         }
     }
+
+    func copyText(_ text: String) throws {
+        let pasteboard = NSPasteboard.general
+
+        pasteboard.clearContents()
+
+        guard pasteboard.setString(text, forType: .string) else {
+            throw ClipboardError.writeFailed
+        }
+    }
 }
 
 enum ClipboardError: LocalizedError {

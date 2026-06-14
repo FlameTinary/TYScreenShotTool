@@ -16,6 +16,7 @@ final class CaptureSessionService {
     private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
+    private let pinWindowService: PinWindowService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
@@ -29,6 +30,7 @@ final class CaptureSessionService {
         clipboardService: ClipboardService,
         imageSaveService: ImageSaveService,
         ocrService: OCRService,
+        pinWindowService: PinWindowService,
         settingsOpenCoordinator: SettingsOpenCoordinator
     ) {
         self.overlayService = overlayService
@@ -36,6 +38,7 @@ final class CaptureSessionService {
         self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
         self.ocrService = ocrService
+        self.pinWindowService = pinWindowService
         self.settingsOpenCoordinator = settingsOpenCoordinator
     }
 
@@ -192,6 +195,53 @@ final class CaptureSessionService {
         }
     }
 
+    func ocrPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
+        guard state == .selectionCompleted, let pendingSelectionRect else {
+            return
+        }
+
+        Task {
+            do {
+                let image = try frozenSelectionImage(for: pendingSelectionRect)
+                let text = try ocrService.recognizeText(in: image)
+                try clipboardService.copyText(text)
+                print("OCR Success")
+                print("text: \(text)")
+                print("Clipboard Copy Success")
+                await MainActor.run {
+                    overlayService.dismissOverlay()
+                }
+                clearPendingCapture()
+                transition(to: .idle)
+            } catch {
+                print("OCR failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func pinPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
+        guard state == .selectionCompleted, let pendingSelectionRect else {
+            return
+        }
+
+        Task { @MainActor in
+            do {
+                let exportedImage = try prepareExportedImage(
+                    selectionRect: pendingSelectionRect,
+                    style: style,
+                    annotations: annotations
+                )
+                pinWindowService.presentPinnedImage(exportedImage)
+                print("Pin Success")
+                overlayService.dismissOverlay()
+                clearPendingCapture()
+                transition(to: .idle)
+            } catch {
+                print("Pin failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func frozenSelectionImage(for selectionRect: CGRect) throws -> CGImage {
         guard selectionRect.width > 1, selectionRect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -218,6 +268,20 @@ final class CaptureSessionService {
             screenImage,
             in: screen.frame,
             to: selectionRect
+        )
+    }
+
+    private func prepareExportedImage(
+        selectionRect: CGRect,
+        style: CapturePreviewStyle,
+        annotations: [CaptureAnnotation]
+    ) throws -> CGImage {
+        let image = try frozenSelectionImage(for: selectionRect)
+        return try exportedImage(
+            from: image,
+            style: style,
+            annotations: annotations,
+            previewSize: selectionRect.size
         )
     }
 
