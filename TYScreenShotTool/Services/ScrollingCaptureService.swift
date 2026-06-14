@@ -12,7 +12,7 @@ final class ScrollingCaptureService {
     func hasVisualChange(between lhs: CGImage, and rhs: CGImage) throws -> Bool {
         let lhsPixels = try ImagePixels(lhs)
         let rhsPixels = try ImagePixels(rhs)
-        return lhsPixels.isIdentical(to: rhsPixels) == false
+        return transition(previous: lhsPixels, current: rhsPixels) != nil
     }
 
     func stitchVertically(_ frames: [CGImage]) throws -> CGImage {
@@ -38,18 +38,15 @@ final class ScrollingCaptureService {
                 continue
             }
 
-            let overlapHeight = bestOverlapHeight(previous: previous, current: current)
-            let segmentHeight = current.height - overlapHeight
-
-            guard segmentHeight > 0 else {
+            guard let transition = transition(previous: previous, current: current) else {
                 continue
             }
 
             let cropRect = CGRect(
                 x: 0,
-                y: overlapHeight,
+                y: transition.overlapHeight,
                 width: current.width,
-                height: segmentHeight
+                height: transition.segmentHeight
             )
 
             guard let croppedImage = normalizedFrames[index].cropping(to: cropRect) else {
@@ -57,7 +54,7 @@ final class ScrollingCaptureService {
             }
 
             segmentImages.append(croppedImage)
-            segmentHeights.append(segmentHeight)
+            segmentHeights.append(transition.segmentHeight)
             appendedSegmentCount += 1
         }
 
@@ -70,6 +67,18 @@ final class ScrollingCaptureService {
             width: normalizedFrames[0].width,
             segmentHeights: segmentHeights
         )
+    }
+
+    func buildCurrentPreviewImage(from frames: [CGImage]) throws -> CGImage {
+        guard frames.isEmpty == false else {
+            throw ScrollingCaptureError.noFrames
+        }
+
+        if frames.count == 1, let firstFrame = frames.first {
+            return firstFrame
+        }
+
+        return try stitchVertically(frames)
     }
 
     private func normalizeFrames(_ frames: [CGImage]) throws -> [CGImage] {
@@ -137,62 +146,133 @@ final class ScrollingCaptureService {
         return stitchedImage
     }
 
-    private func bestOverlapHeight(previous: ImagePixels, current: ImagePixels) -> Int {
-        let frameHeight = min(previous.height, current.height)
-        let minimumOverlap = max(24, frameHeight / 10)
-        let maximumOverlap = min(Int(Double(frameHeight) * 0.78), frameHeight - 1)
+    private func transition(previous: ImagePixels, current: ImagePixels) -> FrameTransition? {
+        guard previous.width == current.width, previous.height == current.height else {
+            return nil
+        }
 
-        guard maximumOverlap >= minimumOverlap else {
-            return fallbackOverlapHeight(for: current.height)
+        let frameHeight = min(previous.height, current.height)
+        let minimumShift = max(18, frameHeight / 20)
+        let maximumShift = min(Int(Double(frameHeight) * 0.45), frameHeight - 1)
+
+        guard maximumShift >= minimumShift else {
+            return nil
+        }
+
+        let baselineDifference = averageDifference(
+            previous: previous,
+            current: current,
+            shift: 0
+        )
+        let match = bestScrollMatch(
+            previous: previous,
+            current: current,
+            minimumShift: minimumShift,
+            maximumShift: maximumShift
+        )
+
+        guard let match else {
+            return nil
+        }
+
+        let absoluteThreshold = 14
+        let relativeThreshold = Int(Double(baselineDifference) * 0.45)
+        let allowedScore = max(absoluteThreshold, relativeThreshold)
+
+        guard match.score <= allowedScore else {
+            return nil
+        }
+
+        let overlapHeight = current.height - match.shift
+        let segmentHeight = match.shift
+
+        guard overlapHeight > 0, segmentHeight > 0 else {
+            return nil
+        }
+
+        return FrameTransition(
+            overlapHeight: overlapHeight,
+            segmentHeight: segmentHeight
+        )
+    }
+
+    private func bestScrollMatch(
+        previous: ImagePixels,
+        current: ImagePixels,
+        minimumShift: Int,
+        maximumShift: Int
+    ) -> ScrollMatch? {
+        var bestMatch: ScrollMatch?
+
+        for shift in stride(from: minimumShift, through: maximumShift, by: 2) {
+            let score = averageDifference(
+                previous: previous,
+                current: current,
+                shift: shift
+            )
+
+            guard score < Int.max else {
+                continue
+            }
+
+            if let bestMatch, bestMatch.score <= score {
+                continue
+            }
+
+            bestMatch = ScrollMatch(shift: shift, score: score)
+        }
+
+        return bestMatch
+    }
+
+    private func averageDifference(
+        previous: ImagePixels,
+        current: ImagePixels,
+        shift: Int
+    ) -> Int {
+        let frameHeight = min(previous.height, current.height)
+        let comparableHeight = frameHeight - shift
+
+        guard comparableHeight > 0 else {
+            return Int.max
         }
 
         let sampleRowCount = 20
         let xSampleCount = min(40, max(12, previous.width / 90))
-        var bestOverlap = fallbackOverlapHeight(for: current.height)
-        var bestScore = Int.max
+        let rowStep = max(comparableHeight / sampleRowCount, 1)
+        var testedRows = 0
+        var totalDifference = 0
 
-        for overlap in stride(from: maximumOverlap, through: minimumOverlap, by: -1) {
-            let rowStep = max(overlap / sampleRowCount, 1)
-            var testedRows = 0
-            var totalDifference = 0
+        var currentRow = 0
+        while currentRow < comparableHeight {
+            let previousRow = currentRow + shift
+            let rowDifference = previous.rowDifference(
+                comparedTo: current,
+                previousRow: previousRow,
+                currentRow: currentRow,
+                xSampleCount: xSampleCount
+            )
 
-            var rowOffset = 0
-            while rowOffset < overlap {
-                let previousRow = previous.height - overlap + rowOffset
-                let currentRow = rowOffset
-
-                let rowDifference = previous.rowDifference(
-                    comparedTo: current,
-                    previousRow: previousRow,
-                    currentRow: currentRow,
-                    xSampleCount: xSampleCount
-                )
-
-                totalDifference += rowDifference
-                testedRows += 1
-                rowOffset += rowStep
-            }
-
-            guard testedRows > 0 else {
-                continue
-            }
-
-            let averageDifference = totalDifference / testedRows
-            let overlapPenalty = Int(Double(overlap) * 0.08)
-            let adjustedScore = averageDifference + overlapPenalty
-
-            if adjustedScore < bestScore {
-                bestScore = adjustedScore
-                bestOverlap = overlap
-            }
+            totalDifference += rowDifference
+            testedRows += 1
+            currentRow += rowStep
         }
 
-        return bestOverlap
+        guard testedRows > 0 else {
+            return Int.max
+        }
+
+        return totalDifference / testedRows
     }
 
-    private func fallbackOverlapHeight(for frameHeight: Int) -> Int {
-        let candidate = Int(Double(frameHeight) * 0.60)
-        return min(max(candidate, 1), frameHeight - 1)
+    private struct ScrollMatch {
+        let shift: Int
+        let score: Int
+    }
+
+    private struct FrameTransition {
+        let overlapHeight: Int
+        let segmentHeight: Int
     }
 }
 

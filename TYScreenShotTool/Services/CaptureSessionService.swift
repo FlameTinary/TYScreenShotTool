@@ -21,6 +21,7 @@ final class CaptureSessionService {
     private let settingsOpenCoordinator: SettingsOpenCoordinator
     private let scrollingCaptureService: ScrollingCaptureService
     private let scrollingCapturePanelService: ScrollingCapturePanelService
+    private let scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
@@ -30,6 +31,9 @@ final class CaptureSessionService {
     private var isInScrollingCaptureMode = false
     private var scrollingCaptureFrames: [CGImage] = []
     private var scrollingCaptureResultImage: CGImage?
+    private var isAppendingScrollingFrame = false
+    private var scrollingEventMonitor: Any?
+    private var scrollingAppendTask: Task<Void, Never>?
 
     init(
         overlayService: CaptureOverlayService,
@@ -41,7 +45,8 @@ final class CaptureSessionService {
         toastService: ToastService,
         settingsOpenCoordinator: SettingsOpenCoordinator,
         scrollingCaptureService: ScrollingCaptureService,
-        scrollingCapturePanelService: ScrollingCapturePanelService
+        scrollingCapturePanelService: ScrollingCapturePanelService,
+        scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
@@ -53,6 +58,7 @@ final class CaptureSessionService {
         self.settingsOpenCoordinator = settingsOpenCoordinator
         self.scrollingCaptureService = scrollingCaptureService
         self.scrollingCapturePanelService = scrollingCapturePanelService
+        self.scrollingCapturePreviewWindowService = scrollingCapturePreviewWindowService
     }
 
     func startSession() {
@@ -286,19 +292,21 @@ final class CaptureSessionService {
 
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
+        isAppendingScrollingFrame = false
         isInScrollingCaptureMode = true
         overlayService.enterLongCaptureGuideMode()
-
         if let screen = screenContaining(pendingSelectionRect) {
-            scrollingCapturePanelService.presentCapturePanel(on: screen)
-        } else {
-            scrollingCapturePanelService.presentCapturePanel(on: NSScreen.main ?? NSScreen.screens[0])
+            scrollingCapturePanelService.presentCapturePanel(selectionRect: pendingSelectionRect, on: screen)
+        } else if let screen = NSScreen.main ?? NSScreen.screens.first {
+            scrollingCapturePanelService.presentCapturePanel(selectionRect: pendingSelectionRect, on: screen)
         }
-
         pendingScreenImages.removeAll()
         reactivateSourceApplicationForScrolling()
 
         print("Scrolling Capture Started")
+
+        captureInitialScrollingFrame(for: pendingSelectionRect)
+        installScrollingEventMonitor(for: pendingSelectionRect)
     }
 
     func appendScrollingCaptureFrame() {
@@ -306,50 +314,7 @@ final class CaptureSessionService {
             return
         }
 
-        Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-
-            do {
-                let frame = try await self.screenCaptureService.captureImageExcludingCurrentApplication(in: pendingSelectionRect)
-                if let previousFrame = self.scrollingCaptureFrames.last,
-                   try self.scrollingCaptureService.hasVisualChange(between: previousFrame, and: frame) == false {
-                    throw ScrollingCaptureError.noScrollChange
-                }
-
-                self.scrollingCaptureFrames.append(frame)
-                print("Scrolling Capture Frame Appended")
-                print("count: \(self.scrollingCaptureFrames.count)")
-                self.toastService.showToast(message: "已追加当前屏")
-            } catch {
-                print("Scrolling capture append failed: \(error.localizedDescription)")
-                self.toastService.showToast(message: "追加当前屏失败")
-            }
-        }
-    }
-
-    func finishScrollingCapture() {
-        guard isInScrollingCaptureMode else {
-            return
-        }
-
-        Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-
-            do {
-                let stitchedImage = try self.scrollingCaptureService.stitchVertically(self.scrollingCaptureFrames)
-                self.scrollingCaptureResultImage = stitchedImage
-                self.scrollingCapturePanelService.showResultPanel()
-                print("Scrolling Capture Stitched")
-                print("frames: \(self.scrollingCaptureFrames.count)")
-                self.toastService.showToast(message: "长截图已生成")
-            } catch {
-                self.failScrollingCapture(message: "Scrolling capture finish failed", error: error)
-            }
-        }
+        appendScrollingCaptureFrameIfNeeded(for: pendingSelectionRect, requiresVisualChange: true)
     }
 
     func copyScrollingCaptureResult() {
@@ -463,6 +428,10 @@ final class CaptureSessionService {
         pendingScreenImages.removeAll()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
+        isAppendingScrollingFrame = false
+        removeScrollingEventMonitor()
+        scrollingAppendTask?.cancel()
+        scrollingAppendTask = nil
         isInScrollingCaptureMode = false
     }
 
@@ -493,6 +462,7 @@ final class CaptureSessionService {
     private func finishFailedSaveSession() {
         overlayService.dismissOverlay()
         scrollingCapturePanelService.dismissPanel()
+        scrollingCapturePreviewWindowService.dismissPreview()
         clearPendingCapture()
 
         if state != .idle {
@@ -552,6 +522,7 @@ final class CaptureSessionService {
 
     private func cancelScrollingCapture() {
         scrollingCapturePanelService.dismissPanel()
+        scrollingCapturePreviewWindowService.dismissPreview()
         print("Scrolling Capture Cancelled")
         overlayService.dismissOverlay()
         clearPendingCapture()
@@ -563,6 +534,7 @@ final class CaptureSessionService {
     @MainActor
     private func finishScrollingCaptureSession() {
         scrollingCapturePanelService.dismissPanel()
+        scrollingCapturePreviewWindowService.dismissPreview()
         overlayService.dismissOverlay()
         clearPendingCapture()
         if state != .idle {
@@ -574,8 +546,13 @@ final class CaptureSessionService {
     private func failScrollingCapture(message: String, error: Error) {
         print("\(message): \(error.localizedDescription)")
         scrollingCapturePanelService.dismissPanel()
+        scrollingCapturePreviewWindowService.dismissPreview()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
+        isAppendingScrollingFrame = false
+        removeScrollingEventMonitor()
+        scrollingAppendTask?.cancel()
+        scrollingAppendTask = nil
         isInScrollingCaptureMode = false
         overlayService.exitLongCaptureGuideMode()
         toastService.showToast(message: "长截图失败，请调整滚动步进后重试")
@@ -587,6 +564,105 @@ final class CaptureSessionService {
         }
 
         sourceApplication.activate(options: [])
+    }
+
+    private func captureInitialScrollingFrame(for selectionRect: CGRect) {
+        appendScrollingCaptureFrameIfNeeded(for: selectionRect, requiresVisualChange: false)
+    }
+
+    private func appendScrollingCaptureFrameIfNeeded(
+        for selectionRect: CGRect,
+        requiresVisualChange: Bool = true
+    ) {
+        guard isAppendingScrollingFrame == false else {
+            return
+        }
+
+        isAppendingScrollingFrame = true
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            defer {
+                self.isAppendingScrollingFrame = false
+            }
+
+            do {
+                let frame = try await self.screenCaptureService.captureImageExcludingCurrentApplication(in: selectionRect)
+
+                if requiresVisualChange,
+                   let previousFrame = self.scrollingCaptureFrames.last,
+                   try self.scrollingCaptureService.hasVisualChange(between: previousFrame, and: frame) == false {
+                    return
+                }
+
+                self.scrollingCaptureFrames.append(frame)
+                try self.rebuildScrollingCaptureResult(for: selectionRect)
+                print("Scrolling Capture Frame Appended")
+                print("count: \(self.scrollingCaptureFrames.count)")
+            } catch {
+                print("Scrolling capture append failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func installScrollingEventMonitor(for selectionRect: CGRect) {
+        removeScrollingEventMonitor()
+        scrollingEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel]) { [weak self] event in
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+
+                guard self.isInScrollingCaptureMode else {
+                    return
+                }
+
+                guard event.scrollingDeltaY != 0 || event.scrollingDeltaX != 0 else {
+                    return
+                }
+
+                self.scheduleScrollingAppend(for: selectionRect)
+            }
+        }
+    }
+
+    private func removeScrollingEventMonitor() {
+        if let scrollingEventMonitor {
+            NSEvent.removeMonitor(scrollingEventMonitor)
+            self.scrollingEventMonitor = nil
+        }
+    }
+
+    private func scheduleScrollingAppend(for selectionRect: CGRect) {
+        scrollingAppendTask?.cancel()
+        scrollingAppendTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            await MainActor.run {
+                guard let self else {
+                    return
+                }
+
+                guard self.isInScrollingCaptureMode else {
+                    return
+                }
+
+                self.appendScrollingCaptureFrameIfNeeded(for: selectionRect, requiresVisualChange: true)
+            }
+        }
+    }
+
+    private func rebuildScrollingCaptureResult(for selectionRect: CGRect) throws {
+        let image = try scrollingCaptureService.buildCurrentPreviewImage(from: scrollingCaptureFrames)
+        scrollingCaptureResultImage = image
+        scrollingCapturePreviewWindowService.presentOrUpdatePreview(image: image, selectionRect: selectionRect)
     }
 
     private func exportedImage(

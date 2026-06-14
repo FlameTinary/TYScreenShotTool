@@ -29,6 +29,7 @@ struct TYScreenShotToolApp: App {
         let toastService = ToastService()
         let scrollingCaptureService = ScrollingCaptureService()
         let scrollingCapturePanelService = ScrollingCapturePanelService()
+        let scrollingCapturePreviewWindowService = ScrollingCapturePreviewWindowService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -47,7 +48,8 @@ struct TYScreenShotToolApp: App {
             toastService: toastService,
             settingsOpenCoordinator: settingsOpenCoordinator,
             scrollingCaptureService: scrollingCaptureService,
-            scrollingCapturePanelService: scrollingCapturePanelService
+            scrollingCapturePanelService: scrollingCapturePanelService,
+            scrollingCapturePreviewWindowService: scrollingCapturePreviewWindowService
         )
 
         overlayService.onCancel = {
@@ -77,20 +79,14 @@ struct TYScreenShotToolApp: App {
         overlayService.onLongCaptureRequested = { annotations in
             sessionService.startScrollingCapture(annotations: annotations)
         }
-        scrollingCapturePanelService.onAppendRequested = {
-            sessionService.appendScrollingCaptureFrame()
-        }
-        scrollingCapturePanelService.onFinishRequested = {
-            sessionService.finishScrollingCapture()
+        scrollingCapturePanelService.onCancelRequested = {
+            sessionService.cancelSession()
         }
         scrollingCapturePanelService.onCopyRequested = {
             sessionService.copyScrollingCaptureResult()
         }
         scrollingCapturePanelService.onSaveRequested = {
             sessionService.saveScrollingCaptureResult()
-        }
-        scrollingCapturePanelService.onCancelRequested = {
-            sessionService.cancelSession()
         }
 
         hotKeyService.onHotKeyPressed = {

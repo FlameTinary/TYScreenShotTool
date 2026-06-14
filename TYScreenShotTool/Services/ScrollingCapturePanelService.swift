@@ -9,8 +9,6 @@ import AppKit
 import Foundation
 
 final class ScrollingCapturePanelService {
-    var onAppendRequested: (() -> Void)?
-    var onFinishRequested: (() -> Void)?
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
@@ -18,14 +16,8 @@ final class ScrollingCapturePanelService {
     private var panel: ScrollingCapturePanel?
     private weak var panelView: ScrollingCapturePanelView?
 
-    func presentCapturePanel(on screen: NSScreen) {
-        let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 360, height: 148))
-        panelView.onAppendRequested = { [weak self] in
-            self?.onAppendRequested?()
-        }
-        panelView.onFinishRequested = { [weak self] in
-            self?.onFinishRequested?()
-        }
+    func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
+        let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 280, height: 56))
         panelView.onCopyRequested = { [weak self] in
             self?.onCopyRequested?()
         }
@@ -35,20 +27,15 @@ final class ScrollingCapturePanelService {
         panelView.onCancelRequested = { [weak self] in
             self?.onCancelRequested?()
         }
-        panelView.configureForCapture()
+        panelView.configureForLiveCapture()
 
         let panel = ScrollingCapturePanel(contentRect: panelView.bounds)
         panel.contentView = panelView
-        panel.setFrame(originRect(for: panel.frame.size, on: screen), display: true)
+        panel.setFrame(originRect(for: panel.frame.size, selectionRect: selectionRect, on: screen), display: true)
         panel.orderFrontRegardless()
 
         self.panel = panel
         self.panelView = panelView
-    }
-
-    func showResultPanel() {
-        panelView?.configureForResult()
-        panel?.orderFrontRegardless()
     }
 
     func dismissPanel() {
@@ -57,11 +44,17 @@ final class ScrollingCapturePanelService {
         panelView = nil
     }
 
-    private func originRect(for size: CGSize, on screen: NSScreen) -> CGRect {
+    private func originRect(for size: CGSize, selectionRect: CGRect, on screen: NSScreen) -> CGRect {
         let frame = screen.visibleFrame
+        let x = min(
+            max(selectionRect.midX - size.width / 2, frame.minX + 24),
+            frame.maxX - size.width - 24
+        )
+        let y = max(frame.minY + 24, selectionRect.minY - size.height - 24)
+
         return CGRect(
-            x: frame.maxX - size.width - 24,
-            y: frame.maxY - size.height - 24,
+            x: x,
+            y: y,
             width: size.width,
             height: size.height
         )
@@ -101,46 +94,29 @@ private final class ScrollingCapturePanel: NSPanel {
 }
 
 private final class ScrollingCapturePanelView: NSView {
-    var onAppendRequested: (() -> Void)?
-    var onFinishRequested: (() -> Void)?
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
-
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let descriptionLabel = NSTextField(wrappingLabelWithString: "")
-    private let primaryButton = NSButton(title: "", target: nil, action: nil)
-    private let secondaryButton = NSButton(title: "", target: nil, action: nil)
+    private let copyButton = NSButton(title: "复制", target: nil, action: nil)
+    private let saveButton = NSButton(title: "保存", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
-    private var mode: Mode = .capture
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 12
-
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-
-        descriptionLabel.font = .systemFont(ofSize: 12)
-        descriptionLabel.textColor = .secondaryLabelColor
-        descriptionLabel.maximumNumberOfLines = 3
-        descriptionLabel.lineBreakMode = .byWordWrapping
-
-        [primaryButton, secondaryButton, cancelButton].forEach {
+        [cancelButton, saveButton, copyButton].forEach {
             $0.bezelStyle = .rounded
             addSubview($0)
         }
 
-        primaryButton.target = self
-        primaryButton.action = #selector(primaryAction)
-        secondaryButton.target = self
-        secondaryButton.action = #selector(secondaryAction)
+        copyButton.target = self
+        copyButton.action = #selector(copyAction)
+        saveButton.target = self
+        saveButton.action = #selector(saveAction)
         cancelButton.target = self
         cancelButton.action = #selector(cancelAction)
-
-        addSubview(titleLabel)
-        addSubview(descriptionLabel)
     }
 
     @available(*, unavailable)
@@ -151,79 +127,32 @@ private final class ScrollingCapturePanelView: NSView {
     override func layout() {
         super.layout()
 
-        let paddingX: CGFloat = 16
-        let paddingTop: CGFloat = 16
+        let paddingX: CGFloat = 12
         let buttonHeight: CGFloat = 30
-        let buttonSpacing: CGFloat = 8
+        let buttonSpacing: CGFloat = 10
         let buttonWidth = (bounds.width - paddingX * 2 - buttonSpacing * 2) / 3
-
-        titleLabel.sizeToFit()
-        titleLabel.frame = CGRect(
-            x: paddingX,
-            y: bounds.height - paddingTop - titleLabel.frame.height,
-            width: bounds.width - paddingX * 2,
-            height: titleLabel.frame.height
-        )
-
-        let descriptionHeight: CGFloat = 42
-        descriptionLabel.frame = CGRect(
-            x: paddingX,
-            y: titleLabel.frame.minY - 10 - descriptionHeight,
-            width: bounds.width - paddingX * 2,
-            height: descriptionHeight
-        )
-
-        let buttonY: CGFloat = 16
-        primaryButton.frame = CGRect(x: paddingX, y: buttonY, width: buttonWidth, height: buttonHeight)
-        secondaryButton.frame = CGRect(x: primaryButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
-        cancelButton.frame = CGRect(x: secondaryButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
+        let buttonY = (bounds.height - buttonHeight) / 2
+        cancelButton.frame = CGRect(x: paddingX, y: buttonY, width: buttonWidth, height: buttonHeight)
+        saveButton.frame = CGRect(x: cancelButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
+        copyButton.frame = CGRect(x: saveButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
     }
 
-    func configureForCapture() {
-        mode = .capture
-        titleLabel.stringValue = "长截图"
-        descriptionLabel.stringValue = "请滚动目标内容，每滚动到下一屏后点击“追加当前屏”，完成后点击“完成长截图”。"
-        primaryButton.title = "追加当前屏"
-        secondaryButton.title = "完成长截图"
-        needsLayout = true
-    }
-
-    func configureForResult() {
-        mode = .result
-        titleLabel.stringValue = "长截图已生成"
-        descriptionLabel.stringValue = "现在可以复制长图或保存到当前默认目录。"
-        primaryButton.title = "复制长图"
-        secondaryButton.title = "保存长图"
+    func configureForLiveCapture() {
         needsLayout = true
     }
 
     @objc
-    private func primaryAction() {
-        switch mode {
-        case .capture:
-            onAppendRequested?()
-        case .result:
-            onCopyRequested?()
-        }
+    private func copyAction() {
+        onCopyRequested?()
     }
 
     @objc
-    private func secondaryAction() {
-        switch mode {
-        case .capture:
-            onFinishRequested?()
-        case .result:
-            onSaveRequested?()
-        }
+    private func saveAction() {
+        onSaveRequested?()
     }
 
     @objc
     private func cancelAction() {
         onCancelRequested?()
-    }
-
-    private enum Mode {
-        case capture
-        case result
     }
 }

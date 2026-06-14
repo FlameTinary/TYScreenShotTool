@@ -880,21 +880,15 @@ final class CaptureOverlayView: NSView {
         copyButton.sizeToFit()
         saveButton.sizeToFit()
         cancelButton.sizeToFit()
+        let toolbarButtons = annotationButtons + [undoButton, longCaptureButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]
 
         let toolbarPaddingX: CGFloat = 12
         let toolbarPaddingY: CGFloat = 6
         let toolbarSpacing: CGFloat = 12
         let toolbarContentHeight = max(
-            annotationButtons.map(\.frame.height).max() ?? 0,
-            undoButton.frame.height,
-            longCaptureButton.frame.height,
-            ocrButton.frame.height,
-            pinButton.frame.height,
-            copyButton.frame.height,
-            saveButton.frame.height,
-            cancelButton.frame.height
+            toolbarButtons.map(\.frame.height).max() ?? 0,
+            0
         )
-        let toolbarButtons = annotationButtons + [undoButton, longCaptureButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]
         let toolbarWidth = toolbarPaddingX * 2
             + toolbarButtons.reduce(CGFloat(0)) { $0 + $1.frame.width }
             + (toolbarSpacing * CGFloat(max(toolbarButtons.count - 1, 0)))
