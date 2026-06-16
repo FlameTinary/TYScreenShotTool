@@ -1,4 +1,4 @@
-# SmartShot
+# TShot
 
 一个用于学习 macOS 原生开发和 AI 辅助开发流程的个人项目。
 
@@ -6,7 +6,7 @@
 
 ## 项目目标
 
-SmartShot 不是为了替代现有截图软件。
+TShot 不是为了替代现有截图软件。
 
 项目主要用于：
 
@@ -212,7 +212,7 @@ CONFIGURATION=Release ./scripts/build.sh
 如需自定义归档输出路径，可使用：
 
 ```bash
-ARCHIVE_PATH=/your/path/SmartShot.xcarchive ./scripts/archive.sh
+ARCHIVE_PATH=/your/path/TShot.xcarchive ./scripts/archive.sh
 ```
 
 约定：
@@ -225,7 +225,7 @@ ARCHIVE_PATH=/your/path/SmartShot.xcarchive ./scripts/archive.sh
 
 ## 项目结构
 
-SmartShot/
+TShot/
 
 ├── App/
 ├── Features/

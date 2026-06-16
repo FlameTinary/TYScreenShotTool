@@ -1,4 +1,4 @@
-# SmartShot
+# TShot
 
 Version: V0.7
 

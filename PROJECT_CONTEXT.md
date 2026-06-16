@@ -1,7 +1,7 @@
 # Project Context
 
 ## Project
-SmartShot
+TShot
 
 ## Goal
 macOS 截图工具
