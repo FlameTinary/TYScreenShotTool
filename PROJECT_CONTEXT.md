@@ -7,7 +7,7 @@ TShot
 macOS 截图工具
 
 ## Current Sprint
-Sprint 25 Planned
+Sprint 27 Completed
 
 ## Principles
 
@@ -33,7 +33,6 @@ Shared
 - Toast Feedback
 - Pin Window Enhancement
 - Settings Entry
-- OCR Toggle
 - HotKey Settings
 - Save Directory Settings
 - Toolbar Editing Foundation
@@ -45,9 +44,9 @@ Shared
 
 ## Current Next Sprint
 
-Sprint 25
+Sprint 28
 
-Scrolling Screenshot
+AI Analysis
 
 ## Source Of Truth
 

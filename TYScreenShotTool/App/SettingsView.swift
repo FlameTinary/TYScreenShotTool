@@ -11,8 +11,6 @@ import SwiftUI
 struct SettingsView: View {
     private let globalHotKeyService: GlobalHotKeyService
 
-    @AppStorage(AppSettings.isOCREnabledKey)
-    private var isOCREnabled = AppSettings.isOCREnabledDefaultValue
     @AppStorage(AppSettings.screenshotHotKeyKey)
     private var selectedHotKeyStorageValue = AppSettings.screenshotHotKeyDefaultValue
     @AppStorage(AppSettings.saveDirectoryPathKey)
@@ -30,14 +28,13 @@ struct SettingsView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("当前版本仅提供最小设置入口，以下配置项将在后续 Sprint 中逐步实现。")
+            Text("当前版本提供截图快捷键与保存目录配置。")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 12) {
                 hotKeyPicker
                 saveDirectoryPicker
-                ocrToggle
             }
 
             Spacer()
@@ -98,18 +95,6 @@ struct SettingsView: View {
             }
 
             Text("仅支持选择单个目录。保存前必须先选择保存目录。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var ocrToggle: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle("OCR 开关", isOn: $isOCREnabled)
-                .font(.headline)
-
-            Text(isOCREnabled ? "截图后将自动执行 OCR。" : "截图后将跳过 OCR。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
