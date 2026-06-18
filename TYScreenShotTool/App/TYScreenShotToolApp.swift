@@ -30,6 +30,7 @@ struct TYScreenShotToolApp: App {
         let scrollingCaptureService = ScrollingCaptureService()
         let scrollingCapturePanelService = ScrollingCapturePanelService()
         let scrollingCapturePreviewWindowService = ScrollingCapturePreviewWindowService()
+        let ocrPreviewWindowService = OCRPreviewWindowService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -49,7 +50,8 @@ struct TYScreenShotToolApp: App {
             settingsOpenCoordinator: settingsOpenCoordinator,
             scrollingCaptureService: scrollingCaptureService,
             scrollingCapturePanelService: scrollingCapturePanelService,
-            scrollingCapturePreviewWindowService: scrollingCapturePreviewWindowService
+            scrollingCapturePreviewWindowService: scrollingCapturePreviewWindowService,
+            ocrPreviewWindowService: ocrPreviewWindowService
         )
 
         overlayService.onCancel = {

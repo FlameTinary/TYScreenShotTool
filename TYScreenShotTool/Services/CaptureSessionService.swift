@@ -22,6 +22,7 @@ final class CaptureSessionService {
     private let scrollingCaptureService: ScrollingCaptureService
     private let scrollingCapturePanelService: ScrollingCapturePanelService
     private let scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
+    private let ocrPreviewWindowService: OCRPreviewWindowService
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
@@ -46,7 +47,8 @@ final class CaptureSessionService {
         settingsOpenCoordinator: SettingsOpenCoordinator,
         scrollingCaptureService: ScrollingCaptureService,
         scrollingCapturePanelService: ScrollingCapturePanelService,
-        scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
+        scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService,
+        ocrPreviewWindowService: OCRPreviewWindowService
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
@@ -59,6 +61,7 @@ final class CaptureSessionService {
         self.scrollingCaptureService = scrollingCaptureService
         self.scrollingCapturePanelService = scrollingCapturePanelService
         self.scrollingCapturePreviewWindowService = scrollingCapturePreviewWindowService
+        self.ocrPreviewWindowService = ocrPreviewWindowService
     }
 
     func startSession() {
@@ -149,6 +152,7 @@ final class CaptureSessionService {
             return
         }
 
+        ocrPreviewWindowService.dismiss()
         clearPendingCapture()
         overlayService.dismissOverlay()
         transition(to: .idle)
@@ -159,6 +163,7 @@ final class CaptureSessionService {
             return
         }
 
+        ocrPreviewWindowService.dismiss()
         Task {
             do {
                 let image = try frozenSelectionImage(for: pendingSelectionRect)
@@ -191,6 +196,7 @@ final class CaptureSessionService {
             return
         }
 
+        ocrPreviewWindowService.dismiss()
         Task {
             var temporaryFileURL: URL?
 
@@ -240,18 +246,25 @@ final class CaptureSessionService {
             do {
                 let image = try frozenSelectionImage(for: pendingSelectionRect)
                 let text = try ocrService.recognizeText(in: image)
-                try clipboardService.copyText(text)
                 print("OCR Success")
                 print("text: \(text)")
-                print("Clipboard Copy Success")
                 await MainActor.run {
-                    toastService.showToast(message: "OCR 已复制到剪贴板")
-                    overlayService.dismissOverlay()
+                    ocrPreviewWindowService.present(
+                        text: text,
+                        selectionRect: pendingSelectionRect,
+                        onCopy: { [weak self] in
+                            self?.copyOCRPreviewText(text)
+                        },
+                        onCancel: { [weak self] in
+                            self?.ocrPreviewWindowService.dismiss()
+                        }
+                    )
                 }
-                clearPendingCapture()
-                transition(to: .idle)
             } catch {
                 print("OCR failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    toastService.showToast(message: "OCR 识别失败")
+                }
             }
         }
     }
@@ -261,6 +274,7 @@ final class CaptureSessionService {
             return
         }
 
+        ocrPreviewWindowService.dismiss()
         Task { @MainActor in
             do {
                 let exportedImage = try prepareExportedImage(
@@ -290,6 +304,7 @@ final class CaptureSessionService {
             return
         }
 
+        ocrPreviewWindowService.dismiss()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
         isAppendingScrollingFrame = false
@@ -459,7 +474,24 @@ final class CaptureSessionService {
         }
     }
 
+    @MainActor
+    private func copyOCRPreviewText(_ text: String) {
+        do {
+            try clipboardService.copyText(text)
+            print("Clipboard Copy Success")
+            toastService.showToast(message: "OCR 已复制到剪贴板")
+            ocrPreviewWindowService.dismiss()
+            overlayService.dismissOverlay()
+            clearPendingCapture()
+            transition(to: .idle)
+        } catch {
+            print("OCR clipboard copy failed: \(error.localizedDescription)")
+            toastService.showToast(message: "OCR 复制失败")
+        }
+    }
+
     private func finishFailedSaveSession() {
+        ocrPreviewWindowService.dismiss()
         overlayService.dismissOverlay()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
@@ -521,6 +553,7 @@ final class CaptureSessionService {
     }
 
     private func cancelScrollingCapture() {
+        ocrPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
         print("Scrolling Capture Cancelled")
@@ -533,6 +566,7 @@ final class CaptureSessionService {
 
     @MainActor
     private func finishScrollingCaptureSession() {
+        ocrPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
         overlayService.dismissOverlay()
@@ -545,6 +579,7 @@ final class CaptureSessionService {
     @MainActor
     private func failScrollingCapture(message: String, error: Error) {
         print("\(message): \(error.localizedDescription)")
+        ocrPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
         scrollingCaptureFrames.removeAll()

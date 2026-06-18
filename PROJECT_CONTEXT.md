@@ -7,7 +7,7 @@ TShot
 macOS 截图工具
 
 ## Current Sprint
-Sprint 27 Completed
+Sprint 28 Completed
 
 ## Principles
 
@@ -29,6 +29,7 @@ Shared
 - Clipboard Copy
 - OCR
 - OCR Toolbar Action
+- OCR Preview
 - Pin Toolbar Action
 - Toast Feedback
 - Pin Window Enhancement
@@ -44,7 +45,7 @@ Shared
 
 ## Current Next Sprint
 
-Sprint 28
+Sprint 29
 
 AI Analysis
 
