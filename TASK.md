@@ -1,6 +1,6 @@
 # TShot
 
-Version: V0.8
+Version: v1.0.0+
 
 Current Sprint: Sprint 31 Completed
 

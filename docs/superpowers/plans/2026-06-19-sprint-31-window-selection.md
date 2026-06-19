@@ -544,7 +544,7 @@ Expected: 所有场景通过，无崩溃、无错误进入编辑态、无自由�
 ```md
 # TShot
 
-Version: V0.8
+Version: v1.0.0+
 
 Current Sprint: Sprint 31 Completed
 
