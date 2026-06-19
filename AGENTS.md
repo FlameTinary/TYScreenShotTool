@@ -90,6 +90,30 @@
 
 ---
 
+## 架构与实现偏好
+
+优先使用清晰、直接的类型与职责划分。
+
+优先：
+
+* Service
+* Struct
+* Enum
+* 明确职责边界
+* 小而清晰的文件划分
+
+避免：
+
+* EventBus
+* 复杂状态机
+* 过度 Protocol 化
+* 为扩展而扩展
+* 提前抽象
+
+除非当前任务明确需要，否则不要引入这些复杂设计。
+
+---
+
 # 技术栈
 
 语言：
@@ -230,6 +254,21 @@ try?
 
 ---
 
+# 文档收尾
+
+当某个 Sprint 范围内的功能实现完成，并且构建通过、人工验证通过后，应同步更新相关文档。
+
+通常包括：
+
+* `TASK.md`
+* 对应的 Sprint 文档
+* `docs/ROADMAP.md`
+* `DEVLOG.md`
+
+只更新与本次 Sprint 直接相关的内容，避免顺手改动无关文档。
+
+---
+
 # 文档边界
 
 `AGENTS.md` 仅描述项目长期稳定的工程约束与开发原则。
@@ -240,7 +279,7 @@ try?
 * 当前迭代阶段与 Sprint 顺序：`docs/ROADMAP.md`
 * 当前唯一任务范围：`TASK.md`
 * 单个 Sprint 的目标、边界、实现与结果：`docs/SPRINTS`
-* AI Agent 的工作流程与评审流程：`SKILL.md`
+* 项目文档协作流程：`docs/PROJECT_WORKFLOW.md`
 * Git 提交约定：`docs/GIT_WORKFLOW.md`
 
 避免在 `AGENTS.md` 中重复维护以下高频变化信息：
