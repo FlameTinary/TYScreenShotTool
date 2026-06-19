@@ -241,6 +241,7 @@ try?
 * 当前唯一任务范围：`TASK.md`
 * 单个 Sprint 的目标、边界、实现与结果：`docs/SPRINTS`
 * AI Agent 的工作流程与评审流程：`SKILL.md`
+* Git 提交约定：`docs/GIT_WORKFLOW.md`
 
 避免在 `AGENTS.md` 中重复维护以下高频变化信息：
 
