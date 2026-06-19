@@ -16,6 +16,7 @@ final class CaptureSessionService {
     private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
+    private let aiAnalysisService: AIAnalysisService
     private let pinWindowService: PinWindowService
     private let toastService: ToastService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
@@ -23,6 +24,7 @@ final class CaptureSessionService {
     private let scrollingCapturePanelService: ScrollingCapturePanelService
     private let scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
     private let ocrPreviewWindowService: OCRPreviewWindowService
+    private let aiAnalysisPreviewWindowService: AIAnalysisPreviewWindowService
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingSelectionRect: CGRect?
@@ -35,6 +37,7 @@ final class CaptureSessionService {
     private var isAppendingScrollingFrame = false
     private var scrollingEventMonitor: Any?
     private var scrollingAppendTask: Task<Void, Never>?
+    private var isAIAnalysisInProgress = false
 
     init(
         overlayService: CaptureOverlayService,
@@ -42,19 +45,22 @@ final class CaptureSessionService {
         clipboardService: ClipboardService,
         imageSaveService: ImageSaveService,
         ocrService: OCRService,
+        aiAnalysisService: AIAnalysisService,
         pinWindowService: PinWindowService,
         toastService: ToastService,
         settingsOpenCoordinator: SettingsOpenCoordinator,
         scrollingCaptureService: ScrollingCaptureService,
         scrollingCapturePanelService: ScrollingCapturePanelService,
         scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService,
-        ocrPreviewWindowService: OCRPreviewWindowService
+        ocrPreviewWindowService: OCRPreviewWindowService,
+        aiAnalysisPreviewWindowService: AIAnalysisPreviewWindowService
     ) {
         self.overlayService = overlayService
         self.screenCaptureService = screenCaptureService
         self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
         self.ocrService = ocrService
+        self.aiAnalysisService = aiAnalysisService
         self.pinWindowService = pinWindowService
         self.toastService = toastService
         self.settingsOpenCoordinator = settingsOpenCoordinator
@@ -62,6 +68,7 @@ final class CaptureSessionService {
         self.scrollingCapturePanelService = scrollingCapturePanelService
         self.scrollingCapturePreviewWindowService = scrollingCapturePreviewWindowService
         self.ocrPreviewWindowService = ocrPreviewWindowService
+        self.aiAnalysisPreviewWindowService = aiAnalysisPreviewWindowService
     }
 
     func startSession() {
@@ -153,6 +160,7 @@ final class CaptureSessionService {
         }
 
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         clearPendingCapture()
         overlayService.dismissOverlay()
         transition(to: .idle)
@@ -164,6 +172,7 @@ final class CaptureSessionService {
         }
 
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         Task {
             do {
                 let image = try frozenSelectionImage(for: pendingSelectionRect)
@@ -197,6 +206,7 @@ final class CaptureSessionService {
         }
 
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         Task {
             var temporaryFileURL: URL?
 
@@ -269,12 +279,42 @@ final class CaptureSessionService {
         }
     }
 
+    func analyzePendingCapture(style _: CapturePreviewStyle, annotations _: [CaptureAnnotation]) {
+        guard state == .selectionCompleted, let pendingSelectionRect else {
+            return
+        }
+
+        guard isAIAnalysisInProgress == false else {
+            toastService.showToast(message: "AI 正在分析中")
+            return
+        }
+
+        isAIAnalysisInProgress = true
+        overlayService.setAIButtonEnabled(false)
+        ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.presentLoading(
+            selectionRect: pendingSelectionRect,
+            onClose: { [weak self] in
+                self?.aiAnalysisPreviewWindowService.dismiss()
+            }
+        )
+
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.performAIAnalysis(selectionRect: pendingSelectionRect)
+        }
+    }
+
     func pinPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingSelectionRect else {
             return
         }
 
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         Task { @MainActor in
             do {
                 let exportedImage = try prepareExportedImage(
@@ -305,6 +345,7 @@ final class CaptureSessionService {
         }
 
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
         isAppendingScrollingFrame = false
@@ -448,6 +489,7 @@ final class CaptureSessionService {
         scrollingAppendTask?.cancel()
         scrollingAppendTask = nil
         isInScrollingCaptureMode = false
+        isAIAnalysisInProgress = false
     }
 
     private func screenContaining(_ rect: CGRect) -> NSScreen? {
@@ -490,8 +532,112 @@ final class CaptureSessionService {
         }
     }
 
+    @MainActor
+    private func performAIAnalysis(selectionRect: CGRect) async {
+        defer {
+            isAIAnalysisInProgress = false
+            overlayService.setAIButtonEnabled(true)
+        }
+
+        do {
+            let image = try frozenSelectionImage(for: selectionRect)
+            let text = try ocrService.recognizeText(in: image)
+            let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
+
+            aiAnalysisPreviewWindowService.presentResult(
+                text: result,
+                selectionRect: selectionRect,
+                onCopy: { [weak self] in
+                    self?.copyAIAnalysisResult(result)
+                },
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+        } catch let error as OCRError {
+            toastService.showToast(message: "OCR 未识别到有效文本")
+            aiAnalysisPreviewWindowService.presentError(
+                message: error.localizedDescription,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+        } catch let error as AIAnalysisError {
+            toastService.showToast(message: "AI 分析失败")
+            aiAnalysisPreviewWindowService.presentError(
+                message: error.localizedDescription,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+        } catch {
+            toastService.showToast(message: "AI 分析失败")
+            aiAnalysisPreviewWindowService.presentError(
+                message: error.localizedDescription,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+        }
+    }
+
+    @MainActor
+    private func retryAIAnalysis() {
+        guard let pendingSelectionRect else {
+            return
+        }
+
+        guard isAIAnalysisInProgress == false else {
+            return
+        }
+
+        isAIAnalysisInProgress = true
+        overlayService.setAIButtonEnabled(false)
+        aiAnalysisPreviewWindowService.presentLoading(
+            selectionRect: pendingSelectionRect,
+            onClose: { [weak self] in
+                self?.aiAnalysisPreviewWindowService.dismiss()
+            }
+        )
+
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            await self.performAIAnalysis(selectionRect: pendingSelectionRect)
+        }
+    }
+
+    @MainActor
+    private func copyAIAnalysisResult(_ text: String) {
+        do {
+            try clipboardService.copyText(text)
+            toastService.showToast(message: "AI 分析结果已复制")
+        } catch {
+            print("AI analysis clipboard copy failed: \(error.localizedDescription)")
+            toastService.showToast(message: "AI 结果复制失败")
+        }
+    }
+
     private func finishFailedSaveSession() {
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         overlayService.dismissOverlay()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
@@ -554,6 +700,7 @@ final class CaptureSessionService {
 
     private func cancelScrollingCapture() {
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
         print("Scrolling Capture Cancelled")
@@ -567,6 +714,7 @@ final class CaptureSessionService {
     @MainActor
     private func finishScrollingCaptureSession() {
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
         overlayService.dismissOverlay()
@@ -580,6 +728,7 @@ final class CaptureSessionService {
     private func failScrollingCapture(message: String, error: Error) {
         print("\(message): \(error.localizedDescription)")
         ocrPreviewWindowService.dismiss()
+        aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
         scrollingCaptureFrames.removeAll()

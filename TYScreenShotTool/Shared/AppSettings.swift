@@ -12,4 +12,9 @@ enum AppSettings {
     static let screenshotHotKeyDefaultValue = "commandShift2"
     static let saveDirectoryPathKey = "settings.saveDirectoryPath"
     static let saveDirectoryBookmarkDataKey = "settings.saveDirectoryBookmarkData"
+    static let aiAnalysisAPIKeyKey = "local.aiAnalysis.openAIAPIKey"
+    static let aiAnalysisBaseURLKey = "local.aiAnalysis.baseURL"
+    static let aiAnalysisModelKey = "local.aiAnalysis.model"
+    static let aiAnalysisBaseURLDefaultValue = "https://api.openai.com"
+    static let aiAnalysisModelDefaultValue = "gpt-5.4-mini"
 }

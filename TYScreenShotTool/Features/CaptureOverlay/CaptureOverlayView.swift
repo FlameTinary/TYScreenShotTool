@@ -17,6 +17,7 @@ final class CaptureOverlayView: NSView {
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onAIRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
 
@@ -61,6 +62,7 @@ final class CaptureOverlayView: NSView {
     private let undoButton = NSButton(title: "撤销", target: nil, action: nil)
     private let longCaptureButton = NSButton(title: "长截图", target: nil, action: nil)
     private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
+    private let aiButton = NSButton(title: "AI", target: nil, action: nil)
     private let pinButton = NSButton(title: "Pin", target: nil, action: nil)
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存", target: nil, action: nil)
@@ -271,6 +273,7 @@ final class CaptureOverlayView: NSView {
         previewContainerView.isHidden = false
         topBarContainerView.isHidden = false
         toolbarContainerView.isHidden = false
+        aiButton.isEnabled = true
 
         updateAnnotationSourceImage()
         updatePreviewAppearance()
@@ -330,8 +333,13 @@ final class CaptureOverlayView: NSView {
         previewContainerView.isHidden = true
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
+        aiButton.isEnabled = true
         needsDisplay = true
         NSCursor.crosshair.set()
+    }
+
+    func setAIButtonEnabled(_ isEnabled: Bool) {
+        aiButton.isEnabled = isEnabled
     }
 
     private var selectionRect: CGRect? {
@@ -769,6 +777,8 @@ final class CaptureOverlayView: NSView {
         longCaptureButton.action = #selector(requestLongCapture)
         ocrButton.target = self
         ocrButton.action = #selector(requestOCR)
+        aiButton.target = self
+        aiButton.action = #selector(requestAI)
         pinButton.target = self
         pinButton.action = #selector(requestPin)
         copyButton.target = self
@@ -785,13 +795,14 @@ final class CaptureOverlayView: NSView {
             return button
         }
 
-        (annotationButtons + [undoButton, longCaptureButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]).forEach { button in
+        (annotationButtons + [undoButton, longCaptureButton, ocrButton, aiButton, pinButton, copyButton, saveButton, cancelButton]).forEach { button in
             button.bezelStyle = .rounded
         }
         annotationButtons.forEach(toolbarContainerView.addSubview)
         toolbarContainerView.addSubview(undoButton)
         toolbarContainerView.addSubview(longCaptureButton)
         toolbarContainerView.addSubview(ocrButton)
+        toolbarContainerView.addSubview(aiButton)
         toolbarContainerView.addSubview(pinButton)
         toolbarContainerView.addSubview(copyButton)
         toolbarContainerView.addSubview(saveButton)
@@ -876,11 +887,12 @@ final class CaptureOverlayView: NSView {
         undoButton.sizeToFit()
         longCaptureButton.sizeToFit()
         ocrButton.sizeToFit()
+        aiButton.sizeToFit()
         pinButton.sizeToFit()
         copyButton.sizeToFit()
         saveButton.sizeToFit()
         cancelButton.sizeToFit()
-        let toolbarButtons = annotationButtons + [undoButton, longCaptureButton, ocrButton, pinButton, copyButton, saveButton, cancelButton]
+        let toolbarButtons = annotationButtons + [undoButton, longCaptureButton, ocrButton, aiButton, pinButton, copyButton, saveButton, cancelButton]
 
         let toolbarPaddingX: CGFloat = 12
         let toolbarPaddingY: CGFloat = 6
@@ -964,6 +976,12 @@ final class CaptureOverlayView: NSView {
     private func requestOCR() {
         annotationCanvasView.commitActiveTextIfNeeded()
         onOCRRequested?(previewStyle, annotationCanvasView.annotations)
+    }
+
+    @objc
+    private func requestAI() {
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onAIRequested?(previewStyle, annotationCanvasView.annotations)
     }
 
     @objc

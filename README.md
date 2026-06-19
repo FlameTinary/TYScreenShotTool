@@ -119,14 +119,14 @@ OCR
 
 ### V0.8
 
-AI分析
+AI 分析
 
 功能：
 
-* 截图发送给 AI
-* 分析代码报错
-* 分析 UI 界面
-* 分析文档内容
+* 基于截图区域 OCR 文本发起 AI 分析
+* 面向开发报错场景输出简要解释
+* 在编辑态侧边面板中展示结果
+* 支持复制、重试、关闭
 
 ---
 
@@ -248,12 +248,12 @@ TShot/
 
 当前开发阶段：
 
-V0.6 已完成
+V0.8 开发中
 
 当前目标：
 
-在已完成工具栏 `OCR`、`Pin`、`Toast` 反馈与 `Pin` 窗口增强能力的基础上，
-进入 `V0.7` 的最小滚动长截图阶段。
+在已完成长截图与 OCR 结果预览的基础上，
+进入 `V0.8` 的最小 AI 分析阶段。
 
 流程：
 
@@ -281,11 +281,72 @@ V0.6 已完成
 
 ↓
 
-用户主动选择复制 / 保存 / 取消
+用户主动选择复制 / 保存 / OCR / AI / Pin / 长截图 / 取消
 
 ↓
 
-后续逐步扩展标注、OCR、Pin、长截图、AI
+后续逐步扩展 AI 工作流深度
+
+---
+
+## 隐藏 AI 配置
+
+当前版本的 `AI 分析` 不提供设置页入口，
+而是通过本地隐藏配置读取 `API Key`、`Base URL` 与模型名。
+
+可选配置 `Base URL`：
+
+```bash
+defaults write com.sheldon.TShot local.aiAnalysis.baseURL -string "https://api.openai.com"
+```
+
+配置 `API Key`：
+
+```bash
+defaults write com.sheldon.TShot local.aiAnalysis.openAIAPIKey -string "YOUR_OPENAI_API_KEY"
+```
+
+可选配置模型：
+
+```bash
+defaults write com.sheldon.TShot local.aiAnalysis.model -string "gpt-5.4-mini"
+```
+
+默认模型：
+
+```text
+gpt-5.4-mini
+```
+
+默认 `Base URL`：
+
+```text
+https://api.openai.com
+```
+
+兼容第三方 OpenAI 风格网关。
+
+例如：
+
+```bash
+defaults write com.sheldon.TShot local.aiAnalysis.baseURL -string "https://www.micuapi.ai/v1"
+defaults write com.sheldon.TShot local.aiAnalysis.openAIAPIKey -string "YOUR_THIRD_PARTY_API_KEY"
+defaults write com.sheldon.TShot local.aiAnalysis.model -string "gpt-5.4"
+```
+
+说明：
+
+* 如果 `Base URL` 不带 `/v1`，程序会自动补到 `/v1/responses`
+* 如果 `Base URL` 已经带了 `/v1`，程序会直接拼到 `/v1/responses`
+* 当前实现仍要求第三方接口兼容 OpenAI `Responses API`
+
+删除本地 AI 配置：
+
+```bash
+defaults delete com.sheldon.TShot local.aiAnalysis.baseURL
+defaults delete com.sheldon.TShot local.aiAnalysis.openAIAPIKey
+defaults delete com.sheldon.TShot local.aiAnalysis.model
+```
 
 ---
 

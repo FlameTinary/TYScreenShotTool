@@ -31,6 +31,8 @@ struct TYScreenShotToolApp: App {
         let scrollingCapturePanelService = ScrollingCapturePanelService()
         let scrollingCapturePreviewWindowService = ScrollingCapturePreviewWindowService()
         let ocrPreviewWindowService = OCRPreviewWindowService()
+        let aiAnalysisService = AIAnalysisService()
+        let aiAnalysisPreviewWindowService = AIAnalysisPreviewWindowService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -45,13 +47,15 @@ struct TYScreenShotToolApp: App {
             clipboardService: clipboardService,
             imageSaveService: imageSaveService,
             ocrService: OCRService(),
+            aiAnalysisService: aiAnalysisService,
             pinWindowService: pinWindowService,
             toastService: toastService,
             settingsOpenCoordinator: settingsOpenCoordinator,
             scrollingCaptureService: scrollingCaptureService,
             scrollingCapturePanelService: scrollingCapturePanelService,
             scrollingCapturePreviewWindowService: scrollingCapturePreviewWindowService,
-            ocrPreviewWindowService: ocrPreviewWindowService
+            ocrPreviewWindowService: ocrPreviewWindowService,
+            aiAnalysisPreviewWindowService: aiAnalysisPreviewWindowService
         )
 
         overlayService.onCancel = {
@@ -74,6 +78,9 @@ struct TYScreenShotToolApp: App {
         }
         overlayService.onOCRRequested = { style, annotations in
             sessionService.ocrPendingCapture(style: style, annotations: annotations)
+        }
+        overlayService.onAIRequested = { style, annotations in
+            sessionService.analyzePendingCapture(style: style, annotations: annotations)
         }
         overlayService.onPinRequested = { style, annotations in
             sessionService.pinPendingCapture(style: style, annotations: annotations)
