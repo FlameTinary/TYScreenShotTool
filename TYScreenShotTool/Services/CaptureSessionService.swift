@@ -545,10 +545,13 @@ final class CaptureSessionService {
             let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
 
             aiAnalysisPreviewWindowService.presentResult(
-                text: result,
+                result: result,
                 selectionRect: selectionRect,
-                onCopy: { [weak self] in
-                    self?.copyAIAnalysisResult(result)
+                onCopyAll: { [weak self] in
+                    self?.copyAIAnalysisResult(result.formattedText)
+                },
+                onCopyNextSteps: { [weak self] in
+                    self?.copyAIAnalysisNextSteps(result.nextSteps)
                 },
                 onRetry: { [weak self] in
                     self?.retryAIAnalysis()
@@ -632,6 +635,17 @@ final class CaptureSessionService {
         } catch {
             print("AI analysis clipboard copy failed: \(error.localizedDescription)")
             toastService.showToast(message: "AI 结果复制失败")
+        }
+    }
+
+    @MainActor
+    private func copyAIAnalysisNextSteps(_ text: String) {
+        do {
+            try clipboardService.copyText(text)
+            toastService.showToast(message: "建议下一步已复制")
+        } catch {
+            print("AI next steps clipboard copy failed: \(error.localizedDescription)")
+            toastService.showToast(message: "建议复制失败")
         }
     }
 

@@ -2,10 +2,47 @@
 //  AIAnalysisService.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/18.
+//  Created by Sheldon on 2026/6/18.
 //
 
 import Foundation
+
+private enum AIAnalysisSectionKey: CaseIterable {
+    case summary
+    case possibleCauses
+    case nextSteps
+
+    var title: String {
+        switch self {
+        case .summary:
+            return "报错大意"
+        case .possibleCauses:
+            return "可能原因"
+        case .nextSteps:
+            return "建议下一步"
+        }
+    }
+}
+
+struct AIAnalysisResult {
+    let summary: String
+    let possibleCauses: String
+    let nextSteps: String
+    let rawText: String
+
+    var formattedText: String {
+        [
+            "报错大意：",
+            summary,
+            "",
+            "可能原因：",
+            possibleCauses,
+            "",
+            "建议下一步：",
+            nextSteps,
+        ].joined(separator: "\n")
+    }
+}
 
 final class AIAnalysisService {
     private let session: URLSession
@@ -19,8 +56,8 @@ final class AIAnalysisService {
         self.userDefaults = userDefaults
     }
 
-    func analyzeDeveloperError(text: String) async throws -> String {
-        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    func analyzeDeveloperError(text: String) async throws -> AIAnalysisResult {
+        let normalized = normalizeOCRText(text)
         guard normalized.isEmpty == false else {
             throw AIAnalysisError.emptyInput
         }
@@ -32,7 +69,7 @@ final class AIAnalysisService {
         do {
             let (data, response) = try await session.data(for: request)
             try validateHTTPResponse(response, data: data)
-            return try parseOutputText(from: data)
+            return try parseAnalysisResult(from: data)
         } catch let error as AIAnalysisError {
             throw error
         } catch let error as DecodingError {
@@ -40,6 +77,35 @@ final class AIAnalysisService {
         } catch {
             throw AIAnalysisError.requestFailed(error.localizedDescription)
         }
+    }
+
+    private func normalizeOCRText(_ text: String) -> String {
+        let normalizedLineBreaks = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        var cleanedLines: [String] = []
+        var previousLineWasEmpty = false
+
+        for line in normalizedLineBreaks.components(separatedBy: "\n") {
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if trimmedLine.isEmpty {
+                guard previousLineWasEmpty == false else {
+                    continue
+                }
+                cleanedLines.append("")
+                previousLineWasEmpty = true
+                continue
+            }
+
+            cleanedLines.append(trimmedLine)
+            previousLineWasEmpty = false
+        }
+
+        return cleanedLines
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func resolvedAPIKey() throws -> String {
@@ -93,15 +159,23 @@ final class AIAnalysisService {
     private func buildDeveloperErrorPrompt(from text: String) -> String {
         """
         你是一个帮助 macOS / iOS 开发者排查报错的助手。
-        请基于下面的报错文本，用简洁中文输出：
-        1. 报错大意
-        2. 可能原因
-        3. 建议下一步
+        请基于下面的报错文本，用简洁中文输出，并严格使用以下结构：
+
+        报错大意：
+        <这里填写内容>
+
+        可能原因：
+        <这里填写内容>
+
+        建议下一步：
+        <这里填写内容>
 
         要求：
+        - 三个部分都必须输出，不能缺省
         - 保持短而清晰
         - 如果信息不足，明确说明不确定点
         - 不要输出与截图无关的泛泛建议
+        - 不要输出额外标题、前言、总结或 Markdown 代码块
 
         报错文本：
         \(text)
@@ -138,7 +212,7 @@ final class AIAnalysisService {
         }
     }
 
-    private func parseOutputText(from data: Data) throws -> String {
+    private func parseAnalysisResult(from data: Data) throws -> AIAnalysisResult {
         let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
 
         let text = envelope.output
@@ -153,7 +227,90 @@ final class AIAnalysisService {
             throw AIAnalysisError.emptyOutput
         }
 
-        return text
+        return try parseStructuredSections(from: text)
+    }
+
+    private func parseStructuredSections(from text: String) throws -> AIAnalysisResult {
+        var currentSection: AIAnalysisSectionKey?
+        var collectedSections: [AIAnalysisSectionKey: [String]] = [:]
+
+        for rawLine in text.components(separatedBy: .newlines) {
+            if let header = parseSectionHeader(from: rawLine) {
+                currentSection = header.section
+                if header.inlineContent.isEmpty == false {
+                    collectedSections[header.section, default: []].append(header.inlineContent)
+                }
+                continue
+            }
+
+            guard let currentSection else {
+                continue
+            }
+
+            collectedSections[currentSection, default: []].append(rawLine)
+        }
+
+        func resolvedContent(for section: AIAnalysisSectionKey) -> String? {
+            let lines = collectedSections[section, default: []]
+            let joined = lines
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .drop(while: \.isEmpty)
+                .reversed()
+                .drop(while: \.isEmpty)
+                .reversed()
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            return joined.isEmpty ? nil : joined
+        }
+
+        guard
+            let summary = resolvedContent(for: .summary),
+            let possibleCauses = resolvedContent(for: .possibleCauses),
+            let nextSteps = resolvedContent(for: .nextSteps)
+        else {
+            throw AIAnalysisError.lowQualityOutput
+        }
+
+        return AIAnalysisResult(
+            summary: summary,
+            possibleCauses: possibleCauses,
+            nextSteps: nextSteps,
+            rawText: text
+        )
+    }
+
+    private func parseSectionHeader(from line: String) -> (section: AIAnalysisSectionKey, inlineContent: String)? {
+        let sanitizedLine = line
+            .replacingOccurrences(of: "**", with: "")
+            .replacingOccurrences(
+                of: #"^\s*[\-\*\•]?\s*\d*\s*[\.、]?\s*"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        for section in AIAnalysisSectionKey.allCases {
+            guard sanitizedLine.hasPrefix(section.title) else {
+                continue
+            }
+
+            let remainder = sanitizedLine.dropFirst(section.title.count)
+            let normalizedRemainder = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if normalizedRemainder.isEmpty {
+                return (section, "")
+            }
+
+            if normalizedRemainder.hasPrefix("：") || normalizedRemainder.hasPrefix(":") {
+                let inlineContent = normalizedRemainder
+                    .dropFirst()
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return (section, inlineContent)
+            }
+        }
+
+        return nil
     }
 }
 
@@ -185,6 +342,7 @@ enum AIAnalysisError: LocalizedError {
     case emptyInput
     case invalidResponse
     case emptyOutput
+    case lowQualityOutput
     case requestFailed(String)
 
     var errorDescription: String? {
@@ -197,6 +355,8 @@ enum AIAnalysisError: LocalizedError {
             return "AI 返回格式无效。"
         case .emptyOutput:
             return "AI 返回内容为空。"
+        case .lowQualityOutput:
+            return "AI 返回结果不完整，请重试或调整截图范围后再试。"
         case let .requestFailed(reason):
             return "AI 请求失败：\(reason)"
         }

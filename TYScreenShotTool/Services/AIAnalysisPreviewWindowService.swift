@@ -2,7 +2,7 @@
 //  AIAnalysisPreviewWindowService.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/18.
+//  Created by Sheldon on 2026/6/18.
 //
 
 import AppKit
@@ -19,12 +19,18 @@ final class AIAnalysisPreviewWindowService {
     private let titleLabel = NSTextField(labelWithString: "AI 分析")
     private let statusLabel = NSTextField(labelWithString: "")
     private let scrollView = NSScrollView()
-    private let textView = NSTextView()
-    private let copyButton = NSButton(title: "复制", target: nil, action: nil)
+    private let documentContentView = FlippedContentView()
+    private let summarySectionView = SectionView(title: "报错大意")
+    private let causesSectionView = SectionView(title: "可能原因")
+    private let nextStepsSectionView = SectionView(title: "建议下一步")
+    private let messageLabel = NSTextField(wrappingLabelWithString: "")
+    private let copyAllButton = NSButton(title: "复制全部", target: nil, action: nil)
+    private let copyNextStepsButton = NSButton(title: "复制建议", target: nil, action: nil)
     private let retryButton = NSButton(title: "重试", target: nil, action: nil)
     private let closeButton = NSButton(title: "关闭", target: nil, action: nil)
 
-    private var onCopy: (() -> Void)?
+    private var onCopyAll: (() -> Void)?
+    private var onCopyNextSteps: (() -> Void)?
     private var onRetry: (() -> Void)?
     private var onClose: (() -> Void)?
 
@@ -55,36 +61,38 @@ final class AIAnalysisPreviewWindowService {
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
+        documentContentView.wantsLayer = false
 
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = false
-        textView.textColor = .white
-        textView.font = .systemFont(ofSize: 13)
-        textView.textContainerInset = CGSize(width: 8, height: 8)
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.autoresizingMask = [.width]
+        messageLabel.font = .systemFont(ofSize: 13)
+        messageLabel.textColor = .white
+        messageLabel.maximumNumberOfLines = 0
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.isHidden = true
 
-        copyButton.target = self
-        copyButton.action = #selector(copyRequested)
-        copyButton.bezelStyle = .rounded
+        [copyAllButton, copyNextStepsButton, retryButton, closeButton].forEach {
+            $0.target = self
+            $0.bezelStyle = .rounded
+        }
 
-        retryButton.target = self
+        copyAllButton.action = #selector(copyAllRequested)
+        copyNextStepsButton.action = #selector(copyNextStepsRequested)
         retryButton.action = #selector(retryRequested)
-        retryButton.bezelStyle = .rounded
-
-        closeButton.target = self
         closeButton.action = #selector(closeRequested)
-        closeButton.bezelStyle = .rounded
 
-        scrollView.documentView = textView
+        scrollView.documentView = documentContentView
         panel.contentView = containerView
         containerView.addSubview(titleLabel)
         containerView.addSubview(statusLabel)
         containerView.addSubview(scrollView)
-        containerView.addSubview(copyButton)
+        containerView.addSubview(copyAllButton)
+        containerView.addSubview(copyNextStepsButton)
         containerView.addSubview(retryButton)
         containerView.addSubview(closeButton)
+
+        documentContentView.addSubview(summarySectionView)
+        documentContentView.addSubview(causesSectionView)
+        documentContentView.addSubview(nextStepsSectionView)
+        documentContentView.addSubview(messageLabel)
     }
 
     func presentLoading(
@@ -93,27 +101,33 @@ final class AIAnalysisPreviewWindowService {
         onClose: @escaping () -> Void
     ) {
         statusLabel.stringValue = message
-        textView.string = ""
-        copyButton.isEnabled = false
+        messageLabel.stringValue = ""
+        configureForLoadingOrError(messageVisible: false)
+        copyAllButton.isEnabled = false
+        copyNextStepsButton.isEnabled = false
         retryButton.isEnabled = false
-        onCopy = nil
+        onCopyAll = nil
+        onCopyNextSteps = nil
         onRetry = nil
         self.onClose = onClose
         presentPanel(selectionRect: selectionRect)
     }
 
     func presentResult(
-        text: String,
+        result: AIAnalysisResult,
         selectionRect: CGRect,
-        onCopy: @escaping () -> Void,
+        onCopyAll: @escaping () -> Void,
+        onCopyNextSteps: @escaping () -> Void,
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
         statusLabel.stringValue = "AI 分析结果"
-        textView.string = text
-        copyButton.isEnabled = true
+        configureForResult(result)
+        copyAllButton.isEnabled = true
+        copyNextStepsButton.isEnabled = true
         retryButton.isEnabled = true
-        self.onCopy = onCopy
+        self.onCopyAll = onCopyAll
+        self.onCopyNextSteps = onCopyNextSteps
         self.onRetry = onRetry
         self.onClose = onClose
         presentPanel(selectionRect: selectionRect)
@@ -126,10 +140,13 @@ final class AIAnalysisPreviewWindowService {
         onClose: @escaping () -> Void
     ) {
         statusLabel.stringValue = "AI 分析失败"
-        textView.string = message
-        copyButton.isEnabled = false
+        messageLabel.stringValue = message
+        configureForLoadingOrError(messageVisible: true)
+        copyAllButton.isEnabled = false
+        copyNextStepsButton.isEnabled = false
         retryButton.isEnabled = true
-        onCopy = nil
+        onCopyAll = nil
+        onCopyNextSteps = nil
         self.onRetry = onRetry
         self.onClose = onClose
         presentPanel(selectionRect: selectionRect)
@@ -137,16 +154,21 @@ final class AIAnalysisPreviewWindowService {
 
     func dismiss() {
         panel.orderOut(nil)
-        textView.string = ""
-        copyButton.isEnabled = true
-        retryButton.isEnabled = true
-        onCopy = nil
+        onCopyAll = nil
+        onCopyNextSteps = nil
         onRetry = nil
         onClose = nil
+        copyAllButton.isEnabled = true
+        copyNextStepsButton.isEnabled = true
+        retryButton.isEnabled = true
     }
 
-    @objc private func copyRequested() {
-        onCopy?()
+    @objc private func copyAllRequested() {
+        onCopyAll?()
+    }
+
+    @objc private func copyNextStepsRequested() {
+        onCopyNextSteps?()
     }
 
     @objc private func retryRequested() {
@@ -155,6 +177,23 @@ final class AIAnalysisPreviewWindowService {
 
     @objc private func closeRequested() {
         onClose?()
+    }
+
+    private func configureForLoadingOrError(messageVisible: Bool) {
+        summarySectionView.isHidden = true
+        causesSectionView.isHidden = true
+        nextStepsSectionView.isHidden = true
+        messageLabel.isHidden = messageVisible == false
+    }
+
+    private func configureForResult(_ result: AIAnalysisResult) {
+        summarySectionView.setContent(result.summary)
+        causesSectionView.setContent(result.possibleCauses)
+        nextStepsSectionView.setContent(result.nextSteps)
+        summarySectionView.isHidden = false
+        causesSectionView.isHidden = false
+        nextStepsSectionView.isHidden = false
+        messageLabel.isHidden = true
     }
 
     private func presentPanel(selectionRect: CGRect) {
@@ -174,8 +213,9 @@ final class AIAnalysisPreviewWindowService {
 
         let padding: CGFloat = 14
         let buttonHeight: CGFloat = 28
-        let buttonWidth: CGFloat = 72
         let spacing: CGFloat = 10
+        let buttonWidths: [CGFloat] = [88, 96, 72, 72]
+        let buttons = [copyAllButton, copyNextStepsButton, retryButton, closeButton]
 
         titleLabel.sizeToFit()
         titleLabel.frame.origin = CGPoint(
@@ -189,52 +229,107 @@ final class AIAnalysisPreviewWindowService {
             y: titleLabel.frame.minY - spacing - statusLabel.frame.height
         )
 
-        closeButton.frame = CGRect(
-            x: size.width - padding - buttonWidth,
-            y: padding,
-            width: buttonWidth,
-            height: buttonHeight
-        )
-        retryButton.frame = CGRect(
-            x: closeButton.frame.minX - spacing - buttonWidth,
-            y: padding,
-            width: buttonWidth,
-            height: buttonHeight
-        )
-        copyButton.frame = CGRect(
-            x: retryButton.frame.minX - spacing - buttonWidth,
-            y: padding,
-            width: buttonWidth,
-            height: buttonHeight
-        )
+        var trailingX = size.width - padding
+        for (button, width) in zip(buttons.reversed(), buttonWidths.reversed()) {
+            trailingX -= width
+            button.frame = CGRect(
+                x: trailingX,
+                y: padding,
+                width: width,
+                height: buttonHeight
+            )
+            trailingX -= spacing
+        }
 
         let scrollTop = statusLabel.frame.minY - spacing
-        let scrollBottom = copyButton.frame.maxY + spacing
+        let scrollBottom = copyAllButton.frame.maxY + spacing
         scrollView.frame = CGRect(
             x: padding,
             y: scrollBottom,
             width: size.width - padding * 2,
-            height: max(scrollTop - scrollBottom, 80)
+            height: max(scrollTop - scrollBottom, 100)
         )
 
-        textView.minSize = CGSize(width: 0, height: scrollView.contentSize.height)
-        textView.maxSize = CGSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        textView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
-        textView.textContainer?.containerSize = CGSize(
-            width: scrollView.contentSize.width,
-            height: CGFloat.greatestFiniteMagnitude
+        layoutDocumentContent(in: scrollView.contentSize)
+    }
+
+    private func layoutDocumentContent(in size: CGSize) {
+        let contentPadding: CGFloat = 8
+        let sectionSpacing: CGFloat = 12
+        let contentWidth = max(size.width - contentPadding * 2, 120)
+        var currentY: CGFloat = contentPadding
+
+        if summarySectionView.isHidden == false {
+            let height = summarySectionView.preferredHeight(forWidth: contentWidth)
+            summarySectionView.frame = CGRect(
+                x: contentPadding,
+                y: currentY,
+                width: contentWidth,
+                height: height
+            )
+            currentY += height + sectionSpacing
+        } else {
+            summarySectionView.frame = .zero
+        }
+
+        if causesSectionView.isHidden == false {
+            let height = causesSectionView.preferredHeight(forWidth: contentWidth)
+            causesSectionView.frame = CGRect(
+                x: contentPadding,
+                y: currentY,
+                width: contentWidth,
+                height: height
+            )
+            currentY += height + sectionSpacing
+        } else {
+            causesSectionView.frame = .zero
+        }
+
+        if nextStepsSectionView.isHidden == false {
+            let height = nextStepsSectionView.preferredHeight(forWidth: contentWidth)
+            nextStepsSectionView.frame = CGRect(
+                x: contentPadding,
+                y: currentY,
+                width: contentWidth,
+                height: height
+            )
+            currentY += height + sectionSpacing
+        } else {
+            nextStepsSectionView.frame = .zero
+        }
+
+        if messageLabel.isHidden == false {
+            let messageSize = messageLabel.sizeThatFits(
+                CGSize(width: contentWidth, height: .greatestFiniteMagnitude)
+            )
+            messageLabel.frame = CGRect(
+                x: contentPadding,
+                y: currentY,
+                width: contentWidth,
+                height: messageSize.height
+            )
+            currentY += messageSize.height + contentPadding
+        } else {
+            messageLabel.frame = .zero
+            currentY += contentPadding
+        }
+
+        documentContentView.frame = CGRect(
+            x: 0,
+            y: 0,
+            width: size.width,
+            height: max(currentY, size.height)
         )
-        textView.textContainer?.widthTracksTextView = true
     }
 
     private func frame(for selectionRect: CGRect, on screen: NSScreen) -> CGRect {
         let visibleFrame = screen.visibleFrame
         let outerMargin: CGFloat = 24
         let gap: CGFloat = 20
-        let minWidth: CGFloat = 300
-        let maxWidth: CGFloat = 400
-        let minHeight: CGFloat = 240
-        let maxHeight: CGFloat = 460
+        let minWidth: CGFloat = 320
+        let maxWidth: CGFloat = 420
+        let minHeight: CGFloat = 260
+        let maxHeight: CGFloat = 480
 
         let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
         let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
@@ -243,8 +338,8 @@ final class AIAnalysisPreviewWindowService {
         let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
         let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
 
-        let panelWidth = min(max(max(availableWidth, minWidth), minWidth), maxWidth)
-        let panelHeight = min(max(max(availableHeight * 0.48, minHeight), minHeight), maxHeight)
+        let panelWidth = min(max(availableWidth, minWidth), maxWidth)
+        let panelHeight = min(max(availableHeight * 0.52, minHeight), maxHeight)
 
         let panelX: CGFloat
         if placeOnLeft {
@@ -276,5 +371,80 @@ final class AIAnalysisPreviewWindowService {
         NSScreen.screens.first { screen in
             screen.frame.contains(CGPoint(x: rect.midX, y: rect.midY))
         }
+    }
+}
+
+private final class FlippedContentView: NSView {
+    override var isFlipped: Bool {
+        true
+    }
+}
+
+private final class SectionView: NSView {
+    private let titleLabel: NSTextField
+    private let contentLabel = NSTextField(wrappingLabelWithString: "")
+
+    init(title: String) {
+        titleLabel = NSTextField(labelWithString: title)
+        super.init(frame: .zero)
+
+        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        titleLabel.textColor = NSColor.white.withAlphaComponent(0.9)
+
+        contentLabel.font = .systemFont(ofSize: 13)
+        contentLabel.textColor = .white
+        contentLabel.maximumNumberOfLines = 0
+        contentLabel.lineBreakMode = .byWordWrapping
+
+        addSubview(titleLabel)
+        addSubview(contentLabel)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func setContent(_ content: String) {
+        contentLabel.stringValue = content
+        needsLayout = true
+    }
+
+    func preferredHeight(forWidth width: CGFloat) -> CGFloat {
+        let titleHeight = titleLabel.fittingSize.height
+        let contentHeight = contentLabel.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        ).height
+        return titleHeight + 6 + contentHeight
+    }
+
+    override func layout() {
+        super.layout()
+
+        let width = bounds.width
+        let spacing: CGFloat = 6
+
+        titleLabel.sizeToFit()
+        titleLabel.frame = CGRect(
+            x: 0,
+            y: bounds.height - titleLabel.frame.height,
+            width: width,
+            height: titleLabel.frame.height
+        )
+
+        let contentSize = contentLabel.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        contentLabel.frame = CGRect(
+            x: 0,
+            y: 0,
+            width: width,
+            height: contentSize.height
+        )
+
+        titleLabel.frame.origin.y = contentLabel.frame.maxY + spacing
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let width = bounds.width > 0 ? bounds.width : 300
+        return NSSize(width: width, height: preferredHeight(forWidth: width))
     }
 }
