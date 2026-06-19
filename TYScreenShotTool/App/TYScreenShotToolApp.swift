@@ -33,6 +33,7 @@ struct TYScreenShotToolApp: App {
         let ocrPreviewWindowService = OCRPreviewWindowService()
         let aiAnalysisService = AIAnalysisService()
         let aiAnalysisPreviewWindowService = AIAnalysisPreviewWindowService()
+        let windowSelectionService = WindowSelectionService()
         let hotKeyService = GlobalHotKeyService(
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
@@ -66,6 +67,12 @@ struct TYScreenShotToolApp: App {
         }
         overlayService.onSelectionCompleted = { rect in
             sessionService.completeSelection(rect)
+        }
+        overlayService.onWindowSelectionConfirmed = { candidate in
+            sessionService.confirmWindowSelection(candidate)
+        }
+        overlayService.windowCandidateProvider = { screenPoint in
+            windowSelectionService.candidateWindow(at: screenPoint)
         }
         overlayService.onPreviewSelectionChanged = { rect in
             sessionService.updatePendingSelection(rect)

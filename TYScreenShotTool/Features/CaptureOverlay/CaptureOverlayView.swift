@@ -13,6 +13,7 @@ final class CaptureOverlayView: NSView {
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
     var onSelection: ((CGRect) -> Void)?
+    var onWindowSelectionConfirmed: ((WindowSelectionCandidate) -> Void)?
     var onPreviewSelectionChanged: ((CGRect) -> Void)?
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
@@ -25,10 +26,17 @@ final class CaptureOverlayView: NSView {
     private static let cornerHitSize: CGFloat = 12
     private static let minimumSelectionWidth: CGFloat = 40
     private static let minimumSelectionHeight: CGFloat = 40
+    private static let dragActivationDistance: CGFloat = 4
+
+    var windowCandidateProvider: ((CGPoint) -> WindowSelectionCandidate?)?
 
     private var dragStartPoint: CGPoint?
     private var currentPoint: CGPoint?
     private var isDragging = false
+    private var hoveredWindowCandidate: WindowSelectionCandidate?
+    private var mouseDownPoint: CGPoint?
+    private var mouseDownWindowCandidate: WindowSelectionCandidate?
+    private var isPendingWindowClickConfirmation = false
     private var previewSelectionLocked = false
     private var cursorTrackingArea: NSTrackingArea?
     private var hoverInteractionTarget: PreviewInteractionTarget = .none
@@ -121,7 +129,7 @@ final class CaptureOverlayView: NSView {
         let activeRect: CGRect?
         switch mode {
         case .selection:
-            activeRect = selectionRect
+            activeRect = selectionRect ?? hoveredWindowCandidate?.frame
         case .preview:
             activeRect = previewSelectionRect
         }
@@ -142,7 +150,7 @@ final class CaptureOverlayView: NSView {
 
         switch mode {
         case .selection:
-            guard let selectionRect else {
+            guard let selectionRect = selectionRect ?? hoveredWindowCandidate?.frame else {
                 return
             }
 
@@ -175,11 +183,10 @@ final class CaptureOverlayView: NSView {
 
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
-        dragStartPoint = point
-        currentPoint = point
-        isDragging = true
-        onDragStarted?()
-        needsDisplay = true
+        refreshHoveredWindowCandidate(at: point)
+        mouseDownPoint = point
+        mouseDownWindowCandidate = hoveredWindowCandidate
+        isPendingWindowClickConfirmation = hoveredWindowCandidate != nil
         updateCursor(for: point)
     }
 
@@ -194,11 +201,34 @@ final class CaptureOverlayView: NSView {
             return
         }
 
-        guard isDragging else {
+        let point = constrainedPoint(for: event)
+
+        if isDragging == false, let startPoint = mouseDownPoint {
+            let deltaX = point.x - startPoint.x
+            let deltaY = point.y - startPoint.y
+            let distance = hypot(deltaX, deltaY)
+
+            guard distance >= Self.dragActivationDistance else {
+                updateCursor(for: point)
+                return
+            }
+
+            dragStartPoint = startPoint
+            currentPoint = point
+            isDragging = true
+            isPendingWindowClickConfirmation = false
+            hoveredWindowCandidate = nil
+            onDragStarted?()
+            needsDisplay = true
+            updateCursor(for: point)
             return
         }
 
-        let point = constrainedPoint(for: event)
+        guard isDragging else {
+            updateCursor(for: point)
+            return
+        }
+
         currentPoint = point
         needsDisplay = true
         updateCursor(for: point)
@@ -215,19 +245,34 @@ final class CaptureOverlayView: NSView {
             return
         }
 
-        guard isDragging else {
+        let point = constrainedPoint(for: event)
+
+        defer {
+            mouseDownPoint = nil
+            mouseDownWindowCandidate = nil
+            isPendingWindowClickConfirmation = false
+        }
+
+        if isDragging {
+            currentPoint = point
+            isDragging = false
+            needsDisplay = true
+
+            if let selectionRect {
+                onSelection?(selectionRect)
+            }
+
+            updateCursor(for: currentPoint ?? .zero)
             return
         }
 
-        currentPoint = constrainedPoint(for: event)
-        isDragging = false
-        needsDisplay = true
-
-        if let selectionRect {
-            onSelection?(selectionRect)
+        if isPendingWindowClickConfirmation, let windowCandidate = mouseDownWindowCandidate {
+            onWindowSelectionConfirmed?(windowCandidate)
+            return
         }
 
-        updateCursor(for: currentPoint ?? .zero)
+        refreshHoveredWindowCandidate(at: point)
+        updateCursor(for: point)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -241,11 +286,13 @@ final class CaptureOverlayView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        refreshHoveredWindowCandidate(at: point)
         updateCursor(for: point)
     }
 
     override func cursorUpdate(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        refreshHoveredWindowCandidate(at: point)
         updateCursor(for: point)
     }
 
@@ -317,6 +364,10 @@ final class CaptureOverlayView: NSView {
         dragStartPoint = nil
         currentPoint = nil
         isDragging = false
+        hoveredWindowCandidate = nil
+        mouseDownPoint = nil
+        mouseDownWindowCandidate = nil
+        isPendingWindowClickConfirmation = false
         hoverInteractionTarget = .none
         activeInteractionTarget = .none
         interactionStartMousePoint = nil
@@ -637,6 +688,15 @@ final class CaptureOverlayView: NSView {
         case .none:
             NSCursor.crosshair.set()
         }
+    }
+
+    private func refreshHoveredWindowCandidate(at point: CGPoint) {
+        guard mode == .selection, isDragging == false else {
+            return
+        }
+
+        hoveredWindowCandidate = windowCandidateProvider?(point)
+        needsDisplay = true
     }
 
     private func interactionTarget(for point: CGPoint) -> PreviewInteractionTarget {

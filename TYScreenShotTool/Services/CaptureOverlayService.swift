@@ -12,6 +12,7 @@ final class CaptureOverlayService {
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
     var onSelectionCompleted: ((CGRect) -> Void)?
+    var onWindowSelectionConfirmed: ((WindowSelectionCandidate) -> Void)?
     var onPreviewSelectionChanged: ((CGRect) -> Void)?
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
@@ -19,6 +20,7 @@ final class CaptureOverlayService {
     var onAIRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
+    var windowCandidateProvider: ((CGPoint) -> WindowSelectionCandidate?)?
 
     private var overlayWindows: [CaptureOverlayWindow] = []
     private weak var activeOverlayView: CaptureOverlayView?
@@ -46,6 +48,35 @@ final class CaptureOverlayService {
                 }
 
                 self.onSelectionCompleted?(window.convertToScreen(rect))
+            }
+            overlayView.windowCandidateProvider = { [weak self] localPoint in
+                guard let self, let window = overlayView.window else {
+                    return nil
+                }
+
+                let screenPoint = window.convertToScreen(CGRect(origin: localPoint, size: .zero)).origin
+                guard let candidate = self.windowCandidateProvider?(screenPoint) else {
+                    return nil
+                }
+
+                return WindowSelectionCandidate(
+                    frame: window.convertFromScreen(candidate.frame),
+                    ownerName: candidate.ownerName,
+                    windowID: candidate.windowID
+                )
+            }
+            overlayView.onWindowSelectionConfirmed = { [weak self] candidate in
+                guard let self, let window = overlayView.window else {
+                    return
+                }
+
+                self.onWindowSelectionConfirmed?(
+                    WindowSelectionCandidate(
+                        frame: window.convertToScreen(candidate.frame),
+                        ownerName: candidate.ownerName,
+                        windowID: candidate.windowID
+                    )
+                )
             }
             overlayView.onPreviewSelectionChanged = { [weak self] rect in
                 guard let self, let window = overlayView.window else {

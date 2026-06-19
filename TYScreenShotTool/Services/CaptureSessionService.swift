@@ -11,6 +11,20 @@ import CoreImage
 import Foundation
 
 final class CaptureSessionService {
+    private enum PendingCaptureSource {
+        case frozenScreenRect(CGRect)
+        case independentWindow(windowID: CGWindowID, frame: CGRect)
+
+        var selectionRect: CGRect {
+            switch self {
+            case let .frozenScreenRect(rect):
+                return rect
+            case let .independentWindow(_, frame):
+                return frame
+            }
+        }
+    }
+
     private let overlayService: CaptureOverlayService
     private let screenCaptureService: ScreenCaptureService
     private let clipboardService: ClipboardService
@@ -27,7 +41,7 @@ final class CaptureSessionService {
     private let aiAnalysisPreviewWindowService: AIAnalysisPreviewWindowService
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
-    private var pendingSelectionRect: CGRect?
+    private var pendingCaptureSource: PendingCaptureSource?
     private var pendingScreenImages: [CGDirectDisplayID: CGImage] = [:]
     private var sourceApplication: NSRunningApplication?
     private var isPreparingSession = false
@@ -133,7 +147,23 @@ final class CaptureSessionService {
 
         transition(to: .selectionCompleted)
         logSelection(rect)
-        pendingSelectionRect = rect
+        pendingCaptureSource = .frozenScreenRect(rect)
+        overlayService.showSelectionPreview(selectionRect: rect, screenImages: pendingScreenImages)
+    }
+
+    func confirmWindowSelection(_ candidate: WindowSelectionCandidate) {
+        guard state == .overlayPresented else {
+            return
+        }
+
+        let rect = candidate.frame
+        guard rect.width > 1, rect.height > 1 else {
+            return
+        }
+
+        transition(to: .selectionCompleted)
+        logSelection(rect)
+        pendingCaptureSource = .independentWindow(windowID: candidate.windowID, frame: rect)
         overlayService.showSelectionPreview(selectionRect: rect, screenImages: pendingScreenImages)
     }
 
@@ -146,7 +176,7 @@ final class CaptureSessionService {
             return
         }
 
-        pendingSelectionRect = rect
+        pendingCaptureSource = .frozenScreenRect(rect)
     }
 
     func cancelSession() {
@@ -167,7 +197,7 @@ final class CaptureSessionService {
     }
 
     func copyPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
-        guard state == .selectionCompleted, let pendingSelectionRect else {
+        guard state == .selectionCompleted, let pendingCaptureSource else {
             return
         }
 
@@ -175,12 +205,13 @@ final class CaptureSessionService {
         aiAnalysisPreviewWindowService.dismiss()
         Task {
             do {
-                let image = try frozenSelectionImage(for: pendingSelectionRect)
+                let selectionRect = pendingCaptureSource.selectionRect
+                let image = try await captureImageForPendingSource(pendingCaptureSource)
                 let exportedImage = try exportedImage(
                     from: image,
                     style: style,
                     annotations: annotations,
-                    previewSize: pendingSelectionRect.size
+                    previewSize: selectionRect.size
                 )
                 try clipboardService.copyImage(exportedImage)
                 print("Clipboard Copy Success")
@@ -201,7 +232,7 @@ final class CaptureSessionService {
     }
 
     func savePendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
-        guard state == .selectionCompleted, let pendingSelectionRect else {
+        guard state == .selectionCompleted, let pendingCaptureSource else {
             return
         }
 
@@ -211,12 +242,13 @@ final class CaptureSessionService {
             var temporaryFileURL: URL?
 
             do {
-                let image = try frozenSelectionImage(for: pendingSelectionRect)
+                let selectionRect = pendingCaptureSource.selectionRect
+                let image = try await captureImageForPendingSource(pendingCaptureSource)
                 let exportedImage = try exportedImage(
                     from: image,
                     style: style,
                     annotations: annotations,
-                    previewSize: pendingSelectionRect.size
+                    previewSize: selectionRect.size
                 )
                 temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
                 let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
@@ -248,20 +280,21 @@ final class CaptureSessionService {
     }
 
     func ocrPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
-        guard state == .selectionCompleted, let pendingSelectionRect else {
+        guard state == .selectionCompleted, let pendingCaptureSource else {
             return
         }
 
         Task {
             do {
-                let image = try frozenSelectionImage(for: pendingSelectionRect)
+                let selectionRect = pendingCaptureSource.selectionRect
+                let image = try await captureImageForPendingSource(pendingCaptureSource)
                 let text = try ocrService.recognizeText(in: image)
                 print("OCR Success")
                 print("text: \(text)")
                 await MainActor.run {
                     ocrPreviewWindowService.present(
                         text: text,
-                        selectionRect: pendingSelectionRect,
+                        selectionRect: selectionRect,
                         onCopy: { [weak self] in
                             self?.copyOCRPreviewText(text)
                         },
@@ -280,7 +313,7 @@ final class CaptureSessionService {
     }
 
     func analyzePendingCapture(style _: CapturePreviewStyle, annotations _: [CaptureAnnotation]) {
-        guard state == .selectionCompleted, let pendingSelectionRect else {
+        guard state == .selectionCompleted, let pendingCaptureSource else {
             return
         }
 
@@ -289,11 +322,12 @@ final class CaptureSessionService {
             return
         }
 
+        let selectionRect = pendingCaptureSource.selectionRect
         isAIAnalysisInProgress = true
         overlayService.setAIButtonEnabled(false)
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.presentLoading(
-            selectionRect: pendingSelectionRect,
+            selectionRect: selectionRect,
             onClose: { [weak self] in
                 self?.aiAnalysisPreviewWindowService.dismiss()
             }
@@ -304,12 +338,12 @@ final class CaptureSessionService {
                 return
             }
 
-            await self.performAIAnalysis(selectionRect: pendingSelectionRect)
+            await self.performAIAnalysis(for: pendingCaptureSource)
         }
     }
 
     func pinPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
-        guard state == .selectionCompleted, let pendingSelectionRect else {
+        guard state == .selectionCompleted, let pendingCaptureSource else {
             return
         }
 
@@ -317,12 +351,13 @@ final class CaptureSessionService {
         aiAnalysisPreviewWindowService.dismiss()
         Task { @MainActor in
             do {
-                let exportedImage = try prepareExportedImage(
-                    selectionRect: pendingSelectionRect,
+                let selectionRect = pendingCaptureSource.selectionRect
+                let exportedImage = try await prepareExportedImage(
+                    for: pendingCaptureSource,
                     style: style,
                     annotations: annotations
                 )
-                pinWindowService.presentPinnedImage(exportedImage, sourceRect: pendingSelectionRect)
+                pinWindowService.presentPinnedImage(exportedImage, sourceRect: selectionRect)
                 print("Pin Success")
                 overlayService.dismissOverlay()
                 clearPendingCapture()
@@ -334,9 +369,11 @@ final class CaptureSessionService {
     }
 
     func startScrollingCapture(annotations: [CaptureAnnotation]) {
-        guard state == .selectionCompleted, isInScrollingCaptureMode == false, let pendingSelectionRect else {
+        guard state == .selectionCompleted, isInScrollingCaptureMode == false, let pendingCaptureSource else {
             return
         }
+
+        let pendingSelectionRect = pendingCaptureSource.selectionRect
 
         guard annotations.isEmpty else {
             print("Scrolling capture failed: current selection contains annotations.")
@@ -366,7 +403,7 @@ final class CaptureSessionService {
     }
 
     func appendScrollingCaptureFrame() {
-        guard isInScrollingCaptureMode, let pendingSelectionRect else {
+        guard isInScrollingCaptureMode, let pendingSelectionRect = pendingCaptureSource?.selectionRect else {
             return
         }
 
@@ -451,12 +488,22 @@ final class CaptureSessionService {
         )
     }
 
+    private func captureImageForPendingSource(_ source: PendingCaptureSource) async throws -> CGImage {
+        switch source {
+        case let .frozenScreenRect(rect):
+            return try frozenSelectionImage(for: rect)
+        case let .independentWindow(windowID, _):
+            return try await screenCaptureService.captureImage(forWindowID: windowID)
+        }
+    }
+
     private func prepareExportedImage(
-        selectionRect: CGRect,
+        for source: PendingCaptureSource,
         style: CapturePreviewStyle,
         annotations: [CaptureAnnotation]
-    ) throws -> CGImage {
-        let image = try frozenSelectionImage(for: selectionRect)
+    ) async throws -> CGImage {
+        let image = try await captureImageForPendingSource(source)
+        let selectionRect = source.selectionRect
         return try exportedImage(
             from: image,
             style: style,
@@ -480,7 +527,7 @@ final class CaptureSessionService {
     }
 
     private func clearPendingCapture() {
-        pendingSelectionRect = nil
+        pendingCaptureSource = nil
         pendingScreenImages.removeAll()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
@@ -533,14 +580,16 @@ final class CaptureSessionService {
     }
 
     @MainActor
-    private func performAIAnalysis(selectionRect: CGRect) async {
+    private func performAIAnalysis(for source: PendingCaptureSource) async {
+        let selectionRect = source.selectionRect
+
         defer {
             isAIAnalysisInProgress = false
             overlayService.setAIButtonEnabled(true)
         }
 
         do {
-            let image = try frozenSelectionImage(for: selectionRect)
+            let image = try await captureImageForPendingSource(source)
             let text = try ocrService.recognizeText(in: image)
             let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
 
@@ -601,10 +650,11 @@ final class CaptureSessionService {
 
     @MainActor
     private func retryAIAnalysis() {
-        guard let pendingSelectionRect else {
+        guard let pendingCaptureSource else {
             return
         }
 
+        let pendingSelectionRect = pendingCaptureSource.selectionRect
         guard isAIAnalysisInProgress == false else {
             return
         }
@@ -623,7 +673,7 @@ final class CaptureSessionService {
                 return
             }
 
-            await self.performAIAnalysis(selectionRect: pendingSelectionRect)
+            await self.performAIAnalysis(for: pendingCaptureSource)
         }
     }
 

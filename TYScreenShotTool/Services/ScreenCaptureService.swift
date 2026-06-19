@@ -72,6 +72,33 @@ final class ScreenCaptureService {
         )
     }
 
+    func captureImage(forWindowID windowID: CGWindowID) async throws -> CGImage {
+        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            throw ScreenCaptureError.permissionRequired
+        }
+
+        let shareableContent = try await SCShareableContent.current
+        guard let window = shareableContent.windows.first(where: { $0.windowID == windowID }) else {
+            throw ScreenCaptureError.windowNotFound
+        }
+
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let contentInfo = SCShareableContent.info(for: filter)
+        let contentRect = contentInfo.contentRect.integral
+
+        guard contentRect.width > 1, contentRect.height > 1 else {
+            throw ScreenCaptureError.invalidSelection
+        }
+
+        let configuration = SCStreamConfiguration()
+        configuration.width = max(Int(contentRect.width * CGFloat(contentInfo.pointPixelScale)), 1)
+        configuration.height = max(Int(contentRect.height * CGFloat(contentInfo.pointPixelScale)), 1)
+        configuration.scalesToFit = false
+        configuration.showsCursor = false
+
+        return try await captureImage(contentFilter: filter, configuration: configuration)
+    }
+
     func cropImage(_ image: CGImage, in screenFrame: CGRect, to screenRect: CGRect) throws -> CGImage {
         guard screenRect.width > 1, screenRect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -213,4 +240,5 @@ enum ScreenCaptureError: Error {
     case permissionRequired
     case displayNotFound
     case captureFailed
+    case windowNotFound
 }
