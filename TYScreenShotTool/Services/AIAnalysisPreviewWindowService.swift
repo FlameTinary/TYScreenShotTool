@@ -229,6 +229,8 @@ final class AIAnalysisPreviewWindowService {
                 sectionView.setContent(section.content)
                 sectionView.isHidden = false
             } else {
+                sectionView.setTitle("")
+                sectionView.setContent("")
                 sectionView.isHidden = true
                 sectionView.frame = .zero
             }

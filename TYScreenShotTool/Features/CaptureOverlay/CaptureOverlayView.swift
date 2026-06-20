@@ -1047,12 +1047,26 @@ final class CaptureOverlayView: NSView {
     private func presentAIMenu(relativeTo button: NSButton) {
         let menu = NSMenu()
 
-        for mode in AIAnalysisMode.allCases {
+        for mode in AIAnalysisMode.topLevelModes {
             let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = mode
             menu.addItem(item)
         }
+
+        let translationItem = NSMenuItem(title: "翻译语言", action: nil, keyEquivalent: "")
+        let translationMenu = NSMenu()
+
+        for language in AITranslationLanguage.allCases {
+            let mode = AIAnalysisMode.translation(language)
+            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode
+            translationMenu.addItem(item)
+        }
+
+        menu.setSubmenu(translationMenu, for: translationItem)
+        menu.addItem(translationItem)
 
         let menuOrigin = CGPoint(x: button.frame.minX, y: button.frame.maxY + 4)
         menu.popUp(positioning: nil, at: menuOrigin, in: toolbarContainerView)

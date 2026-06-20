@@ -156,18 +156,22 @@ final class AIAnalysisService {
     }
 
     private func buildDeveloperErrorPrompt(from text: String) -> String {
-        buildPrompt(from: definition(for: .developerError), text: text)
+        buildPrompt(from: definition(for: .developerError), text: text, mode: .developerError)
     }
 
     private func buildPrompt(for mode: AIAnalysisMode, text: String) -> String {
-        buildPrompt(from: definition(for: mode), text: text)
+        buildPrompt(from: definition(for: mode), text: text, mode: mode)
     }
 
     private func buildSummaryPrompt(from text: String) -> String {
-        buildPrompt(from: definition(for: .summary), text: text)
+        buildPrompt(from: definition(for: .summary), text: text, mode: .summary)
     }
 
-    private func buildPrompt(from definition: AnalysisModeDefinition, text: String) -> String {
+    private func buildPrompt(
+        from definition: AnalysisModeDefinition,
+        text: String,
+        mode: AIAnalysisMode
+    ) -> String {
         let sectionsText = definition.sections
             .map { "\($0.promptTitle)：\n<这里填写内容>" }
             .joined(separator: "\n\n")
@@ -176,9 +180,32 @@ final class AIAnalysisService {
             .map { "- \($0)" }
             .joined(separator: "\n")
 
+        let outputLanguageInstruction: String
+        switch mode {
+        case .developerError, .summary:
+            outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，用简洁中文输出，并严格使用以下结构："
+        case .translation:
+            outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，严格按要求输出译文："
+        }
+
+        let targetLanguageInstruction: String
+        switch mode {
+        case let .translation(language):
+            switch language {
+            case .simplifiedChinese:
+                targetLanguageInstruction = "目标语言：简体中文"
+            case .english:
+                targetLanguageInstruction = "目标语言：英文"
+            }
+        default:
+            targetLanguageInstruction = ""
+        }
+
         return """
         \(definition.promptIntro)
-        请基于下面的\(definition.inputLabel)，用简洁中文输出，并严格使用以下结构：
+        \(outputLanguageInstruction)
+
+        \(targetLanguageInstruction.isEmpty ? "" : targetLanguageInstruction + "\n")
 
         \(sectionsText)
 
@@ -285,6 +312,25 @@ final class AIAnalysisService {
                     ),
                 ]
             )
+        case .translation:
+            return AnalysisModeDefinition(
+                instructions: "你负责将截图中的文字翻译成指定目标语言，并仅输出译文结果。",
+                promptIntro: "你是一个帮助用户翻译截图文字内容的助手。",
+                inputLabel: "待翻译文本",
+                requirements: [
+                    "只输出译文，不要输出原文",
+                    "不要输出解释、说明、前言、结语或 Markdown 代码块",
+                    "保持语义准确与表达自然",
+                    "若原文中存在明显的菜单、按钮或短句，仍然按自然语言翻译",
+                ],
+                sections: [
+                    SectionDefinition(
+                        title: "译文",
+                        promptTitle: "译文",
+                        acceptedHeaders: [.exact("译文")]
+                    ),
+                ]
+            )
         }
     }
 
@@ -355,12 +401,25 @@ final class AIAnalysisService {
             statusTitle: mode.resultStatusTitle,
             sections: sections,
             rawText: text,
-            secondaryCopyText: mode == .summary
-                ? sections
-                    .map { "\($0.title)：\n\($0.content)" }
-                    .joined(separator: "\n\n")
-                : (sections.last?.content ?? text)
+            secondaryCopyText: secondaryCopyText(for: mode, sections: sections, fallback: text)
         )
+    }
+
+    private func secondaryCopyText(
+        for mode: AIAnalysisMode,
+        sections: [AIAnalysisSection],
+        fallback: String
+    ) -> String {
+        switch mode {
+        case .summary:
+            return sections
+                .map { "\($0.title)：\n\($0.content)" }
+                .joined(separator: "\n\n")
+        case .translation:
+            return sections.first?.content ?? fallback
+        case .developerError:
+            return sections.last?.content ?? fallback
+        }
     }
 
     private func parseSectionHeader(
