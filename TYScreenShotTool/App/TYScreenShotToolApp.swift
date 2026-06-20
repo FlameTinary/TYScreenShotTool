@@ -31,6 +31,7 @@ struct TYScreenShotToolApp: App {
         let scrollingCapturePanelService = ScrollingCapturePanelService()
         let scrollingCapturePreviewWindowService = ScrollingCapturePreviewWindowService()
         let ocrPreviewWindowService = OCRPreviewWindowService()
+        let aiImageTextExtractionService = AIImageTextExtractionService()
         let aiAnalysisService = AIAnalysisService()
         let aiAnalysisPreviewWindowService = AIAnalysisPreviewWindowService()
         let windowSelectionService = WindowSelectionService()
@@ -48,6 +49,7 @@ struct TYScreenShotToolApp: App {
             clipboardService: clipboardService,
             imageSaveService: imageSaveService,
             ocrService: OCRService(),
+            aiImageTextExtractionService: aiImageTextExtractionService,
             aiAnalysisService: aiAnalysisService,
             pinWindowService: pinWindowService,
             toastService: toastService,

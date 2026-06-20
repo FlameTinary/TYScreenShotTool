@@ -25,11 +25,17 @@ final class CaptureSessionService {
         }
     }
 
+    private enum AITextInputStrategy {
+        case localOCR
+        case visionAI
+    }
+
     private let overlayService: CaptureOverlayService
     private let screenCaptureService: ScreenCaptureService
     private let clipboardService: ClipboardService
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
+    private let aiImageTextExtractionService: AIImageTextExtractionService
     private let aiAnalysisService: AIAnalysisService
     private let pinWindowService: PinWindowService
     private let toastService: ToastService
@@ -64,6 +70,7 @@ final class CaptureSessionService {
         clipboardService: ClipboardService,
         imageSaveService: ImageSaveService,
         ocrService: OCRService,
+        aiImageTextExtractionService: AIImageTextExtractionService,
         aiAnalysisService: AIAnalysisService,
         pinWindowService: PinWindowService,
         toastService: ToastService,
@@ -79,6 +86,7 @@ final class CaptureSessionService {
         self.clipboardService = clipboardService
         self.imageSaveService = imageSaveService
         self.ocrService = ocrService
+        self.aiImageTextExtractionService = aiImageTextExtractionService
         self.aiAnalysisService = aiAnalysisService
         self.pinWindowService = pinWindowService
         self.toastService = toastService
@@ -622,6 +630,11 @@ final class CaptureSessionService {
         let oldState = state
         state = newState
         print("[CaptureSession] \(oldState.displayName) -> \(newState.displayName)")
+    }
+
+    private func currentAITextInputStrategy() -> AITextInputStrategy {
+        let useVision = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey)
+        return useVision ? .visionAI : .localOCR
     }
 
     private func logSelection(_ rect: CGRect) {
