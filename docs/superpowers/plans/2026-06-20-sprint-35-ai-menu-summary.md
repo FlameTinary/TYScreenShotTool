@@ -426,10 +426,23 @@ struct AIAnalysisResult {
             .dropLast()
             .joined(separator: "\n")
     }
+
+    var summary: String {
+        sections[safe: 0]?.content ?? ""
+    }
+
+    var possibleCauses: String {
+        sections[safe: 1]?.content ?? ""
+    }
+
+    var nextSteps: String {
+        sections[safe: 2]?.content ?? ""
+    }
 }
 ```
 
 Expected: 结果模型不再被“报错三段结构”的字段名绑死。
+Expected: 在 Task 5 / Task 6 / Task 7 还未全部切换到 `sections` 前，旧调用方仍可通过兼容只读属性持续编译。
 
 - [ ] **Step 2: 增加按模式分析的统一公开入口**
 
