@@ -343,18 +343,48 @@ case .interfaceStructure:
     )
 ```
 
-- [ ] **Step 2: 为界面结构识别增加独立 prompt 兜底**
+- [ ] **Step 2: 为界面结构识别增加固定 5 小标题 prompt 模板**
 
-Inside `buildPrompt(from:text:mode:)`, extend the output-language switch:
+Inside `buildPrompt(from:text:mode:)`, add a dedicated template for `.interfaceStructure` instead of reusing the generic `sectionsText`:
+
+```swift
+let sectionsText: String
+switch mode {
+case .interfaceStructure:
+    sectionsText = """
+    界面结构：
+    组件识别：
+    <这里填写内容>
+
+    结构层级：
+    <这里填写内容>
+
+    视觉特征：
+    <这里填写内容>
+
+    交互语义：
+    <这里填写内容>
+
+    实现提示：
+    <这里填写内容>
+    """
+default:
+    sectionsText = definition.sections
+        .map { "\($0.promptTitle)：\n<这里填写内容>" }
+        .joined(separator: "\n\n")
+}
+```
+
+and extend the output-language switch:
 
 ```swift
 case .interfaceStructure:
-    outputLanguageInstruction = "请基于下面的\\(definition.inputLabel)，严格按要求输出一段结构化界面说明："
+    outputLanguageInstruction = "请基于下面的\\(definition.inputLabel)，严格按要求输出一段结构化界面说明，并确保 5 个固定小标题全部出现："
 ```
 
-This keeps the new mode away from the old “用简洁中文输出，并严格使用以下结构” wording intended for multi-section analysis.
+Expected: prompt 明确写出 `组件识别 / 结构层级 / 视觉特征 / 交互语义 / 实现提示`，而不是只给出一个模糊的“固定小标题”要求。
 
-- [ ] **Step 3: 增加界面结构识别的单段结果解析兜底**
+- [ ] **Step 3: 增加界面结构识别的单段结果解析入口**
 
 Update `parseAnalysisResult(from:mode:)` from:
 
@@ -377,18 +407,43 @@ default:
 }
 ```
 
-- [ ] **Step 4: 实现 parseInterfaceStructureResult**
+- [ ] **Step 4: 实现界面结构识别的 5 小标题校验**
+
+Append to `AIAnalysisService.swift`:
+
+```swift
+private func hasAllInterfaceStructureHeadings(in text: String) -> Bool {
+    let headings = [
+        "组件识别",
+        "结构层级",
+        "视觉特征",
+        "交互语义",
+        "实现提示",
+    ]
+
+    return headings.allSatisfy { heading in
+        text.contains("\(heading)：") || text.contains("\(heading):")
+    }
+}
+```
+
+Expected: 即使模型没有完全按外层 `界面结构` header 返回，只要缺任何一个固定小标题，也会被视为低质量输出。
+
+- [ ] **Step 5: 实现 parseInterfaceStructureResult**
 
 Append to `AIAnalysisService.swift`:
 
 ```swift
 private func parseInterfaceStructureResult(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
     if let structuredResult = try? parseStructuredSections(from: text, mode: mode) {
+        guard hasAllInterfaceStructureHeadings(in: structuredResult.sections.first?.content ?? "") else {
+            throw AIAnalysisError.lowQualityOutput
+        }
         return structuredResult
     }
 
     let normalized = normalizeInterfaceStructureText(text)
-    guard normalized.isEmpty == false else {
+    guard normalized.isEmpty == false, hasAllInterfaceStructureHeadings(in: normalized) else {
         throw AIAnalysisError.lowQualityOutput
     }
 
@@ -408,7 +463,7 @@ private func parseInterfaceStructureResult(from text: String, mode: AIAnalysisMo
 }
 ```
 
-- [ ] **Step 5: 实现 normalizeInterfaceStructureText**
+- [ ] **Step 6: 实现 normalizeInterfaceStructureText**
 
 Append below `normalizeTranslationText(_:)`:
 
@@ -436,7 +491,7 @@ private func normalizeInterfaceStructureText(_ text: String) -> String {
 }
 ```
 
-- [ ] **Step 6: 让 secondaryCopyText 支持复制结构**
+- [ ] **Step 7: 让 secondaryCopyText 支持复制结构**
 
 Update:
 
@@ -455,7 +510,7 @@ case .interfaceStructure:
     return sections.first?.content ?? fallback
 ```
 
-- [ ] **Step 7: 保持 formattedText 兼容单段结构化结果**
+- [ ] **Step 8: 保持 formattedText 兼容单段结构化结果**
 
 Keep `AIAnalysisResult.formattedText` as-is if it already works with one section:
 
@@ -473,7 +528,7 @@ Expected: interface-structure mode will produce:
 <structured text>
 ```
 
-- [ ] **Step 8: 构建验证并提交**
+- [ ] **Step 9: 构建验证并提交**
 
 Run:
 
@@ -487,26 +542,34 @@ Expected: AI service 已能为新方向生成 prompt 并解析单段结构化结
 
 ---
 
-### Task 5: 泛化 AI 结果窗，支持复制结构与单段界面结构文本
+### Task 5: 验证结果窗复用策略，无需新增结果窗代码
 
 **Files:**
-- Modify: `TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift`
+- None (verification only)
 
-- [ ] **Step 1: 继续复用单段结果展示**
+- [ ] **Step 1: 确认单段结果展示已被现有实现覆盖**
 
-Keep the current `configureForResult(_:)` strategy:
+Read the existing result-window wiring and verify these assumptions remain成立:
 
 ```swift
 let sectionViews = [summarySectionView, causesSectionView, nextStepsSectionView]
 ```
 
-and rely on the first section to render:
+and:
 
 ```swift
-AIAnalysisSection(title: "界面结构", content: normalized)
+copyNextStepsButton.title = result.mode.secondaryCopyButtonTitle
 ```
 
-while unused section views keep:
+Expected:
+
+- `界面结构` 作为第一段内容可以直接落入现有 section 容器
+- `复制结构` 按钮文案会自动来自 `AIAnalysisMode`
+- 未使用的 section view 会继续隐藏，不需要为 Sprint 37 新增窗口类型
+
+- [ ] **Step 2: 如果验证中发现缺口，再回补最小代码**
+
+Only if the code check in Step 1 shows a real gap, apply the smallest possible fix in `TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift`, for example:
 
 ```swift
 sectionView.setTitle("")
@@ -515,39 +578,13 @@ sectionView.isHidden = true
 sectionView.frame = .zero
 ```
 
-- [ ] **Step 2: 让界面结构识别按钮文案正确映射**
+Expected: 只有在现有结果窗无法稳定展示单段内容时，才改这个文件；否则本 task 不产生代码改动。
 
-Keep existing result-window hookup:
+- [ ] **Step 3: 本 task 不单独提交**
 
-```swift
-copyNextStepsButton.title = result.mode.secondaryCopyButtonTitle
-```
+Do not create a standalone commit here. Fold any truly necessary preview-window tweak into the neighboring feature commit that introduced the behavior.
 
-Expected: interface-structure mode automatically shows `复制结构`.
-
-- [ ] **Step 3: 保持 loading / error / placement 机制不变**
-
-Do not create new panel types. Reuse:
-
-```swift
-presentLoading(...)
-presentResult(...)
-presentError(...)
-```
-
-Expected: interface-structure mode shares the same placement, loading, retry, and close mechanics.
-
-- [ ] **Step 4: 构建验证并提交**
-
-Run:
-
-```bash
-./scripts/build.sh
-git add TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift
-git commit -m "feat(sprint-37): 复用结果窗展示界面结构"
-```
-
-Expected: 结果窗能稳定显示单段 `界面结构` 内容，并正确展示 `复制结构`。
+Expected: 避免为了保持 task 数量而制造空提交或无意义改动。
 
 ---
 
@@ -615,7 +652,22 @@ private func emptyContentMessage(for mode: AIAnalysisMode) -> String {
 }
 ```
 
-- [ ] **Step 5: 长截图无有效内容提示同步按新 mode 调整**
+- [ ] **Step 5: 普通截图 AI 分析层空结果也走无有效内容语义**
+
+Inside the `catch let error as AIAnalysisError` branch in `performAIAnalysis(...)`, split out empty-content cases:
+
+```swift
+case .emptyInput, .lowQualityOutput:
+    print("[AI Analysis] Interface structure produced no useful content: \(error.localizedDescription)")
+    toastService.showToast(message: emptyContentMessage(for: mode))
+    aiAnalysisPreviewWindowService.dismiss()
+```
+
+Keep only real service/request failures on the existing `AI 分析失败` path.
+
+Expected: 新 mode 在 AI 输出为空、缺固定小标题或结构质量不足时，不会错误弹成 `AI 分析失败`。
+
+- [ ] **Step 6: 长截图无有效内容提示同步按新 mode 调整**
 
 In `performScrollingAIAnalysis(...)` and `handleVisionAIExtractionError(...)`, replace the hardcoded:
 
@@ -642,7 +694,22 @@ private func handleVisionAIExtractionError(
 
 then pass `mode` from call sites.
 
-- [ ] **Step 6: 普通截图与长截图复制结构只关闭结果窗**
+- [ ] **Step 7: 长截图 AI 分析层空结果也走无有效内容语义**
+
+Inside the `catch let error as AIAnalysisError` branch in `performScrollingAIAnalysis(...)`, split out:
+
+```swift
+case .emptyInput, .lowQualityOutput:
+    print("[AI Analysis] Scrolling interface structure produced no useful content: \(error.localizedDescription)")
+    toastService.showToast(message: emptyContentMessage(for: mode))
+    aiAnalysisPreviewWindowService.dismiss()
+```
+
+and keep transport / API failures on the existing error window branch.
+
+Expected: 普通截图与长截图在“AI 有返回但不满足 Sprint 37 固定结构要求”时，语义一致。
+
+- [ ] **Step 8: 普通截图与长截图复制结构只关闭结果窗**
 
 Keep the current copy success behavior:
 
@@ -652,7 +719,7 @@ aiAnalysisPreviewWindowService.dismiss()
 
 Expected: `复制结构` and `复制全部` still only close the AI result window.
 
-- [ ] **Step 7: 长截图继续复用当前 preferredSide 与 request guard**
+- [ ] **Step 9: 长截图继续复用当前 preferredSide 与 request guard**
 
 Do not change:
 
@@ -671,7 +738,7 @@ shouldAcceptScrollingAIResult(
 
 Expected: interface-structure mode continues to follow current long-capture placement and stale-result protection.
 
-- [ ] **Step 8: 构建验证并提交**
+- [ ] **Step 10: 构建验证并提交**
 
 Run:
 
