@@ -156,72 +156,42 @@ final class AIAnalysisService {
     }
 
     private func buildDeveloperErrorPrompt(from text: String) -> String {
-        """
-        你是一个帮助 macOS / iOS 开发者排查报错的助手。
-        请基于下面的报错文本，用简洁中文输出，并严格使用以下结构：
-
-        报错大意：
-        <这里填写内容>
-
-        可能原因：
-        <这里填写内容>
-
-        建议下一步：
-        <这里填写内容>
-
-        要求：
-        - 三个部分都必须输出，不能缺省
-        - 保持短而清晰
-        - 如果信息不足，明确说明不确定点
-        - 不要输出与截图无关的泛泛建议
-        - 不要输出额外标题、前言、总结或 Markdown 代码块
-
-        报错文本：
-        \(text)
-        """
+        buildPrompt(from: definition(for: .developerError), text: text)
     }
 
     private func buildPrompt(for mode: AIAnalysisMode, text: String) -> String {
-        switch mode {
-        case .developerError:
-            return buildDeveloperErrorPrompt(from: text)
-        case .summary:
-            return buildSummaryPrompt(from: text)
-        }
+        buildPrompt(from: definition(for: mode), text: text)
     }
 
     private func buildSummaryPrompt(from text: String) -> String {
-        """
-        你是一个帮助用户总结截图文字重点的助手。
-        请基于下面的文字内容，用简洁中文输出，并严格使用以下结构：
+        buildPrompt(from: definition(for: .summary), text: text)
+    }
 
-        重点 1：
-        <这里填写内容>
+    private func buildPrompt(from definition: AnalysisModeDefinition, text: String) -> String {
+        let sectionsText = definition.sections
+            .map { "\($0.promptTitle)：\n<这里填写内容>" }
+            .joined(separator: "\n\n")
 
-        重点 2：
-        <这里填写内容>
+        let requirementsText = definition.requirements
+            .map { "- \($0)" }
+            .joined(separator: "\n")
 
-        重点 3：
-        <这里填写内容>
+        return """
+        \(definition.promptIntro)
+        请基于下面的\(definition.inputLabel)，用简洁中文输出，并严格使用以下结构：
+
+        \(sectionsText)
 
         要求：
-        - 三个部分都必须输出，不能缺省
-        - 每条尽量短句
-        - 如果信息不足，明确说明信息不足
-        - 不要输出额外标题、前言、总结或 Markdown 代码块
+        \(requirementsText)
 
-        文字内容：
+        \(definition.inputLabel)：
         \(text)
         """
     }
 
     private func buildInstructions(for mode: AIAnalysisMode) -> String {
-        switch mode {
-        case .developerError:
-            return "你负责分析开发报错文本，并用简洁中文输出结果。"
-        case .summary:
-            return "你负责总结截图文字重点，并用简洁中文输出结果。"
-        }
+        definition(for: mode).instructions
     }
 
     private func makeRequest(apiKey: String, prompt: String, mode: AIAnalysisMode) throws -> URLRequest {
@@ -254,12 +224,67 @@ final class AIAnalysisService {
         }
     }
 
-    private func expectedSectionTitles(for mode: AIAnalysisMode) -> [String] {
+    private func definition(for mode: AIAnalysisMode) -> AnalysisModeDefinition {
         switch mode {
         case .developerError:
-            return ["报错大意", "可能原因", "建议下一步"]
+            return AnalysisModeDefinition(
+                instructions: "你负责分析开发报错文本，并用简洁中文输出结果。",
+                promptIntro: "你是一个帮助 macOS / iOS 开发者排查报错的助手。",
+                inputLabel: "报错文本",
+                requirements: [
+                    "三个部分都必须输出，不能缺省",
+                    "保持短而清晰",
+                    "如果信息不足，明确说明不确定点",
+                    "不要输出与截图无关的泛泛建议",
+                    "不要输出额外标题、前言、总结或 Markdown 代码块",
+                ],
+                sections: [
+                    SectionDefinition(
+                        title: "报错大意",
+                        promptTitle: "报错大意",
+                        acceptedHeaders: [.exact("报错大意")]
+                    ),
+                    SectionDefinition(
+                        title: "可能原因",
+                        promptTitle: "可能原因",
+                        acceptedHeaders: [.exact("可能原因")]
+                    ),
+                    SectionDefinition(
+                        title: "建议下一步",
+                        promptTitle: "建议下一步",
+                        acceptedHeaders: [.exact("建议下一步")]
+                    ),
+                ]
+            )
         case .summary:
-            return ["重点 1", "重点 2", "重点 3"]
+            return AnalysisModeDefinition(
+                instructions: "你负责总结截图文字重点，并用简洁中文输出结果。",
+                promptIntro: "你是一个帮助用户总结截图文字重点的助手。",
+                inputLabel: "文字内容",
+                requirements: [
+                    "三个部分都必须输出，不能缺省",
+                    "每条尽量短句",
+                    "如果信息不足，明确说明信息不足",
+                    "不要输出额外标题、前言、总结或 Markdown 代码块",
+                ],
+                sections: [
+                    SectionDefinition(
+                        title: "重点 1",
+                        promptTitle: "重点 1",
+                        acceptedHeaders: [.exact("重点 1"), .exact("重点1"), .exact("重点一")]
+                    ),
+                    SectionDefinition(
+                        title: "重点 2",
+                        promptTitle: "重点 2",
+                        acceptedHeaders: [.exact("重点 2"), .exact("重点2"), .exact("重点二")]
+                    ),
+                    SectionDefinition(
+                        title: "重点 3",
+                        promptTitle: "重点 3",
+                        acceptedHeaders: [.exact("重点 3"), .exact("重点3"), .exact("重点三")]
+                    ),
+                ]
+            )
         }
     }
 
@@ -282,12 +307,13 @@ final class AIAnalysisService {
     }
 
     private func parseStructuredSections(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
-        let titles = expectedSectionTitles(for: mode)
+        let definition = definition(for: mode)
+        let titles = definition.sections.map(\.title)
         var currentTitle: String?
         var collectedSections: [String: [String]] = [:]
 
         for rawLine in text.components(separatedBy: .newlines) {
-            if let header = parseSectionHeader(from: rawLine, expectedTitles: titles) {
+            if let header = parseSectionHeader(from: rawLine, sections: definition.sections) {
                 currentTitle = header.title
                 if header.inlineContent.isEmpty == false {
                     collectedSections[header.title, default: []].append(header.inlineContent)
@@ -339,7 +365,7 @@ final class AIAnalysisService {
 
     private func parseSectionHeader(
         from line: String,
-        expectedTitles: [String]
+        sections: [SectionDefinition]
     ) -> (title: String, inlineContent: String)? {
         let sanitizedLine = line
             .replacingOccurrences(of: "**", with: "")
@@ -350,23 +376,23 @@ final class AIAnalysisService {
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        for title in expectedTitles {
-            guard sanitizedLine.hasPrefix(title) else {
+        for section in sections {
+            guard let matchedHeader = section.matchedHeader(in: sanitizedLine) else {
                 continue
             }
 
-            let remainder = sanitizedLine.dropFirst(title.count)
+            let remainder = sanitizedLine.dropFirst(matchedHeader.count)
             let normalizedRemainder = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if normalizedRemainder.isEmpty {
-                return (title, "")
+                return (section.title, "")
             }
 
             if normalizedRemainder.hasPrefix("：") || normalizedRemainder.hasPrefix(":") {
                 let inlineContent = normalizedRemainder
                     .dropFirst()
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                return (title, inlineContent)
+                return (section.title, inlineContent)
             }
         }
 
@@ -385,6 +411,41 @@ private extension Array {
 }
 
 private extension AIAnalysisService {
+    struct AnalysisModeDefinition {
+        let instructions: String
+        let promptIntro: String
+        let inputLabel: String
+        let requirements: [String]
+        let sections: [SectionDefinition]
+    }
+
+    struct SectionDefinition {
+        let title: String
+        let promptTitle: String
+        let acceptedHeaders: [AcceptedHeader]
+
+        func matchedHeader(in line: String) -> String? {
+            for acceptedHeader in acceptedHeaders {
+                if let matchedHeader = acceptedHeader.matchedHeader(in: line) {
+                    return matchedHeader
+                }
+            }
+
+            return nil
+        }
+    }
+
+    enum AcceptedHeader {
+        case exact(String)
+
+        func matchedHeader(in line: String) -> String? {
+            switch self {
+            case let .exact(header):
+                return line.hasPrefix(header) ? header : nil
+            }
+        }
+    }
+
     struct ResponseRequestBody: Encodable {
         let model: String
         let instructions: String
