@@ -17,7 +17,7 @@ final class ScrollingCapturePanelService {
             panelView?.onOCRRequested = makePanelActionHandler(for: onOCRRequested)
         }
     }
-    var onAIRequested: (() -> Void)? {
+    var onAIRequested: ((AIAnalysisMode) -> Void)? {
         didSet {
             panelView?.onAIRequested = makePanelActionHandler(for: onAIRequested)
         }
@@ -81,6 +81,16 @@ final class ScrollingCapturePanelService {
             action()
         }
     }
+
+    private func makePanelActionHandler(for action: ((AIAnalysisMode) -> Void)?) -> ((AIAnalysisMode) -> Void)? {
+        guard let action else {
+            return nil
+        }
+
+        return { mode in
+            action(mode)
+        }
+    }
 }
 
 private final class ScrollingCapturePanel: NSPanel {
@@ -124,7 +134,7 @@ private final class ScrollingCapturePanelView: NSView {
             ocrButton.isEnabled = onOCRRequested != nil
         }
     }
-    var onAIRequested: (() -> Void)? {
+    var onAIRequested: ((AIAnalysisMode) -> Void)? {
         didSet {
             aiButton.isEnabled = onAIRequested != nil
         }
@@ -206,6 +216,29 @@ private final class ScrollingCapturePanelView: NSView {
 
     @objc
     private func aiAction() {
-        onAIRequested?()
+        presentAIMenu(relativeTo: aiButton)
+    }
+
+    private func presentAIMenu(relativeTo button: NSButton) {
+        let menu = NSMenu()
+
+        for mode in AIAnalysisMode.allCases {
+            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode
+            menu.addItem(item)
+        }
+
+        let menuOrigin = CGPoint(x: button.frame.minX, y: button.frame.maxY + 4)
+        menu.popUp(positioning: nil, at: menuOrigin, in: self)
+    }
+
+    @objc
+    private func handleAIMenuSelection(_ sender: NSMenuItem) {
+        guard let mode = sender.representedObject as? AIAnalysisMode else {
+            return
+        }
+
+        onAIRequested?(mode)
     }
 }
