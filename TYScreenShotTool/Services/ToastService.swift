@@ -81,7 +81,7 @@ final class ToastService {
         window.isOpaque = false
         window.hasShadow = false
         window.ignoresMouseEvents = true
-        window.level = .statusBar
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 3)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentView = contentView
 
