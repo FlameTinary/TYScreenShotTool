@@ -24,7 +24,7 @@
   - 点击长截图 `AI` 按钮时弹出同样菜单
   - 透传长截图里的 `AIAnalysisMode`
 - Modify: `TYScreenShotTool/App/TYScreenShotToolApp.swift`
-  - 调整 `AI` 回调签名，向 `CaptureSessionService` 传入模式
+  - 在 `CaptureSessionService` 新签名落地后，再调整 `AI` 回调签名并传入模式
 - Modify: `TYScreenShotTool/Services/AIAnalysisService.swift`
   - 支持按 `AIAnalysisMode` 生成 prompt、解析结果
   - 新增摘要总结 3 段结构
@@ -189,6 +189,15 @@ enum AIAnalysisMode: CaseIterable {
             return "复制重点"
         }
     }
+
+    var secondaryCopySuccessMessage: String {
+        switch self {
+        case .developerError:
+            return "建议下一步已复制"
+        case .summary:
+            return "摘要重点已复制"
+        }
+    }
 }
 ```
 
@@ -277,11 +286,10 @@ Expected: 普通截图菜单骨架与共享模式定义独立成一个小提交�
 
 ---
 
-### Task 3: 接入长截图 AI 菜单与 App 回调透传
+### Task 3: 接入长截图 AI 菜单骨架
 
 **Files:**
 - Modify: `TYScreenShotTool/Services/ScrollingCapturePanelService.swift`
-- Modify: `TYScreenShotTool/App/TYScreenShotToolApp.swift`
 
 - [ ] **Step 1: 将长截图 AI 回调改为携带模式**
 
@@ -347,27 +355,13 @@ private func aiAction() {
 
 Expected: 长截图点击 `AI` 后也先弹相同菜单。
 
-- [ ] **Step 3: 在 app 入口透传新的 AI 模式参数**
+- [ ] **Step 3: 暂不修改 app 入口接线**
 
-Update `TYScreenShotTool/App/TYScreenShotToolApp.swift`:
+Do not update `TYScreenShotToolApp.swift` in this task.
 
-```swift
-overlayService.onAIRequested = { mode, style, annotations in
-    sessionService.analyzePendingCapture(
-        mode: mode,
-        style: style,
-        annotations: annotations
-    )
-}
+Expected: 避免在 `CaptureSessionService` 新签名尚未落地前，提前引入编译错误。
 
-scrollingCapturePanelService.onAIRequested = { mode in
-    sessionService.analyzeScrollingCaptureResult(mode: mode)
-}
-```
-
-Expected: 普通截图与长截图的菜单选择都能进入同一个编排层。
-
-- [ ] **Step 4: 运行构建，确认长截图菜单与 app 透传可独立编译**
+- [ ] **Step 4: 运行构建，确认长截图菜单骨架可独立编译**
 
 Run: `./scripts/build.sh`
 
@@ -376,11 +370,11 @@ Expected: `** BUILD SUCCEEDED **`
 - [ ] **Step 5: 提交这一任务**
 
 ```bash
-git add TYScreenShotTool/Services/ScrollingCapturePanelService.swift TYScreenShotTool/App/TYScreenShotToolApp.swift
+git add TYScreenShotTool/Services/ScrollingCapturePanelService.swift
 git commit -m "feat(sprint-35): 接入长截图 AI 菜单"
 ```
 
-Expected: 长截图菜单与 app 回调透传独立成一个小提交。
+Expected: 长截图菜单骨架独立成一个小提交，不提前耦合 app 入口改造。
 
 ---
 
@@ -574,7 +568,11 @@ private func parseStructuredSections(from text: String, mode: AIAnalysisMode) th
         statusTitle: mode.resultStatusTitle,
         sections: sections,
         rawText: text,
-        secondaryCopyText: sections.last?.content ?? text
+        secondaryCopyText: mode == .summary
+            ? sections
+                .map { "\($0.title)：\n\($0.content)" }
+                .joined(separator: "\n\n")
+            : (sections.last?.content ?? text)
     )
 }
 
@@ -615,7 +613,7 @@ private func parseSectionHeader(
 }
 ```
 
-Expected: `AIAnalysisService` 能根据模式解析 `报错大意 / 可能原因 / 建议下一步` 或 `重点 1 / 重点 2 / 重点 3`。
+Expected: `AIAnalysisService` 能根据模式解析 `报错大意 / 可能原因 / 建议下一步` 或 `重点 1 / 重点 2 / 重点 3`，且 `摘要总结` 的“复制重点”会复制全部 3 条重点。
 
 - [ ] **Step 5: 运行构建，确认双方向分析服务可独立编译**
 
@@ -729,6 +727,7 @@ Expected: 结果窗泛化独立成一个小提交。
 
 **Files:**
 - Modify: `TYScreenShotTool/Services/CaptureSessionService.swift`
+- Modify: `TYScreenShotTool/App/TYScreenShotToolApp.swift`
 
 - [ ] **Step 1: 在 session 中记录当前已选 AI 模式**
 
@@ -736,6 +735,12 @@ Append near properties:
 
 ```swift
 private var pendingAIAnalysisMode: AIAnalysisMode?
+```
+
+And update `clearPendingCapture()` to include:
+
+```swift
+pendingAIAnalysisMode = nil
 ```
 
 And replace entry signature:
@@ -821,7 +826,10 @@ aiAnalysisPreviewWindowService.presentResult(
         self?.copyAIAnalysisResult(result.formattedText)
     },
     onCopySecondary: { [weak self] in
-        self?.copyAIAnalysisSecondaryText(result.secondaryCopyText)
+        self?.copyAIAnalysisSecondaryText(
+            result.secondaryCopyText,
+            successMessage: result.mode.secondaryCopySuccessMessage
+        )
     },
     onRetry: { [weak self] in
         self?.retryAIAnalysis()
@@ -836,10 +844,13 @@ And replace helper:
 
 ```swift
 @MainActor
-private func copyAIAnalysisSecondaryText(_ text: String) {
+private func copyAIAnalysisSecondaryText(
+    _ text: String,
+    successMessage: String
+) {
     do {
         try clipboardService.copyText(text)
-        toastService.showToast(message: "AI 结果片段已复制")
+        toastService.showToast(message: successMessage)
     } catch {
         print("AI secondary clipboard copy failed: \(error.localizedDescription)")
         toastService.showToast(message: "AI 结果复制失败")
@@ -847,9 +858,56 @@ private func copyAIAnalysisSecondaryText(_ text: String) {
 }
 ```
 
-Expected: 报错分析仍能复制“建议下一步”，摘要总结则复制“重点 3”内容。
+Expected: 报错分析仍能复制“建议下一步”，摘要总结则复制全部 3 条重点。
 
-- [ ] **Step 4: 普通截图重试保持当前模式**
+- [ ] **Step 4: 普通截图无文字时统一只 toast 并关闭结果窗**
+
+Update the `performAIAnalysis(for:mode:)` error handling:
+
+```swift
+        } catch let error as OCRError {
+            switch error {
+            case .noTextRecognized, .emptyText:
+                print("[AI Analysis] Local OCR produced no useful text: \(error.localizedDescription)")
+                toastService.showToast(message: "AI 未识别到有效文字")
+                aiAnalysisPreviewWindowService.dismiss()
+            case .requestFailed:
+                toastService.showToast(message: "OCR 识别失败")
+                aiAnalysisPreviewWindowService.presentError(
+                    title: "OCR 识别失败",
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
+```
+
+Keep `AIImageTextExtractionError.noUsefulText` branch aligned with the same UX.
+
+Expected: 本地 OCR 的“无文字”场景只 toast `AI 未识别到有效文字` 并关闭结果窗；真正的 OCR 请求失败仍保留错误窗与重试入口。视觉取字链路继续保持同样的“无文字”和“请求失败”区分。
+
+- [ ] **Step 5: 在 app 入口透传普通截图与长截图的新模式参数**
+
+Update `TYScreenShotTool/App/TYScreenShotToolApp.swift`:
+
+```swift
+overlayService.onAIRequested = { mode, style, annotations in
+    sessionService.analyzePendingCapture(
+        mode: mode,
+        style: style,
+        annotations: annotations
+    )
+}
+```
+
+Expected: 先只接入普通截图的新模式参数，避免在长截图 session 新签名落地前提前引入编译错误。
+
+- [ ] **Step 6: 普通截图重试保持当前模式**
 
 Replace retry logic with:
 
@@ -888,13 +946,13 @@ private func retryAIAnalysis() {
 
 Expected: 点击重试时不再重新弹菜单，且继续沿用当前分析方向。
 
-- [ ] **Step 5: 运行构建，确认普通截图菜单分析链路可独立编译**
+- [ ] **Step 7: 运行构建，确认普通截图菜单分析链路可独立编译**
 
 Run: `./scripts/build.sh`
 
 Expected: `** BUILD SUCCEEDED **`
 
-- [ ] **Step 6: 人工验证普通截图菜单两项**
+- [ ] **Step 8: 人工验证普通截图菜单两项**
 
 Manual:
 
@@ -905,6 +963,7 @@ Manual:
 5. 确认得到 3 条重点摘要
 6. 点击 `重试`，确认不重新弹菜单
 7. 截取无文字区域，确认只提示 `AI 未识别到有效文字`
+8. 点击 `复制重点`，确认复制内容包含 `重点 1 / 重点 2 / 重点 3`
 
 Expected:
 
@@ -912,11 +971,12 @@ Expected:
 - 两项模式都可用
 - 重试保持当前模式
 - 无文字场景不保留结果窗
+- `复制重点` 会复制全部 3 条重点
 
-- [ ] **Step 7: 提交这一任务**
+- [ ] **Step 9: 提交这一任务**
 
 ```bash
-git add TYScreenShotTool/Services/CaptureSessionService.swift TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift TYScreenShotTool/Services/AIAnalysisService.swift
+git add TYScreenShotTool/Services/CaptureSessionService.swift TYScreenShotTool/App/TYScreenShotToolApp.swift
 git commit -m "feat(sprint-35): 支持普通截图 AI 菜单分析"
 ```
 
@@ -974,7 +1034,19 @@ func analyzeScrollingCaptureResult(mode: AIAnalysisMode) {
 
 Expected: 长截图只会在菜单项被明确选中后开始分析。
 
-- [ ] **Step 2: 长截图分析函数改为显式接收模式**
+- [ ] **Step 2: 在 app 入口补上长截图的新模式参数透传**
+
+Update `TYScreenShotTool/App/TYScreenShotToolApp.swift`:
+
+```swift
+scrollingCapturePanelService.onAIRequested = { mode in
+    sessionService.analyzeScrollingCaptureResult(mode: mode)
+}
+```
+
+Expected: 长截图菜单选择会在 session 新签名落地后，再接入 app 编排层。
+
+- [ ] **Step 3: 长截图分析函数改为显式接收模式**
 
 Replace signature and service call:
 
@@ -999,7 +1071,7 @@ private func performScrollingAIAnalysis(
 
 Expected: 长截图 AI 主流程也能按菜单模式切换文本分析方向。
 
-- [ ] **Step 3: 长截图结果窗与复制逻辑切换到通用结果**
+- [ ] **Step 4: 长截图结果窗与复制逻辑切换到通用结果**
 
 Update result branch:
 
@@ -1012,7 +1084,10 @@ aiAnalysisPreviewWindowService.presentResult(
         self?.copyAIAnalysisResult(result.formattedText)
     },
     onCopySecondary: { [weak self] in
-        self?.copyAIAnalysisSecondaryText(result.secondaryCopyText)
+        self?.copyAIAnalysisSecondaryText(
+            result.secondaryCopyText,
+            successMessage: result.mode.secondaryCopySuccessMessage
+        )
     },
     onRetry: { [weak self] in
         self?.retryScrollingAIAnalysis()
@@ -1025,7 +1100,48 @@ aiAnalysisPreviewWindowService.presentResult(
 
 Expected: 长截图结果窗也能展示 `摘要总结` 结构，不需要第二种窗口。
 
-- [ ] **Step 4: 长截图重试保持当前模式**
+- [ ] **Step 5: 长截图无文字时统一只 toast 并关闭结果窗**
+
+Keep both branches aligned in `performScrollingAIAnalysis(...)`:
+
+```swift
+        } catch let error as OCRError {
+            await MainActor.run {
+                guard shouldAcceptScrollingAIResult(
+                    requestID: requestID,
+                    resultRevision: resultRevision
+                ) else {
+                    return
+                }
+
+                switch error {
+                case .noTextRecognized, .emptyText:
+                    print("[AI Analysis] Scrolling local OCR produced no useful text: \(error.localizedDescription)")
+                    toastService.showToast(message: "AI 未识别到有效文字")
+                    aiAnalysisPreviewWindowService.dismiss()
+                case .requestFailed:
+                    toastService.showToast(message: "OCR 识别失败")
+                    aiAnalysisPreviewWindowService.presentError(
+                        title: "OCR 识别失败",
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        preferredSide: preferredSide,
+                        onRetry: { [weak self] in
+                            self?.retryScrollingAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                }
+            }
+```
+
+Keep `AIImageTextExtractionError.noUsefulText` branch aligned with the same UX.
+
+Expected: 长截图本地 OCR 的“无文字”场景只 toast 并关闭结果窗；真正的 OCR 请求失败仍保留错误窗与重试入口。视觉取字链路继续保持同样的“无文字”和“请求失败”区分。
+
+- [ ] **Step 6: 长截图重试保持当前模式**
 
 Replace retry helper:
 
@@ -1043,7 +1159,7 @@ private func retryScrollingAIAnalysis() {
 
 Expected: 长截图点 `重试` 时继续沿用原模式，不重新弹菜单。
 
-- [ ] **Step 5: 保持长截图现有过期结果保护**
+- [ ] **Step 7: 保持长截图现有过期结果保护**
 
 Do not change:
 
@@ -1058,13 +1174,13 @@ guard shouldAcceptScrollingAIResult(
 
 Expected: 长截图继续滚动后，旧 AI 结果仍然不会晚到覆盖新状态。
 
-- [ ] **Step 6: 运行构建，确认长截图菜单分析链路可独立编译**
+- [ ] **Step 8: 运行构建，确认长截图菜单分析链路可独立编译**
 
 Run: `./scripts/build.sh`
 
 Expected: `** BUILD SUCCEEDED **`
 
-- [ ] **Step 7: 人工验证长截图菜单两项与过期保护**
+- [ ] **Step 9: 人工验证长截图菜单两项与过期保护**
 
 Manual:
 
@@ -1075,6 +1191,9 @@ Manual:
 5. 确认得到 3 条重点摘要
 6. 点击 `重试`，确认不重新弹菜单
 7. 继续滚动后再次点击 `AI`，确认旧结果不会覆盖新状态
+8. 点击 `复制重点`，确认复制内容包含 `重点 1 / 重点 2 / 重点 3`
+9. 截取无文字场景，确认只提示 `AI 未识别到有效文字`
+10. 模拟 OCR 请求失败，确认展示 `OCR 识别失败` 错误窗并可重试
 
 Expected:
 
@@ -1082,11 +1201,14 @@ Expected:
 - 两项模式都可用
 - 重试保持当前模式
 - 旧请求仍不会晚到覆盖新状态
+- `复制重点` 会复制全部 3 条重点
+- 无文字场景不保留结果窗
+- OCR 请求失败时仍保留错误窗与重试入口
 
-- [ ] **Step 8: 提交这一任务**
+- [ ] **Step 10: 提交这一任务**
 
 ```bash
-git add TYScreenShotTool/Services/CaptureSessionService.swift TYScreenShotTool/Services/ScrollingCapturePanelService.swift
+git add TYScreenShotTool/Services/CaptureSessionService.swift TYScreenShotTool/App/TYScreenShotToolApp.swift
 git commit -m "feat(sprint-35): 支持长截图 AI 菜单分析"
 ```
 
@@ -1122,6 +1244,7 @@ Manual:
 8. `AI 使用视觉取字` 开关打开时，普通截图与长截图都继续走视觉取字
 9. 无有效文字时，只提示 `AI 未识别到有效文字`
 10. 点击 `重试` 时保持原方向，不重新弹菜单
+11. `摘要总结` 点击 `复制重点` 时，复制内容包含 `重点 1 / 重点 2 / 重点 3`
 
 Expected:
 
