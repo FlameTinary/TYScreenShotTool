@@ -57,6 +57,7 @@ final class HotKeyRecorderTextField: NSTextField {
     }
 
     override func mouseDown(with event: NSEvent) {
+        recorderDelegate?.didRequestRecordingFromClick()
         window?.makeFirstResponder(self)
         super.mouseDown(with: event)
     }
@@ -97,6 +98,12 @@ extension HotKeyRecorderField {
             self.parent = parent
         }
 
+        func didRequestRecordingFromClick() {
+            if parent.isRecording == false {
+                parent.onBeginRecording()
+            }
+        }
+
         func didBeginRecording() {
             if parent.isRecording == false {
                 parent.onBeginRecording()
@@ -133,6 +140,7 @@ extension HotKeyRecorderField {
             switch Int(event.keyCode) {
             case kVK_Return:
                 suppressFocusLossCancel = true
+                resetRecordingState()
                 parent.onCommit()
             case kVK_Escape:
                 cancelRecording()
@@ -154,11 +162,15 @@ extension HotKeyRecorderField {
         }
 
         private func cancelRecording() {
-            currentModifiers = 0
-            currentCandidate = nil
             suppressFocusLossCancel = true
+            resetRecordingState()
             parent.onCandidateChanged(nil)
             parent.onCancel()
+        }
+
+        private func resetRecordingState() {
+            currentModifiers = 0
+            currentCandidate = nil
         }
 
         private func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
