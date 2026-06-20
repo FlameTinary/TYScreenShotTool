@@ -47,7 +47,10 @@ struct SettingsView: View {
         .padding(24)
         .frame(minWidth: 460, minHeight: 360, alignment: .topLeading)
         .onAppear {
-            displayedHotKeyValue = configuredHotKey.displayName
+            resetHotKeyEditorState()
+        }
+        .onDisappear {
+            resetHotKeyEditorState()
         }
     }
 
@@ -77,7 +80,7 @@ struct SettingsView: View {
                         cancelRecordedHotKey()
                     }
                 )
-                .frame(height: 28)
+                .frame(width: 220, height: 28, alignment: .leading)
             }
 
             if hotKeyErrorMessage.isEmpty == false {
@@ -215,5 +218,13 @@ struct SettingsView: View {
         } catch {
             print("Save directory bookmark creation failed: \(error.localizedDescription)")
         }
+    }
+
+    private func resetHotKeyEditorState() {
+        displayedHotKeyValue = configuredHotKey.displayName
+        isRecordingHotKey = false
+        pendingHotKey = nil
+        previousHotKey = nil
+        hotKeyErrorMessage = ""
     }
 }

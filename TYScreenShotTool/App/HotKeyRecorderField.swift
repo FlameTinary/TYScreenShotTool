@@ -24,12 +24,11 @@ struct HotKeyRecorderField: NSViewRepresentable {
     func makeNSView(context: Context) -> HotKeyRecorderTextField {
         let textField = HotKeyRecorderTextField(frame: .zero)
         textField.isEditable = false
-        textField.isBordered = true
+        textField.isBordered = false
         textField.drawsBackground = true
-        textField.backgroundColor = .textBackgroundColor
         textField.alignment = .left
         textField.font = .systemFont(ofSize: 13)
-        textField.focusRingType = .default
+        textField.focusRingType = .none
         textField.recorderDelegate = context.coordinator
         textField.placeholderString = "点击后录制热键"
         return textField
@@ -44,13 +43,31 @@ struct HotKeyRecorderField: NSViewRepresentable {
 
         if isRecording, nsView.window?.firstResponder !== nsView {
             nsView.window?.makeFirstResponder(nsView)
+        } else if isRecording == false, nsView.window?.firstResponder === nsView {
+            nsView.window?.makeFirstResponder(nil)
         }
     }
 }
 
 final class HotKeyRecorderTextField: NSTextField {
     weak var recorderDelegate: HotKeyRecorderField.Coordinator?
-    var isRecording = false
+    private var outsideClickMonitor: Any?
+    var isRecording = false {
+        didSet {
+            updateAppearance()
+            updateOutsideClickMonitor()
+        }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureAppearance()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override var acceptsFirstResponder: Bool {
         true
@@ -60,14 +77,6 @@ final class HotKeyRecorderTextField: NSTextField {
         recorderDelegate?.didRequestRecordingFromClick()
         window?.makeFirstResponder(self)
         super.mouseDown(with: event)
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        if accepted {
-            recorderDelegate?.didBeginRecording()
-        }
-        return accepted
     }
 
     override func resignFirstResponder() -> Bool {
@@ -84,6 +93,59 @@ final class HotKeyRecorderTextField: NSTextField {
 
     override func flagsChanged(with event: NSEvent) {
         recorderDelegate?.handleFlagsChanged(event)
+    }
+
+    private func configureAppearance() {
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.borderWidth = 1
+        updateAppearance()
+    }
+
+    private func updateAppearance() {
+        let borderColor = isRecording
+            ? NSColor.systemBlue.withAlphaComponent(0.55)
+            : NSColor.separatorColor.withAlphaComponent(0.9)
+        let fillColor = isRecording
+            ? NSColor.systemBlue.withAlphaComponent(0.08)
+            : NSColor.textBackgroundColor
+
+        layer?.borderColor = borderColor.cgColor
+        layer?.backgroundColor = fillColor.cgColor
+        backgroundColor = fillColor
+    }
+
+    private func updateOutsideClickMonitor() {
+        if isRecording {
+            guard outsideClickMonitor == nil else {
+                return
+            }
+
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown]
+            ) { [weak self] event in
+                guard let self, let window = self.window, event.window === window else {
+                    return event
+                }
+
+                let point = self.convert(event.locationInWindow, from: nil)
+                guard self.bounds.contains(point) == false else {
+                    return event
+                }
+
+                self.recorderDelegate?.didClickOutsideRecorder()
+                return event
+            }
+        } else if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+    }
+
+    deinit {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+        }
     }
 }
 
@@ -104,15 +166,17 @@ extension HotKeyRecorderField {
             }
         }
 
-        func didBeginRecording() {
-            if parent.isRecording == false {
-                parent.onBeginRecording()
-            }
-        }
-
         func didLoseFocus() {
             guard parent.isRecording, suppressFocusLossCancel == false else {
                 suppressFocusLossCancel = false
+                return
+            }
+
+            cancelRecording()
+        }
+
+        func didClickOutsideRecorder() {
+            guard parent.isRecording else {
                 return
             }
 

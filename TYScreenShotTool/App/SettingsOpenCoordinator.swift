@@ -11,22 +11,26 @@ import SwiftUI
 @MainActor
 final class SettingsOpenCoordinator {
     private var settingsWindow: NSWindow?
+    private var contentProvider: (() -> AnyView)?
 
-    func configure<Content: View>(@ViewBuilder content: () -> Content) {
-        let hostingController = NSHostingController(rootView: content())
+    func configure<Content: View>(@ViewBuilder content: @escaping () -> Content) {
+        contentProvider = {
+            AnyView(content())
+        }
 
         if let settingsWindow {
-            settingsWindow.contentViewController = hostingController
+            refreshContentViewController(for: settingsWindow)
             return
         }
 
-        let window = NSWindow(contentViewController: hostingController)
+        let window = NSWindow()
         window.title = "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 460, height: 360)
         window.setContentSize(NSSize(width: 520, height: 420))
         window.center()
+        refreshContentViewController(for: window)
         self.settingsWindow = window
     }
 
@@ -35,7 +39,17 @@ final class SettingsOpenCoordinator {
             return
         }
 
+        refreshContentViewController(for: settingsWindow)
         NSApplication.shared.activate(ignoringOtherApps: true)
         settingsWindow.makeKeyAndOrderFront(nil)
+    }
+
+    private func refreshContentViewController(for window: NSWindow) {
+        guard let contentProvider else {
+            return
+        }
+
+        let hostingController = NSHostingController(rootView: contentProvider())
+        window.contentViewController = hostingController
     }
 }
