@@ -12,12 +12,14 @@ final class ScrollingCapturePanelService {
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
+    var onOCRRequested: (() -> Void)?
+    var onAIRequested: (() -> Void)?
 
     private var panel: ScrollingCapturePanel?
     private weak var panelView: ScrollingCapturePanelView?
 
     func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
-        let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 280, height: 56))
+        let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 440, height: 56))
         panelView.onCopyRequested = { [weak self] in
             self?.onCopyRequested?()
         }
@@ -26,6 +28,12 @@ final class ScrollingCapturePanelService {
         }
         panelView.onCancelRequested = { [weak self] in
             self?.onCancelRequested?()
+        }
+        panelView.onOCRRequested = { [weak self] in
+            self?.onOCRRequested?()
+        }
+        panelView.onAIRequested = { [weak self] in
+            self?.onAIRequested?()
         }
         panelView.configureForLiveCapture()
 
@@ -97,16 +105,20 @@ private final class ScrollingCapturePanelView: NSView {
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
+    var onOCRRequested: (() -> Void)?
+    var onAIRequested: (() -> Void)?
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
+    private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
+    private let aiButton = NSButton(title: "AI", target: nil, action: nil)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 12
-        [cancelButton, saveButton, copyButton].forEach {
+        [cancelButton, ocrButton, aiButton, saveButton, copyButton].forEach {
             $0.bezelStyle = .rounded
             addSubview($0)
         }
@@ -117,6 +129,10 @@ private final class ScrollingCapturePanelView: NSView {
         saveButton.action = #selector(saveAction)
         cancelButton.target = self
         cancelButton.action = #selector(cancelAction)
+        ocrButton.target = self
+        ocrButton.action = #selector(ocrAction)
+        aiButton.target = self
+        aiButton.action = #selector(aiAction)
     }
 
     @available(*, unavailable)
@@ -130,10 +146,13 @@ private final class ScrollingCapturePanelView: NSView {
         let paddingX: CGFloat = 12
         let buttonHeight: CGFloat = 30
         let buttonSpacing: CGFloat = 10
-        let buttonWidth = (bounds.width - paddingX * 2 - buttonSpacing * 2) / 3
+        let buttonWidth = (bounds.width - paddingX * 2 - buttonSpacing * 4) / 5
         let buttonY = (bounds.height - buttonHeight) / 2
+
         cancelButton.frame = CGRect(x: paddingX, y: buttonY, width: buttonWidth, height: buttonHeight)
-        saveButton.frame = CGRect(x: cancelButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
+        ocrButton.frame = CGRect(x: cancelButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
+        aiButton.frame = CGRect(x: ocrButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
+        saveButton.frame = CGRect(x: aiButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
         copyButton.frame = CGRect(x: saveButton.frame.maxX + buttonSpacing, y: buttonY, width: buttonWidth, height: buttonHeight)
     }
 
@@ -154,5 +173,15 @@ private final class ScrollingCapturePanelView: NSView {
     @objc
     private func cancelAction() {
         onCancelRequested?()
+    }
+
+    @objc
+    private func ocrAction() {
+        onOCRRequested?()
+    }
+
+    @objc
+    private func aiAction() {
+        onAIRequested?()
     }
 }
