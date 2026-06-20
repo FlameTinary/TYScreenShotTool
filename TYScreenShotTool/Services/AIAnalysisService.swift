@@ -349,7 +349,36 @@ final class AIAnalysisService {
             throw AIAnalysisError.emptyOutput
         }
 
+        if case .translation = mode {
+            return try parseTranslationResult(from: text, mode: mode)
+        }
+
         return try parseStructuredSections(from: text, mode: mode)
+    }
+
+    private func parseTranslationResult(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
+        if let structuredResult = try? parseStructuredSections(from: text, mode: mode) {
+            return structuredResult
+        }
+
+        let normalized = normalizeTranslationText(text)
+        guard normalized.isEmpty == false else {
+            throw AIAnalysisError.lowQualityOutput
+        }
+
+        print("[AI Analysis] Translation output missing explicit section header, fallback to raw translated text")
+
+        let sections = [
+            AIAnalysisSection(title: "译文", content: normalized),
+        ]
+
+        return AIAnalysisResult(
+            mode: mode,
+            statusTitle: mode.resultStatusTitle,
+            sections: sections,
+            rawText: text,
+            secondaryCopyText: normalized
+        )
     }
 
     private func parseStructuredSections(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
@@ -420,6 +449,30 @@ final class AIAnalysisService {
         case .developerError:
             return sections.last?.content ?? fallback
         }
+    }
+
+    private func normalizeTranslationText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return ""
+        }
+
+        let candidates = [
+            "译文：",
+            "译文:",
+            "Translation:",
+            "Translation：",
+        ]
+
+        for prefix in candidates {
+            if trimmed.hasPrefix(prefix) {
+                return trimmed
+                    .dropFirst(prefix.count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return trimmed
     }
 
     private func parseSectionHeader(
