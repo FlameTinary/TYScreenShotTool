@@ -77,6 +77,7 @@ final class OCRPreviewWindowService {
     func present(
         text: String,
         selectionRect: CGRect,
+        preferredSide: PreviewPlacementSide? = nil,
         onCopy: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -92,7 +93,11 @@ final class OCRPreviewWindowService {
         textView.string = displayText
         copyButton.isEnabled = normalizedText.isEmpty == false
 
-        let panelFrame = frame(for: selectionRect, on: screen)
+        let panelFrame = frame(
+            for: selectionRect,
+            on: screen,
+            preferredSide: preferredSide
+        )
         panel.setFrame(panelFrame, display: true)
         layoutContent(in: panelFrame.size)
         panel.orderFrontRegardless()
@@ -160,7 +165,11 @@ final class OCRPreviewWindowService {
         textView.textContainer?.widthTracksTextView = true
     }
 
-    private func frame(for selectionRect: CGRect, on screen: NSScreen) -> CGRect {
+    private func frame(
+        for selectionRect: CGRect,
+        on screen: NSScreen,
+        preferredSide: PreviewPlacementSide?
+    ) -> CGRect {
         let visibleFrame = screen.visibleFrame
         let outerMargin: CGFloat = 24
         let gap: CGFloat = 20
@@ -171,7 +180,27 @@ final class OCRPreviewWindowService {
 
         let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
         let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
-        let placeOnLeft = leftAvailableWidth >= rightAvailableWidth
+        let defaultPlaceOnLeft = leftAvailableWidth >= rightAvailableWidth
+
+        let preferredPlaceOnLeft: Bool?
+        switch preferredSide {
+        case .left:
+            preferredPlaceOnLeft = true
+        case .right:
+            preferredPlaceOnLeft = false
+        case nil:
+            preferredPlaceOnLeft = nil
+        }
+
+        let placeOnLeft: Bool
+        if let preferredPlaceOnLeft {
+            let preferredWidth = preferredPlaceOnLeft ? leftAvailableWidth : rightAvailableWidth
+            let oppositeWidth = preferredPlaceOnLeft ? rightAvailableWidth : leftAvailableWidth
+            placeOnLeft = preferredWidth >= minWidth || preferredWidth >= oppositeWidth
+        } else {
+            placeOnLeft = defaultPlaceOnLeft
+        }
+
         let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
         let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
         let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
