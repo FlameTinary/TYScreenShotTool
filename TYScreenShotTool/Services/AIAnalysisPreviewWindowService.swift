@@ -233,8 +233,6 @@ final class AIAnalysisPreviewWindowService {
         let padding: CGFloat = 14
         let buttonHeight: CGFloat = 28
         let spacing: CGFloat = 10
-        let buttonWidths: [CGFloat] = [88, 96, 72, 72]
-        let buttons = [copyAllButton, copyNextStepsButton, retryButton, closeButton]
 
         titleLabel.sizeToFit()
         titleLabel.frame.origin = CGPoint(
@@ -248,20 +246,14 @@ final class AIAnalysisPreviewWindowService {
             y: titleLabel.frame.minY - spacing - statusLabel.frame.height
         )
 
-        var trailingX = size.width - padding
-        for (button, width) in zip(buttons.reversed(), buttonWidths.reversed()) {
-            trailingX -= width
-            button.frame = CGRect(
-                x: trailingX,
-                y: padding,
-                width: width,
-                height: buttonHeight
-            )
-            trailingX -= spacing
-        }
-
+        let buttonsTop = layoutActionButtons(
+            in: size,
+            padding: padding,
+            spacing: spacing,
+            buttonHeight: buttonHeight
+        )
         let scrollTop = statusLabel.frame.minY - spacing
-        let scrollBottom = copyAllButton.frame.maxY + spacing
+        let scrollBottom = buttonsTop + spacing
         scrollView.frame = CGRect(
             x: padding,
             y: scrollBottom,
@@ -270,6 +262,56 @@ final class AIAnalysisPreviewWindowService {
         )
 
         layoutDocumentContent(in: scrollView.contentSize)
+    }
+
+    private func layoutActionButtons(
+        in size: CGSize,
+        padding: CGFloat,
+        spacing: CGFloat,
+        buttonHeight: CGFloat
+    ) -> CGFloat {
+        let buttonItems: [(button: NSButton, width: CGFloat)] = [
+            (closeButton, 72),
+            (retryButton, 72),
+            (copyNextStepsButton, 96),
+            (copyAllButton, 88)
+        ]
+        let availableWidth = max(size.width - padding * 2, 72)
+        var rows: [[(button: NSButton, width: CGFloat)]] = [[]]
+        var currentRowWidth: CGFloat = 0
+
+        for item in buttonItems {
+            let neededWidth = rows[rows.count - 1].isEmpty
+                ? item.width
+                : currentRowWidth + spacing + item.width
+
+            if neededWidth > availableWidth, rows[rows.count - 1].isEmpty == false {
+                rows.append([item])
+                currentRowWidth = item.width
+                continue
+            }
+
+            rows[rows.count - 1].append(item)
+            currentRowWidth = neededWidth
+        }
+
+        var currentY = padding
+        for row in rows {
+            var trailingX = size.width - padding
+            for item in row {
+                trailingX -= item.width
+                item.button.frame = CGRect(
+                    x: trailingX,
+                    y: currentY,
+                    width: item.width,
+                    height: buttonHeight
+                )
+                trailingX -= spacing
+            }
+            currentY += buttonHeight + spacing
+        }
+
+        return currentY - spacing
     }
 
     private func layoutDocumentContent(in size: CGSize) {
