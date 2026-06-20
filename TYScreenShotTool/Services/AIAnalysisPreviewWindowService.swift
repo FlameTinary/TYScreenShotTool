@@ -97,6 +97,7 @@ final class AIAnalysisPreviewWindowService {
 
     func presentLoading(
         selectionRect: CGRect,
+        preferredSide: PreviewPlacementSide? = nil,
         message: String = "AI 正在分析...",
         onClose: @escaping () -> Void
     ) {
@@ -110,12 +111,16 @@ final class AIAnalysisPreviewWindowService {
         onCopyNextSteps = nil
         onRetry = nil
         self.onClose = onClose
-        presentPanel(selectionRect: selectionRect)
+        presentPanel(
+            selectionRect: selectionRect,
+            preferredSide: preferredSide
+        )
     }
 
     func presentResult(
         result: AIAnalysisResult,
         selectionRect: CGRect,
+        preferredSide: PreviewPlacementSide? = nil,
         onCopyAll: @escaping () -> Void,
         onCopyNextSteps: @escaping () -> Void,
         onRetry: @escaping () -> Void,
@@ -130,12 +135,16 @@ final class AIAnalysisPreviewWindowService {
         self.onCopyNextSteps = onCopyNextSteps
         self.onRetry = onRetry
         self.onClose = onClose
-        presentPanel(selectionRect: selectionRect)
+        presentPanel(
+            selectionRect: selectionRect,
+            preferredSide: preferredSide
+        )
     }
 
     func presentError(
         message: String,
         selectionRect: CGRect,
+        preferredSide: PreviewPlacementSide? = nil,
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
@@ -149,7 +158,10 @@ final class AIAnalysisPreviewWindowService {
         onCopyNextSteps = nil
         self.onRetry = onRetry
         self.onClose = onClose
-        presentPanel(selectionRect: selectionRect)
+        presentPanel(
+            selectionRect: selectionRect,
+            preferredSide: preferredSide
+        )
     }
 
     func dismiss() {
@@ -196,13 +208,20 @@ final class AIAnalysisPreviewWindowService {
         messageLabel.isHidden = true
     }
 
-    private func presentPanel(selectionRect: CGRect) {
+    private func presentPanel(
+        selectionRect: CGRect,
+        preferredSide: PreviewPlacementSide?
+    ) {
         guard let screen = screenContaining(selectionRect) else {
             dismiss()
             return
         }
 
-        let panelFrame = frame(for: selectionRect, on: screen)
+        let panelFrame = frame(
+            for: selectionRect,
+            on: screen,
+            preferredSide: preferredSide
+        )
         panel.setFrame(panelFrame, display: true)
         layoutContent(in: panelFrame.size)
         panel.orderFrontRegardless()
@@ -322,7 +341,11 @@ final class AIAnalysisPreviewWindowService {
         )
     }
 
-    private func frame(for selectionRect: CGRect, on screen: NSScreen) -> CGRect {
+    private func frame(
+        for selectionRect: CGRect,
+        on screen: NSScreen,
+        preferredSide: PreviewPlacementSide?
+    ) -> CGRect {
         let visibleFrame = screen.visibleFrame
         let outerMargin: CGFloat = 24
         let gap: CGFloat = 20
@@ -333,9 +356,30 @@ final class AIAnalysisPreviewWindowService {
 
         let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
         let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
-        let placeOnLeft = leftAvailableWidth >= rightAvailableWidth
-        let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
-        let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
+        let leftEffectiveWidth = max(leftAvailableWidth - outerMargin, 0)
+        let rightEffectiveWidth = max(rightAvailableWidth - outerMargin, 0)
+        let defaultPlaceOnLeft = leftAvailableWidth >= rightAvailableWidth
+
+        let preferredPlaceOnLeft: Bool?
+        switch preferredSide {
+        case .left:
+            preferredPlaceOnLeft = true
+        case .right:
+            preferredPlaceOnLeft = false
+        case nil:
+            preferredPlaceOnLeft = nil
+        }
+
+        let placeOnLeft: Bool
+        if let preferredPlaceOnLeft {
+            let preferredWidth = preferredPlaceOnLeft ? leftEffectiveWidth : rightEffectiveWidth
+            let oppositeWidth = preferredPlaceOnLeft ? rightEffectiveWidth : leftEffectiveWidth
+            placeOnLeft = preferredWidth >= minWidth || preferredWidth >= oppositeWidth
+        } else {
+            placeOnLeft = defaultPlaceOnLeft
+        }
+
+        let availableWidth = placeOnLeft ? leftEffectiveWidth : rightEffectiveWidth
         let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
 
         let panelWidth = min(max(availableWidth, minWidth), maxWidth)
