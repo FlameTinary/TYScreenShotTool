@@ -122,17 +122,18 @@ final class AIAnalysisPreviewWindowService {
         selectionRect: CGRect,
         preferredSide: PreviewPlacementSide? = nil,
         onCopyAll: @escaping () -> Void,
-        onCopyNextSteps: @escaping () -> Void,
+        onCopyNextSteps onCopySecondary: @escaping () -> Void,
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
-        statusLabel.stringValue = "AI 分析结果"
+        statusLabel.stringValue = result.statusTitle
+        copyNextStepsButton.title = result.mode.secondaryCopyButtonTitle
         configureForResult(result)
         copyAllButton.isEnabled = true
         copyNextStepsButton.isEnabled = true
         retryButton.isEnabled = true
         self.onCopyAll = onCopyAll
-        self.onCopyNextSteps = onCopyNextSteps
+        self.onCopyNextSteps = onCopySecondary
         self.onRetry = onRetry
         self.onClose = onClose
         presentPanel(
@@ -200,12 +201,20 @@ final class AIAnalysisPreviewWindowService {
     }
 
     private func configureForResult(_ result: AIAnalysisResult) {
-        summarySectionView.setContent(result.summary)
-        causesSectionView.setContent(result.possibleCauses)
-        nextStepsSectionView.setContent(result.nextSteps)
-        summarySectionView.isHidden = false
-        causesSectionView.isHidden = false
-        nextStepsSectionView.isHidden = false
+        let sectionViews = [summarySectionView, causesSectionView, nextStepsSectionView]
+
+        for (index, sectionView) in sectionViews.enumerated() {
+            if index < result.sections.count {
+                let section = result.sections[index]
+                sectionView.setTitle(section.title)
+                sectionView.setContent(section.content)
+                sectionView.isHidden = false
+            } else {
+                sectionView.isHidden = true
+                sectionView.frame = .zero
+            }
+        }
+
         messageLabel.isHidden = true
     }
 
@@ -494,6 +503,11 @@ private final class SectionView: NSView {
 
     func setContent(_ content: String) {
         contentLabel.stringValue = content
+        needsLayout = true
+    }
+
+    func setTitle(_ title: String) {
+        titleLabel.stringValue = title
         needsLayout = true
     }
 
