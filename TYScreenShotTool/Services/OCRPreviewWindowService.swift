@@ -180,6 +180,8 @@ final class OCRPreviewWindowService {
 
         let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
         let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
+        let leftEffectiveWidth = max(leftAvailableWidth - outerMargin, 0)
+        let rightEffectiveWidth = max(rightAvailableWidth - outerMargin, 0)
         let defaultPlaceOnLeft = leftAvailableWidth >= rightAvailableWidth
 
         let preferredPlaceOnLeft: Bool?
@@ -194,15 +196,14 @@ final class OCRPreviewWindowService {
 
         let placeOnLeft: Bool
         if let preferredPlaceOnLeft {
-            let preferredWidth = preferredPlaceOnLeft ? leftAvailableWidth : rightAvailableWidth
-            let oppositeWidth = preferredPlaceOnLeft ? rightAvailableWidth : leftAvailableWidth
+            let preferredWidth = preferredPlaceOnLeft ? leftEffectiveWidth : rightEffectiveWidth
+            let oppositeWidth = preferredPlaceOnLeft ? rightEffectiveWidth : leftEffectiveWidth
             placeOnLeft = preferredWidth >= minWidth || preferredWidth >= oppositeWidth
         } else {
             placeOnLeft = defaultPlaceOnLeft
         }
 
-        let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
-        let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
+        let availableWidth = placeOnLeft ? leftEffectiveWidth : rightEffectiveWidth
         let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
 
         let panelWidth = min(max(max(availableWidth, minWidth), minWidth), maxWidth)
