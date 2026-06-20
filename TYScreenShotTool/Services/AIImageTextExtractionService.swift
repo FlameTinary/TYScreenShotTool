@@ -58,13 +58,22 @@ extension AIImageTextExtractionService {
     func extractText(from image: CGImage) async throws -> AIExtractedTextResult {
         let apiKey = try resolvedAPIKey()
         let dataURL = try makeImageDataURL(from: image)
+        let model = resolvedModel()
         let request = try makeRequest(apiKey: apiKey, imageDataURL: dataURL)
+
+        print("[AI Vision] Start text extraction")
+        print("[AI Vision] model: \(model)")
+        print("[AI Vision] image: \(image.width)x\(image.height)")
 
         do {
             let (data, response) = try await session.data(for: request)
             try validateHTTPResponse(response, data: data)
-            return try parseExtractionResult(from: data)
+            let result = try parseExtractionResult(from: data)
+            print("[AI Vision] Extraction success")
+            print("[AI Vision] normalized text length: \(result.text.count)")
+            return result
         } catch let error as AIImageTextExtractionError {
+            print("[AI Vision] Extraction failed: \(error.localizedDescription)")
             throw error
         } catch let error as DecodingError {
             throw AIImageTextExtractionError.requestFailed("响应解析失败：\(error.localizedDescription)")
@@ -202,6 +211,8 @@ private extension AIImageTextExtractionService {
             throw AIImageTextExtractionError.invalidResponse
         }
 
+        print("[AI Vision] HTTP status: \(httpResponse.statusCode)")
+
         guard 200 ..< 300 ~= httpResponse.statusCode else {
             let message = String(data: data, encoding: .utf8) ?? "未知服务端错误。"
             throw AIImageTextExtractionError.requestFailed(message)
@@ -220,11 +231,13 @@ private extension AIImageTextExtractionService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard rawText.isEmpty == false else {
-            throw AIImageTextExtractionError.emptyOutput
+            print("[AI Vision] Response returned empty output text, treating as no useful text")
+            throw AIImageTextExtractionError.noUsefulText
         }
 
         let normalized = normalizeExtractedText(rawText)
         guard normalized.isEmpty == false else {
+            print("[AI Vision] Response text normalized to empty text")
             throw AIImageTextExtractionError.noUsefulText
         }
 

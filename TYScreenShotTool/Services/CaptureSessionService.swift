@@ -28,6 +28,15 @@ final class CaptureSessionService {
     private enum AITextInputStrategy {
         case localOCR
         case visionAI
+
+        var logName: String {
+            switch self {
+            case .localOCR:
+                return "local_ocr"
+            case .visionAI:
+                return "vision_ai"
+            }
+        }
     }
 
     private let overlayService: CaptureOverlayService
@@ -634,6 +643,7 @@ final class CaptureSessionService {
 
     private func currentAITextInputStrategy() -> AITextInputStrategy {
         let useVision = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey)
+        print("[AI Analysis] Settings aiUseVisionTextExtraction: \(useVision)")
         return useVision ? .visionAI : .localOCR
     }
 
@@ -716,9 +726,14 @@ final class CaptureSessionService {
         let selectionRect = source.selectionRect
         let strategy = currentAITextInputStrategy()
 
+        print("[AI Analysis] Start normal capture analysis")
+        print("[AI Analysis] strategy: \(strategy.logName)")
+        print("[AI Analysis] selection: \(Int(selectionRect.width))x\(Int(selectionRect.height))")
+
         defer {
             isAIAnalysisInProgress = false
             overlayService.setAIButtonEnabled(true)
+            print("[AI Analysis] Finish normal capture analysis")
         }
 
         do {
@@ -798,8 +813,10 @@ final class CaptureSessionService {
     ) async throws -> String {
         switch strategy {
         case .localOCR:
+            print("[AI Analysis] Resolve text via local OCR")
             return try ocrService.recognizeText(in: image)
         case .visionAI:
+            print("[AI Analysis] Resolve text via AI vision extraction")
             let extracted = try await aiImageTextExtractionService.extractText(from: image)
             return extracted.text
         }
@@ -813,9 +830,11 @@ final class CaptureSessionService {
     ) {
         switch error {
         case .noUsefulText:
+            print("[AI Analysis] Vision extraction produced no useful text")
             toastService.showToast(message: "AI 未识别到有效文字")
             aiAnalysisPreviewWindowService.dismiss()
         case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
+            print("[AI Analysis] Vision extraction failed with recoverable error")
             toastService.showToast(message: "AI 识别失败")
             aiAnalysisPreviewWindowService.presentError(
                 title: "AI 识别失败",
@@ -865,8 +884,15 @@ final class CaptureSessionService {
         resultRevision: Int,
         requestID: UUID
     ) async {
+        let strategy = currentAITextInputStrategy()
+
+        print("[AI Analysis] Start scrolling capture analysis")
+        print("[AI Analysis] strategy: \(strategy.logName)")
+        print("[AI Analysis] resultRevision: \(resultRevision)")
+        print("[AI Analysis] selection: \(Int(selectionRect.width))x\(Int(selectionRect.height))")
+
         do {
-            let text = try await recognizeScrollingAIText(in: image)
+            let text = try await resolveAIText(from: image, strategy: strategy)
             let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
             await MainActor.run {
                 guard shouldAcceptScrollingAIResult(
@@ -914,6 +940,37 @@ final class CaptureSessionService {
                         self?.aiAnalysisPreviewWindowService.dismiss()
                     }
                 )
+            }
+        } catch let error as AIImageTextExtractionError {
+            await MainActor.run {
+                guard shouldAcceptScrollingAIResult(
+                    requestID: requestID,
+                    resultRevision: resultRevision
+                ) else {
+                    return
+                }
+
+                switch error {
+                case .noUsefulText:
+                    print("[AI Analysis] Scrolling vision extraction produced no useful text")
+                    toastService.showToast(message: "AI 未识别到有效文字")
+                    aiAnalysisPreviewWindowService.dismiss()
+                case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
+                    print("[AI Analysis] Scrolling vision extraction failed with recoverable error")
+                    toastService.showToast(message: "AI 识别失败")
+                    aiAnalysisPreviewWindowService.presentError(
+                        title: "AI 识别失败",
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        preferredSide: preferredSide,
+                        onRetry: { [weak self] in
+                            self?.retryScrollingAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                }
             }
         } catch let error as AIAnalysisError {
             await MainActor.run {
@@ -1114,19 +1171,6 @@ final class CaptureSessionService {
 
     private func preferredResultSideForScrollingPreview() -> PreviewPlacementSide? {
         scrollingCapturePreviewWindowService.attachmentSide?.opposite
-    }
-
-    private func recognizeScrollingAIText(in image: CGImage) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async { [ocrService] in
-                do {
-                    let text = try ocrService.recognizeText(in: image)
-                    continuation.resume(returning: text)
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
     }
 
     private func beginScrollingOCRRequest(for resultRevision: Int) -> Int {
