@@ -110,8 +110,8 @@ struct TYScreenShotToolApp: App {
         scrollingCapturePanelService.onOCRRequested = {
             sessionService.ocrScrollingCaptureResult()
         }
-        scrollingCapturePanelService.onAIRequested = { _ in
-            sessionService.analyzeScrollingCaptureResult()
+        scrollingCapturePanelService.onAIRequested = { mode in
+            sessionService.analyzeScrollingCaptureResult(mode: mode)
         }
         scrollingCapturePanelService.onSaveRequested = {
             sessionService.saveScrollingCaptureResult()

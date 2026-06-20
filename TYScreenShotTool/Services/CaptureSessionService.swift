@@ -555,13 +555,14 @@ final class CaptureSessionService {
         }
     }
 
-    func analyzeScrollingCaptureResult() {
+    func analyzeScrollingCaptureResult(mode: AIAnalysisMode) {
         guard isInScrollingCaptureMode,
               let image = scrollingCaptureResultImage,
               let selectionRect = pendingCaptureSource?.selectionRect else {
             return
         }
 
+        pendingAIAnalysisMode = mode
         let resultRevision = scrollingCaptureResultRevision
         invalidateScrollingOCRRequest()
         ocrPreviewWindowService.dismiss()
@@ -572,6 +573,7 @@ final class CaptureSessionService {
         aiAnalysisPreviewWindowService.presentLoading(
             selectionRect: selectionRect,
             preferredSide: preferredSide,
+            message: mode.loadingMessage,
             onClose: { [weak self] in
                 self?.scrollingAIRequestID = UUID()
                 self?.aiAnalysisPreviewWindowService.dismiss()
@@ -584,7 +586,8 @@ final class CaptureSessionService {
                 selectionRect: selectionRect,
                 preferredSide: preferredSide,
                 resultRevision: resultRevision,
-                requestID: requestID
+                requestID: requestID,
+                mode: mode
             )
         }
     }
@@ -903,18 +906,19 @@ final class CaptureSessionService {
         selectionRect: CGRect,
         preferredSide: PreviewPlacementSide?,
         resultRevision: Int,
-        requestID: UUID
+        requestID: UUID,
+        mode: AIAnalysisMode
     ) async {
         let strategy = currentAITextInputStrategy()
 
-        print("[AI Analysis] Start scrolling capture analysis")
+        print("[AI Analysis] mode: \(mode.menuTitle)")
         print("[AI Analysis] strategy: \(strategy.logName)")
         print("[AI Analysis] resultRevision: \(resultRevision)")
         print("[AI Analysis] selection: \(Int(selectionRect.width))x\(Int(selectionRect.height))")
 
         do {
             let text = try await resolveAIText(from: image, strategy: strategy)
-            let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
+            let result = try await aiAnalysisService.analyze(text: text, mode: mode)
             await MainActor.run {
                 guard shouldAcceptScrollingAIResult(
                     requestID: requestID,
@@ -931,7 +935,10 @@ final class CaptureSessionService {
                         self?.copyAIAnalysisResult(result.formattedText)
                     },
                     onCopyNextSteps: { [weak self] in
-                        self?.copyAIAnalysisNextSteps(result.nextSteps)
+                        self?.copyAIAnalysisSecondaryText(
+                            result.secondaryCopyText,
+                            successMessage: result.mode.secondaryCopySuccessMessage
+                        )
                     },
                     onRetry: { [weak self] in
                         self?.retryScrollingAIAnalysis()
@@ -949,18 +956,27 @@ final class CaptureSessionService {
                 ) else {
                     return
                 }
-                toastService.showToast(message: "OCR 未识别到有效文本")
-                aiAnalysisPreviewWindowService.presentError(
-                    message: error.localizedDescription,
-                    selectionRect: selectionRect,
-                    preferredSide: preferredSide,
-                    onRetry: { [weak self] in
-                        self?.retryScrollingAIAnalysis()
-                    },
-                    onClose: { [weak self] in
-                        self?.aiAnalysisPreviewWindowService.dismiss()
-                    }
-                )
+
+                switch error {
+                case .noTextRecognized, .emptyText:
+                    print("[AI Analysis] Scrolling local OCR produced no useful text: \(error.localizedDescription)")
+                    toastService.showToast(message: "AI 未识别到有效文字")
+                    aiAnalysisPreviewWindowService.dismiss()
+                case .requestFailed:
+                    toastService.showToast(message: "OCR 识别失败")
+                    aiAnalysisPreviewWindowService.presentError(
+                        title: "OCR 识别失败",
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        preferredSide: preferredSide,
+                        onRetry: { [weak self] in
+                            self?.retryScrollingAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                }
             }
         } catch let error as AIImageTextExtractionError {
             await MainActor.run {
@@ -1040,11 +1056,12 @@ final class CaptureSessionService {
 
     @MainActor
     private func retryScrollingAIAnalysis() {
-        guard isInScrollingCaptureMode else {
+        guard isInScrollingCaptureMode,
+              let pendingAIAnalysisMode else {
             return
         }
 
-        analyzeScrollingCaptureResult()
+        analyzeScrollingCaptureResult(mode: pendingAIAnalysisMode)
     }
 
     @MainActor
