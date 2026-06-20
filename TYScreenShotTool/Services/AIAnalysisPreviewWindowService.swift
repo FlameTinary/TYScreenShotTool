@@ -142,13 +142,14 @@ final class AIAnalysisPreviewWindowService {
     }
 
     func presentError(
+        title: String = "AI 分析失败",
         message: String,
         selectionRect: CGRect,
         preferredSide: PreviewPlacementSide? = nil,
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
-        statusLabel.stringValue = "AI 分析失败"
+        statusLabel.stringValue = title
         messageLabel.stringValue = message
         configureForLoadingOrError(messageVisible: true)
         copyAllButton.isEnabled = false

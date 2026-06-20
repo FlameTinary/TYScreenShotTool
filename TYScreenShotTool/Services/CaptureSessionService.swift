@@ -714,6 +714,7 @@ final class CaptureSessionService {
     @MainActor
     private func performAIAnalysis(for source: PendingCaptureSource) async {
         let selectionRect = source.selectionRect
+        let strategy = currentAITextInputStrategy()
 
         defer {
             isAIAnalysisInProgress = false
@@ -722,7 +723,7 @@ final class CaptureSessionService {
 
         do {
             let image = try await captureImageForPendingSource(source)
-            let text = try ocrService.recognizeText(in: image)
+            let text = try await resolveAIText(from: image, strategy: strategy)
             let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
 
             aiAnalysisPreviewWindowService.presentResult(
@@ -744,6 +745,7 @@ final class CaptureSessionService {
         } catch let error as OCRError {
             toastService.showToast(message: "OCR 未识别到有效文本")
             aiAnalysisPreviewWindowService.presentError(
+                title: "AI 分析失败",
                 message: error.localizedDescription,
                 selectionRect: selectionRect,
                 onRetry: { [weak self] in
@@ -753,9 +755,18 @@ final class CaptureSessionService {
                     self?.aiAnalysisPreviewWindowService.dismiss()
                 }
             )
+        } catch let error as AIImageTextExtractionError {
+            handleVisionAIExtractionError(
+                error,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                }
+            )
         } catch let error as AIAnalysisError {
             toastService.showToast(message: "AI 分析失败")
             aiAnalysisPreviewWindowService.presentError(
+                title: "AI 分析失败",
                 message: error.localizedDescription,
                 selectionRect: selectionRect,
                 onRetry: { [weak self] in
@@ -768,11 +779,49 @@ final class CaptureSessionService {
         } catch {
             toastService.showToast(message: "AI 分析失败")
             aiAnalysisPreviewWindowService.presentError(
+                title: "AI 分析失败",
                 message: error.localizedDescription,
                 selectionRect: selectionRect,
                 onRetry: { [weak self] in
                     self?.retryAIAnalysis()
                 },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+        }
+    }
+
+    private func resolveAIText(
+        from image: CGImage,
+        strategy: AITextInputStrategy
+    ) async throws -> String {
+        switch strategy {
+        case .localOCR:
+            return try ocrService.recognizeText(in: image)
+        case .visionAI:
+            let extracted = try await aiImageTextExtractionService.extractText(from: image)
+            return extracted.text
+        }
+    }
+
+    @MainActor
+    private func handleVisionAIExtractionError(
+        _ error: AIImageTextExtractionError,
+        selectionRect: CGRect,
+        onRetry: @escaping () -> Void
+    ) {
+        switch error {
+        case .noUsefulText:
+            toastService.showToast(message: "AI 未识别到有效文字")
+            aiAnalysisPreviewWindowService.dismiss()
+        case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
+            toastService.showToast(message: "AI 识别失败")
+            aiAnalysisPreviewWindowService.presentError(
+                title: "AI 识别失败",
+                message: error.localizedDescription,
+                selectionRect: selectionRect,
+                onRetry: onRetry,
                 onClose: { [weak self] in
                     self?.aiAnalysisPreviewWindowService.dismiss()
                 }
