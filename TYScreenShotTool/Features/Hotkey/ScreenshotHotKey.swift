@@ -8,57 +8,110 @@
 import Carbon
 
 struct ScreenshotHotKey: Equatable {
-    let storageValue: String
     let id: UInt32
     let keyCode: UInt32
     let modifiers: UInt32
-    let displayName: String
+
+    var storageValue: String {
+        "\(keyCode):\(modifiers)"
+    }
+
+    var displayName: String {
+        modifierDisplayName + (KeyEquivalentNameMap.displayName(for: keyCode) ?? "")
+    }
+
+    private var modifierDisplayName: String {
+        var parts: [String] = []
+
+        if modifiers & UInt32(cmdKey) != 0 {
+            parts.append("⌘")
+        }
+        if modifiers & UInt32(shiftKey) != 0 {
+            parts.append("⇧")
+        }
+        if modifiers & UInt32(optionKey) != 0 {
+            parts.append("⌥")
+        }
+        if modifiers & UInt32(controlKey) != 0 {
+            parts.append("⌃")
+        }
+
+        return parts.joined()
+    }
 
     init(
-        storageValue: String,
-        id: UInt32,
+        id: UInt32 = 1,
         keyCode: UInt32,
-        modifiers: UInt32,
-        displayName: String
+        modifiers: UInt32
     ) {
-        self.storageValue = storageValue
         self.id = id
         self.keyCode = keyCode
         self.modifiers = modifiers
-        self.displayName = displayName
     }
 
+    static let screenshot = ScreenshotHotKey(
+        keyCode: UInt32(kVK_ANSI_2),
+        modifiers: UInt32(cmdKey | shiftKey)
+    )
+
     static let presets: [ScreenshotHotKey] = [
+        .screenshot,
         ScreenshotHotKey(
-            storageValue: "commandShift2",
-            id: 1,
-            keyCode: UInt32(kVK_ANSI_2),
-            modifiers: UInt32(cmdKey | shiftKey),
-            displayName: "⌘⇧2"
-        ),
-        ScreenshotHotKey(
-            storageValue: "commandShift8",
-            id: 1,
             keyCode: UInt32(kVK_ANSI_8),
-            modifiers: UInt32(cmdKey | shiftKey),
-            displayName: "⌘⇧8"
+            modifiers: UInt32(cmdKey | shiftKey)
         ),
         ScreenshotHotKey(
-            storageValue: "commandShift9",
-            id: 1,
             keyCode: UInt32(kVK_ANSI_9),
-            modifiers: UInt32(cmdKey | shiftKey),
-            displayName: "⌘⇧9"
+            modifiers: UInt32(cmdKey | shiftKey)
         )
     ]
 
-    static let screenshot = presets[0]
-
     init?(storageValue: String) {
-        guard let hotKey = Self.presets.first(where: { $0.storageValue == storageValue }) else {
+        switch storageValue {
+        case "commandShift2":
+            self = .screenshot
+            return
+        case "commandShift8":
+            self = ScreenshotHotKey(
+                keyCode: UInt32(kVK_ANSI_8),
+                modifiers: UInt32(cmdKey | shiftKey)
+            )
+            return
+        case "commandShift9":
+            self = ScreenshotHotKey(
+                keyCode: UInt32(kVK_ANSI_9),
+                modifiers: UInt32(cmdKey | shiftKey)
+            )
+            return
+        default:
+            break
+        }
+
+        let parts = storageValue.split(separator: ":")
+        guard parts.count == 2,
+              let keyCode = UInt32(parts[0]),
+              let modifiers = UInt32(parts[1]),
+              KeyEquivalentNameMap.displayName(for: keyCode) != nil else {
             return nil
         }
 
-        self = hotKey
+        self.init(
+            keyCode: keyCode,
+            modifiers: modifiers
+        )
+    }
+
+    static func makeCandidate(
+        keyCode: UInt32,
+        modifiers: UInt32
+    ) -> ScreenshotHotKey? {
+        guard KeyEquivalentNameMap.displayName(for: keyCode) != nil else {
+            return nil
+        }
+
+        return ScreenshotHotKey(
+            keyCode: keyCode,
+            modifiers: modifiers
+        )
     }
 }
