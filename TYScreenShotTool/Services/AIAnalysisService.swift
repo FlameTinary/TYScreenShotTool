@@ -172,9 +172,31 @@ final class AIAnalysisService {
         text: String,
         mode: AIAnalysisMode
     ) -> String {
-        let sectionsText = definition.sections
-            .map { "\($0.promptTitle)：\n<这里填写内容>" }
-            .joined(separator: "\n\n")
+        let sectionsText: String
+        switch mode {
+        case .interfaceStructure:
+            sectionsText = """
+            界面结构：
+            组件识别：
+            <这里填写内容>
+
+            结构层级：
+            <这里填写内容>
+
+            视觉特征：
+            <这里填写内容>
+
+            交互语义：
+            <这里填写内容>
+
+            实现提示：
+            <这里填写内容>
+            """
+        default:
+            sectionsText = definition.sections
+                .map { "\($0.promptTitle)：\n<这里填写内容>" }
+                .joined(separator: "\n\n")
+        }
 
         let requirementsText = definition.requirements
             .map { "- \($0)" }
@@ -184,6 +206,8 @@ final class AIAnalysisService {
         switch mode {
         case .developerError, .summary:
             outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，用简洁中文输出，并严格使用以下结构："
+        case .interfaceStructure:
+            outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，严格按要求输出一段结构化界面说明，并确保 5 个固定小标题全部出现："
         case .translation:
             outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，严格按要求输出译文："
         }
@@ -331,6 +355,26 @@ final class AIAnalysisService {
                     ),
                 ]
             )
+        case .interfaceStructure:
+            return AnalysisModeDefinition(
+                instructions: "你负责识别截图中的界面结构，并输出一段可供设计与开发继续复用的结构化说明。",
+                promptIntro: "你是一个帮助设计师和开发者理解截图界面结构的助手。",
+                inputLabel: "界面内容",
+                requirements: [
+                    "必须按固定小标题输出",
+                    "保持简洁、具体、可复用",
+                    "优先描述组件类型、层级、视觉特征、交互语义与实现提示",
+                    "实现提示先给通用方向，再补一句前端或原生可参考的落地建议",
+                    "不要输出代码块、JSON、前言、结语或与截图无关的猜测",
+                ],
+                sections: [
+                    SectionDefinition(
+                        title: "界面结构",
+                        promptTitle: "界面结构",
+                        acceptedHeaders: [.exact("界面结构")]
+                    ),
+                ]
+            )
         }
     }
 
@@ -349,11 +393,14 @@ final class AIAnalysisService {
             throw AIAnalysisError.emptyOutput
         }
 
-        if case .translation = mode {
+        switch mode {
+        case .translation:
             return try parseTranslationResult(from: text, mode: mode)
+        case .interfaceStructure:
+            return try parseInterfaceStructureResult(from: text, mode: mode)
+        default:
+            return try parseStructuredSections(from: text, mode: mode)
         }
-
-        return try parseStructuredSections(from: text, mode: mode)
     }
 
     private func parseTranslationResult(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
@@ -370,6 +417,34 @@ final class AIAnalysisService {
 
         let sections = [
             AIAnalysisSection(title: "译文", content: normalized),
+        ]
+
+        return AIAnalysisResult(
+            mode: mode,
+            statusTitle: mode.resultStatusTitle,
+            sections: sections,
+            rawText: text,
+            secondaryCopyText: normalized
+        )
+    }
+
+    private func parseInterfaceStructureResult(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
+        if let structuredResult = try? parseStructuredSections(from: text, mode: mode) {
+            guard hasAllInterfaceStructureHeadings(in: structuredResult.sections.first?.content ?? "") else {
+                throw AIAnalysisError.lowQualityOutput
+            }
+            return structuredResult
+        }
+
+        let normalized = normalizeInterfaceStructureText(text)
+        guard normalized.isEmpty == false, hasAllInterfaceStructureHeadings(in: normalized) else {
+            throw AIAnalysisError.lowQualityOutput
+        }
+
+        print("[AI Analysis] Interface structure output missing explicit section header, fallback to raw structured text")
+
+        let sections = [
+            AIAnalysisSection(title: "界面结构", content: normalized),
         ]
 
         return AIAnalysisResult(
@@ -446,6 +521,8 @@ final class AIAnalysisService {
                 .joined(separator: "\n\n")
         case .translation:
             return sections.first?.content ?? fallback
+        case .interfaceStructure:
+            return sections.first?.content ?? fallback
         case .developerError:
             return sections.last?.content ?? fallback
         }
@@ -473,6 +550,42 @@ final class AIAnalysisService {
         }
 
         return trimmed
+    }
+
+    private func normalizeInterfaceStructureText(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return ""
+        }
+
+        let candidates = [
+            "界面结构：",
+            "界面结构:",
+        ]
+
+        for prefix in candidates {
+            if trimmed.hasPrefix(prefix) {
+                return trimmed
+                    .dropFirst(prefix.count)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return trimmed
+    }
+
+    private func hasAllInterfaceStructureHeadings(in text: String) -> Bool {
+        let headings = [
+            "组件识别",
+            "结构层级",
+            "视觉特征",
+            "交互语义",
+            "实现提示",
+        ]
+
+        return headings.allSatisfy { heading in
+            text.contains("\(heading)：") || text.contains("\(heading):")
+        }
     }
 
     private func parseSectionHeader(

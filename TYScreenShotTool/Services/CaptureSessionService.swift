@@ -776,7 +776,7 @@ final class CaptureSessionService {
             switch error {
             case .noTextRecognized, .emptyText:
                 print("[AI Analysis] Local OCR produced no useful text: \(error.localizedDescription)")
-                toastService.showToast(message: "AI 未识别到有效文字")
+                toastService.showToast(message: emptyContentMessage(for: mode))
                 aiAnalysisPreviewWindowService.dismiss()
             case .requestFailed:
                 toastService.showToast(message: "OCR 识别失败")
@@ -796,23 +796,31 @@ final class CaptureSessionService {
             handleVisionAIExtractionError(
                 error,
                 selectionRect: selectionRect,
+                mode: mode,
                 onRetry: { [weak self] in
                     self?.retryAIAnalysis()
                 }
             )
         } catch let error as AIAnalysisError {
-            toastService.showToast(message: "AI 分析失败")
-            aiAnalysisPreviewWindowService.presentError(
-                title: "AI 分析失败",
-                message: error.localizedDescription,
-                selectionRect: selectionRect,
-                onRetry: { [weak self] in
-                    self?.retryAIAnalysis()
-                },
-                onClose: { [weak self] in
-                    self?.aiAnalysisPreviewWindowService.dismiss()
-                }
-            )
+            switch error {
+            case .emptyInput, .lowQualityOutput:
+                print("[AI Analysis] Interface structure produced no useful content: \(error.localizedDescription)")
+                toastService.showToast(message: emptyContentMessage(for: mode))
+                aiAnalysisPreviewWindowService.dismiss()
+            case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
+                toastService.showToast(message: "AI 分析失败")
+                aiAnalysisPreviewWindowService.presentError(
+                    title: "AI 分析失败",
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
         } catch {
             toastService.showToast(message: "AI 分析失败")
             aiAnalysisPreviewWindowService.presentError(
@@ -848,12 +856,13 @@ final class CaptureSessionService {
     private func handleVisionAIExtractionError(
         _ error: AIImageTextExtractionError,
         selectionRect: CGRect,
+        mode: AIAnalysisMode,
         onRetry: @escaping () -> Void
     ) {
         switch error {
         case .noUsefulText:
             print("[AI Analysis] Vision extraction produced no useful text")
-            toastService.showToast(message: "AI 未识别到有效文字")
+            toastService.showToast(message: emptyContentMessage(for: mode))
             aiAnalysisPreviewWindowService.dismiss()
         case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
             print("[AI Analysis] Vision extraction failed with recoverable error")
@@ -960,7 +969,7 @@ final class CaptureSessionService {
                 switch error {
                 case .noTextRecognized, .emptyText:
                     print("[AI Analysis] Scrolling local OCR produced no useful text: \(error.localizedDescription)")
-                    toastService.showToast(message: "AI 未识别到有效文字")
+                    toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .requestFailed:
                     toastService.showToast(message: "OCR 识别失败")
@@ -990,7 +999,7 @@ final class CaptureSessionService {
                 switch error {
                 case .noUsefulText:
                     print("[AI Analysis] Scrolling vision extraction produced no useful text")
-                    toastService.showToast(message: "AI 未识别到有效文字")
+                    toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
                     print("[AI Analysis] Scrolling vision extraction failed with recoverable error")
@@ -1017,18 +1026,26 @@ final class CaptureSessionService {
                 ) else {
                     return
                 }
-                toastService.showToast(message: "AI 分析失败")
-                aiAnalysisPreviewWindowService.presentError(
-                    message: error.localizedDescription,
-                    selectionRect: selectionRect,
-                    preferredSide: preferredSide,
-                    onRetry: { [weak self] in
-                        self?.retryScrollingAIAnalysis()
-                    },
-                    onClose: { [weak self] in
-                        self?.aiAnalysisPreviewWindowService.dismiss()
-                    }
-                )
+
+                switch error {
+                case .emptyInput, .lowQualityOutput:
+                    print("[AI Analysis] Scrolling interface structure produced no useful content: \(error.localizedDescription)")
+                    toastService.showToast(message: emptyContentMessage(for: mode))
+                    aiAnalysisPreviewWindowService.dismiss()
+                case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
+                    toastService.showToast(message: "AI 分析失败")
+                    aiAnalysisPreviewWindowService.presentError(
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        preferredSide: preferredSide,
+                        onRetry: { [weak self] in
+                            self?.retryScrollingAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                }
             }
         } catch {
             await MainActor.run {
@@ -1051,6 +1068,15 @@ final class CaptureSessionService {
                     }
                 )
             }
+        }
+    }
+
+    private func emptyContentMessage(for mode: AIAnalysisMode) -> String {
+        switch mode {
+        case .interfaceStructure:
+            return "AI 未识别到有效内容"
+        default:
+            return "AI 未识别到有效文字"
         }
     }
 
