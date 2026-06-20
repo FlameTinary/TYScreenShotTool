@@ -2,7 +2,7 @@
 
 ## Status
 
-Blocked
+Completed
 
 ## Goal
 
@@ -95,16 +95,18 @@ Settings 中的保存目录配置，
 
 ## Result
 
-Blocked
+Completed
 
 当前结果：
 
 - App Sandbox 已开启并适配当前保存目录模型
 - 保存目录权限配置、应用重启后权限恢复、未配置目录时错误提示已完成
-- 工程已具备继续执行 Release / Archive / Upload 前的最小功能条件
-- 当前阻塞点不在代码，而在开发者账号尚未申请完成
+- Release 构建、Archive、上传与上架验证链路已补齐
+- `v1.0.0` 已提交 App Store，并已通过审核正式上架
+- 当前 App Store 地址：
+  `https://apps.apple.com/cn/app/tshot/id6780356949?mt=12`
 
-后续恢复条件：
+补充说明：
 
-- 开发者账号可用
-- 可以继续执行 Archive / Upload / TestFlight 验证
+- 本轮最初的唯一阻塞项是开发者账号尚未可用
+- 当前该外部阻塞已解除，因此 `Sprint 14` 正式转为完成

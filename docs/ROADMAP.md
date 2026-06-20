@@ -188,27 +188,27 @@ HotKey 配置
 
 ---
 
-## 当前状态
-
 ### Sprint 14
 
 上架适配
 
 状态：
-⏸ Blocked
+✅ Done
 
-说明：
+成果：
 
 - 开启并适配 App Sandbox
 - 梳理 Screen Recording 权限与上架说明
 - 调整保存目录能力以兼容沙箱权限模型
 - 补齐最小上架所需的工程与隐私配置
-- 验证 Release 构建与上架可行性
-- 当前功能适配已基本完成
-- 因开发者账号尚未申请完成，暂不进入 TestFlight 上传
-- 待开发者账号可用后，再恢复 Archive / Upload / TestFlight 验证
+- 完成 Release 构建、Archive、上传与上架验证链路
+- `v1.0.0` 已通过审核并正式上架 App Store
+- App Store 地址：
+  `https://apps.apple.com/cn/app/tshot/id6780356949?mt=12`
 
 ---
+
+## 当前状态
 
 ### Sprint 15
 
