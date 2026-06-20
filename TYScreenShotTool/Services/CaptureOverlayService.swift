@@ -17,7 +17,7 @@ final class CaptureOverlayService {
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
-    var onAIRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onAIRequested: ((AIAnalysisMode, CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
     var windowCandidateProvider: ((CGPoint) -> WindowSelectionCandidate?)?
@@ -94,8 +94,8 @@ final class CaptureOverlayService {
             overlayView.onOCRRequested = { [weak self] in
                 self?.onOCRRequested?($0, $1)
             }
-            overlayView.onAIRequested = { [weak self] in
-                self?.onAIRequested?($0, $1)
+            overlayView.onAIRequested = { [weak self] mode, style, annotations in
+                self?.onAIRequested?(mode, style, annotations)
             }
             overlayView.onPinRequested = { [weak self] in
                 self?.onPinRequested?($0, $1)

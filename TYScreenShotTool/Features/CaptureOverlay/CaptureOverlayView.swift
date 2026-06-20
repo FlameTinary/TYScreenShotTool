@@ -18,7 +18,7 @@ final class CaptureOverlayView: NSView {
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
-    var onAIRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onAIRequested: ((AIAnalysisMode, CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
 
@@ -1041,7 +1041,31 @@ final class CaptureOverlayView: NSView {
     @objc
     private func requestAI() {
         annotationCanvasView.commitActiveTextIfNeeded()
-        onAIRequested?(previewStyle, annotationCanvasView.annotations)
+        presentAIMenu(relativeTo: aiButton)
+    }
+
+    private func presentAIMenu(relativeTo button: NSButton) {
+        let menu = NSMenu()
+
+        for mode in AIAnalysisMode.allCases {
+            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode
+            menu.addItem(item)
+        }
+
+        let menuOrigin = CGPoint(x: button.frame.minX, y: button.frame.maxY + 4)
+        menu.popUp(positioning: nil, at: menuOrigin, in: toolbarContainerView)
+    }
+
+    @objc
+    private func handleAIMenuSelection(_ sender: NSMenuItem) {
+        guard let mode = sender.representedObject as? AIAnalysisMode else {
+            return
+        }
+
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onAIRequested?(mode, previewStyle, annotationCanvasView.annotations)
     }
 
     @objc
