@@ -17,6 +17,11 @@ struct SettingsView: View {
     private var saveDirectoryPath = ""
     @AppStorage(AppSettings.saveDirectoryBookmarkDataKey)
     private var saveDirectoryBookmarkData = Data()
+    @State private var displayedHotKeyValue = ScreenshotHotKey.screenshot.displayName
+    @State private var isRecordingHotKey = false
+    @State private var pendingHotKey: ScreenshotHotKey?
+    @State private var previousHotKey: ScreenshotHotKey?
+    @State private var hotKeyErrorMessage = ""
 
     init(globalHotKeyService: GlobalHotKeyService) {
         self.globalHotKeyService = globalHotKeyService
@@ -41,14 +46,8 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(minWidth: 460, minHeight: 360, alignment: .topLeading)
-        .onChange(of: selectedHotKeyStorageValue) { _, newValue in
-            guard let hotKey = ScreenshotHotKey(storageValue: newValue) else {
-                return
-            }
-
-            if !globalHotKeyService.updateHotKey(hotKey) {
-                selectedHotKeyStorageValue = AppSettings.screenshotHotKeyDefaultValue
-            }
+        .onAppear {
+            displayedHotKeyValue = configuredHotKey.displayName
         }
     }
 
@@ -57,15 +56,38 @@ struct SettingsView: View {
             Text("HotKey 配置")
                 .font(.headline)
 
-            Picker("截图快捷键", selection: $selectedHotKeyStorageValue) {
-                ForEach(ScreenshotHotKey.presets, id: \.storageValue) { hotKey in
-                    Text(hotKey.displayName)
-                        .tag(hotKey.storageValue)
-                }
-            }
-            .pickerStyle(.menu)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("截图快捷键")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-            Text("仅支持少量预设快捷键，修改后立即生效。")
+                HotKeyRecorderField(
+                    displayedValue: $displayedHotKeyValue,
+                    isRecording: $isRecordingHotKey,
+                    onBeginRecording: {
+                        beginRecordingIfNeeded()
+                    },
+                    onCandidateChanged: { candidate in
+                        pendingHotKey = candidate
+                    },
+                    onCommit: {
+                        commitRecordedHotKey()
+                    },
+                    onCancel: {
+                        cancelRecordedHotKey()
+                    }
+                )
+                .frame(height: 28)
+            }
+
+            if hotKeyErrorMessage.isEmpty == false {
+                Text(hotKeyErrorMessage)
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text("支持修饰键与字母、数字、功能键、方向键组合，按回车确认。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -107,6 +129,60 @@ struct SettingsView: View {
         }
 
         return saveDirectoryPath
+    }
+
+    private var configuredHotKey: ScreenshotHotKey {
+        ScreenshotHotKey(storageValue: selectedHotKeyStorageValue) ?? .screenshot
+    }
+
+    private func beginRecordingIfNeeded() {
+        if isRecordingHotKey == false {
+            isRecordingHotKey = true
+            previousHotKey = configuredHotKey
+            pendingHotKey = nil
+        }
+        hotKeyErrorMessage = ""
+    }
+
+    private func cancelRecordedHotKey() {
+        let hotKey = previousHotKey ?? configuredHotKey
+        displayedHotKeyValue = hotKey.displayName
+        pendingHotKey = nil
+        previousHotKey = nil
+        isRecordingHotKey = false
+        hotKeyErrorMessage = ""
+    }
+
+    private func commitRecordedHotKey() {
+        let fallbackHotKey = previousHotKey ?? configuredHotKey
+
+        defer {
+            isRecordingHotKey = false
+            pendingHotKey = nil
+            previousHotKey = nil
+        }
+
+        guard let pendingHotKey else {
+            displayedHotKeyValue = fallbackHotKey.displayName
+            hotKeyErrorMessage = "请至少输入一个主键"
+            return
+        }
+
+        if pendingHotKey == fallbackHotKey {
+            displayedHotKeyValue = fallbackHotKey.displayName
+            hotKeyErrorMessage = ""
+            return
+        }
+
+        guard globalHotKeyService.updateHotKey(pendingHotKey) else {
+            displayedHotKeyValue = fallbackHotKey.displayName
+            hotKeyErrorMessage = "快捷键注册失败，请更换组合"
+            return
+        }
+
+        selectedHotKeyStorageValue = pendingHotKey.storageValue
+        displayedHotKeyValue = pendingHotKey.displayName
+        hotKeyErrorMessage = ""
     }
 
     private func chooseSaveDirectory() {
