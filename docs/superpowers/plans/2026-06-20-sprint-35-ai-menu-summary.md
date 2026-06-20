@@ -462,6 +462,16 @@ func analyze(text: String, mode: AIAnalysisMode) async throws -> AIAnalysisResul
 
 Expected: `AIAnalysisService` 可以从同一个入口支持 `开发报错分析` 和 `摘要总结`。
 
+Keep a compatibility wrapper during this task:
+
+```swift
+func analyzeDeveloperError(text: String) async throws -> AIAnalysisResult {
+    try await analyze(text: text, mode: .developerError)
+}
+```
+
+Expected: `CaptureSessionService` 在 Task 6 / Task 7 切换到新接口前，当前工程仍可持续编译。
+
 - [ ] **Step 3: 为两个模式分别定义 prompt**
 
 Append:
