@@ -142,6 +142,7 @@ Expected: 计划执行从代码实现开始，避免重复编辑和重复提交 
 - Create: `TYScreenShotTool/Shared/AIAnalysisMode.swift`
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift`
 - Modify: `TYScreenShotTool/Services/CaptureOverlayService.swift`
+- Modify: `TYScreenShotTool/App/TYScreenShotToolApp.swift`
 
 - [ ] **Step 1: 新建共享 `AIAnalysisMode` 枚举**
 
@@ -225,7 +226,7 @@ overlayView.onAIRequested = { [weak self] mode, style, annotations in
 }
 ```
 
-Expected: 普通截图 `AI` 入口可以把“用户选了哪一项”往上游传。
+Expected: 普通截图 `AI` 入口可以把“用户选了哪一项”传到 overlay / service / app 接线层，为 Task 6 的 session 模式消费做好准备。
 
 - [ ] **Step 3: 在普通截图 `AI` 按钮点击时弹出最小菜单**
 
@@ -269,20 +270,32 @@ private func requestAI() {
 
 Expected: 普通截图点击 `AI` 时先弹菜单，而不是直接开始分析。
 
-- [ ] **Step 4: 运行构建，确认共享模型与普通截图菜单可独立编译**
+- [ ] **Step 4: 在 app 入口兼容新的普通截图 AI 回调签名**
+
+Update `TYScreenShotTool/App/TYScreenShotToolApp.swift`:
+
+```swift
+overlayService.onAIRequested = { _, style, annotations in
+    sessionService.analyzePendingCapture(style: style, annotations: annotations)
+}
+```
+
+Expected: 普通截图菜单选择可以先安全接到 app 层并恢复全项目可编译；当前阶段允许先不在 session 层消费 `mode`，实际模式消费在 Task 6 完成。
+
+- [ ] **Step 5: 运行构建，确认共享模型与普通截图菜单可独立编译**
 
 Run: `./scripts/build.sh`
 
 Expected: `** BUILD SUCCEEDED **`
 
-- [ ] **Step 5: 提交这一任务**
+- [ ] **Step 6: 提交这一任务**
 
 ```bash
-git add TYScreenShotTool/Shared/AIAnalysisMode.swift TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift TYScreenShotTool/Services/CaptureOverlayService.swift
+git add TYScreenShotTool/Shared/AIAnalysisMode.swift TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift TYScreenShotTool/Services/CaptureOverlayService.swift TYScreenShotTool/App/TYScreenShotToolApp.swift
 git commit -m "feat(sprint-35): 增加普通截图 AI 菜单入口"
 ```
 
-Expected: 普通截图菜单骨架与共享模式定义独立成一个小提交。
+Expected: 普通截图菜单骨架、共享模式定义和最小 app 接线兼容独立成一个小提交；模式值的业务消费放在 Task 6。
 
 ---
 
