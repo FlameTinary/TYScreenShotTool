@@ -17,6 +17,8 @@ struct SettingsView: View {
     private var saveDirectoryPath = ""
     @AppStorage(AppSettings.saveDirectoryBookmarkDataKey)
     private var saveDirectoryBookmarkData = Data()
+    @AppStorage(AppSettings.aiUseVisionTextExtractionKey)
+    private var aiUseVisionTextExtraction = AppSettings.aiUseVisionTextExtractionDefaultValue
     @State private var displayedHotKeyValue = ScreenshotHotKey.screenshot.displayName
     @State private var isRecordingHotKey = false
     @State private var pendingHotKey: ScreenshotHotKey?
@@ -33,12 +35,13 @@ struct SettingsView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("当前版本提供截图快捷键与保存目录配置。")
+            Text("当前版本提供截图快捷键、AI 分析链路与保存目录配置。")
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 12) {
                 hotKeyPicker
+                aiAnalysisSettings
                 saveDirectoryPicker
             }
 
@@ -91,6 +94,20 @@ struct SettingsView: View {
             }
 
             Text("支持修饰键与字母、数字、功能键、方向键组合，按回车确认。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var aiAnalysisSettings: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("AI 分析配置")
+                .font(.headline)
+
+            Toggle("AI 使用视觉取字", isOn: $aiUseVisionTextExtraction)
+
+            Text("关闭时使用本地 OCR，开启时使用 AI 先识别截图文字再分析。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

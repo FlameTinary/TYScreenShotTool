@@ -12,6 +12,8 @@ enum AppSettings {
     static let screenshotHotKeyDefaultValue = ScreenshotHotKey.screenshot.storageValue
     static let saveDirectoryPathKey = "settings.saveDirectoryPath"
     static let saveDirectoryBookmarkDataKey = "settings.saveDirectoryBookmarkData"
+    static let aiUseVisionTextExtractionKey = "settings.aiUseVisionTextExtraction"
+    static let aiUseVisionTextExtractionDefaultValue = false
     static let aiAnalysisAPIKeyKey = "local.aiAnalysis.openAIAPIKey"
     static let aiAnalysisBaseURLKey = "local.aiAnalysis.baseURL"
     static let aiAnalysisModelKey = "local.aiAnalysis.model"
