@@ -7,40 +7,35 @@
 
 import Foundation
 
-private enum AIAnalysisSectionKey: CaseIterable {
-    case summary
-    case possibleCauses
-    case nextSteps
-
-    var title: String {
-        switch self {
-        case .summary:
-            return "报错大意"
-        case .possibleCauses:
-            return "可能原因"
-        case .nextSteps:
-            return "建议下一步"
-        }
-    }
+struct AIAnalysisSection {
+    let title: String
+    let content: String
 }
 
 struct AIAnalysisResult {
-    let summary: String
-    let possibleCauses: String
-    let nextSteps: String
+    let mode: AIAnalysisMode
+    let statusTitle: String
+    let sections: [AIAnalysisSection]
     let rawText: String
+    let secondaryCopyText: String
+
+    var summary: String {
+        sections[safe: 0]?.content ?? ""
+    }
+
+    var possibleCauses: String {
+        sections[safe: 1]?.content ?? ""
+    }
+
+    var nextSteps: String {
+        sections[safe: 2]?.content ?? ""
+    }
 
     var formattedText: String {
-        [
-            "报错大意：",
-            summary,
-            "",
-            "可能原因：",
-            possibleCauses,
-            "",
-            "建议下一步：",
-            nextSteps,
-        ].joined(separator: "\n")
+        sections
+            .flatMap { [$0.title + "：", $0.content, ""] }
+            .dropLast()
+            .joined(separator: "\n")
     }
 }
 
@@ -56,20 +51,20 @@ final class AIAnalysisService {
         self.userDefaults = userDefaults
     }
 
-    func analyzeDeveloperError(text: String) async throws -> AIAnalysisResult {
+    func analyze(text: String, mode: AIAnalysisMode) async throws -> AIAnalysisResult {
         let normalized = normalizeOCRText(text)
         guard normalized.isEmpty == false else {
             throw AIAnalysisError.emptyInput
         }
 
         let apiKey = try resolvedAPIKey()
-        let prompt = buildDeveloperErrorPrompt(from: normalized)
-        let request = try makeRequest(apiKey: apiKey, prompt: prompt)
+        let prompt = buildPrompt(for: mode, text: normalized)
+        let request = try makeRequest(apiKey: apiKey, prompt: prompt, mode: mode)
 
         do {
             let (data, response) = try await session.data(for: request)
             try validateHTTPResponse(response, data: data)
-            return try parseAnalysisResult(from: data)
+            return try parseAnalysisResult(from: data, mode: mode)
         } catch let error as AIAnalysisError {
             throw error
         } catch let error as DecodingError {
@@ -77,6 +72,10 @@ final class AIAnalysisService {
         } catch {
             throw AIAnalysisError.requestFailed(error.localizedDescription)
         }
+    }
+
+    func analyzeDeveloperError(text: String) async throws -> AIAnalysisResult {
+        try await analyze(text: text, mode: .developerError)
     }
 
     private func normalizeOCRText(_ text: String) -> String {
@@ -182,7 +181,50 @@ final class AIAnalysisService {
         """
     }
 
-    private func makeRequest(apiKey: String, prompt: String) throws -> URLRequest {
+    private func buildPrompt(for mode: AIAnalysisMode, text: String) -> String {
+        switch mode {
+        case .developerError:
+            return buildDeveloperErrorPrompt(from: text)
+        case .summary:
+            return buildSummaryPrompt(from: text)
+        }
+    }
+
+    private func buildSummaryPrompt(from text: String) -> String {
+        """
+        你是一个帮助用户总结截图文字重点的助手。
+        请基于下面的文字内容，用简洁中文输出，并严格使用以下结构：
+
+        重点 1：
+        <这里填写内容>
+
+        重点 2：
+        <这里填写内容>
+
+        重点 3：
+        <这里填写内容>
+
+        要求：
+        - 三个部分都必须输出，不能缺省
+        - 每条尽量短句
+        - 如果信息不足，明确说明信息不足
+        - 不要输出额外标题、前言、总结或 Markdown 代码块
+
+        文字内容：
+        \(text)
+        """
+    }
+
+    private func buildInstructions(for mode: AIAnalysisMode) -> String {
+        switch mode {
+        case .developerError:
+            return "你负责分析开发报错文本，并用简洁中文输出结果。"
+        case .summary:
+            return "你负责总结截图文字重点，并用简洁中文输出结果。"
+        }
+    }
+
+    private func makeRequest(apiKey: String, prompt: String, mode: AIAnalysisMode) throws -> URLRequest {
         let url = try resolvedBaseURL()
 
         var request = URLRequest(url: url)
@@ -192,7 +234,7 @@ final class AIAnalysisService {
 
         let body = ResponseRequestBody(
             model: resolvedModel(),
-            instructions: "你负责分析开发报错文本，并用简洁中文输出结果。",
+            instructions: buildInstructions(for: mode),
             input: prompt,
             store: false
         )
@@ -212,7 +254,16 @@ final class AIAnalysisService {
         }
     }
 
-    private func parseAnalysisResult(from data: Data) throws -> AIAnalysisResult {
+    private func expectedSectionTitles(for mode: AIAnalysisMode) -> [String] {
+        switch mode {
+        case .developerError:
+            return ["报错大意", "可能原因", "建议下一步"]
+        case .summary:
+            return ["重点 1", "重点 2", "重点 3"]
+        }
+    }
+
+    private func parseAnalysisResult(from data: Data, mode: AIAnalysisMode) throws -> AIAnalysisResult {
         let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
 
         let text = envelope.output
@@ -227,31 +278,32 @@ final class AIAnalysisService {
             throw AIAnalysisError.emptyOutput
         }
 
-        return try parseStructuredSections(from: text)
+        return try parseStructuredSections(from: text, mode: mode)
     }
 
-    private func parseStructuredSections(from text: String) throws -> AIAnalysisResult {
-        var currentSection: AIAnalysisSectionKey?
-        var collectedSections: [AIAnalysisSectionKey: [String]] = [:]
+    private func parseStructuredSections(from text: String, mode: AIAnalysisMode) throws -> AIAnalysisResult {
+        let titles = expectedSectionTitles(for: mode)
+        var currentTitle: String?
+        var collectedSections: [String: [String]] = [:]
 
         for rawLine in text.components(separatedBy: .newlines) {
-            if let header = parseSectionHeader(from: rawLine) {
-                currentSection = header.section
+            if let header = parseSectionHeader(from: rawLine, expectedTitles: titles) {
+                currentTitle = header.title
                 if header.inlineContent.isEmpty == false {
-                    collectedSections[header.section, default: []].append(header.inlineContent)
+                    collectedSections[header.title, default: []].append(header.inlineContent)
                 }
                 continue
             }
 
-            guard let currentSection else {
+            guard let currentTitle else {
                 continue
             }
 
-            collectedSections[currentSection, default: []].append(rawLine)
+            collectedSections[currentTitle, default: []].append(rawLine)
         }
 
-        func resolvedContent(for section: AIAnalysisSectionKey) -> String? {
-            let lines = collectedSections[section, default: []]
+        func resolvedContent(for title: String) -> String? {
+            let lines = collectedSections[title, default: []]
             let joined = lines
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .drop(while: \.isEmpty)
@@ -264,23 +316,31 @@ final class AIAnalysisService {
             return joined.isEmpty ? nil : joined
         }
 
-        guard
-            let summary = resolvedContent(for: .summary),
-            let possibleCauses = resolvedContent(for: .possibleCauses),
-            let nextSteps = resolvedContent(for: .nextSteps)
-        else {
-            throw AIAnalysisError.lowQualityOutput
+        let sections = try titles.map { title -> AIAnalysisSection in
+            guard let content = resolvedContent(for: title) else {
+                throw AIAnalysisError.lowQualityOutput
+            }
+
+            return AIAnalysisSection(title: title, content: content)
         }
 
         return AIAnalysisResult(
-            summary: summary,
-            possibleCauses: possibleCauses,
-            nextSteps: nextSteps,
-            rawText: text
+            mode: mode,
+            statusTitle: mode.resultStatusTitle,
+            sections: sections,
+            rawText: text,
+            secondaryCopyText: mode == .summary
+                ? sections
+                    .map { "\($0.title)：\n\($0.content)" }
+                    .joined(separator: "\n\n")
+                : (sections.last?.content ?? text)
         )
     }
 
-    private func parseSectionHeader(from line: String) -> (section: AIAnalysisSectionKey, inlineContent: String)? {
+    private func parseSectionHeader(
+        from line: String,
+        expectedTitles: [String]
+    ) -> (title: String, inlineContent: String)? {
         let sanitizedLine = line
             .replacingOccurrences(of: "**", with: "")
             .replacingOccurrences(
@@ -290,27 +350,37 @@ final class AIAnalysisService {
             )
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        for section in AIAnalysisSectionKey.allCases {
-            guard sanitizedLine.hasPrefix(section.title) else {
+        for title in expectedTitles {
+            guard sanitizedLine.hasPrefix(title) else {
                 continue
             }
 
-            let remainder = sanitizedLine.dropFirst(section.title.count)
+            let remainder = sanitizedLine.dropFirst(title.count)
             let normalizedRemainder = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if normalizedRemainder.isEmpty {
-                return (section, "")
+                return (title, "")
             }
 
             if normalizedRemainder.hasPrefix("：") || normalizedRemainder.hasPrefix(":") {
                 let inlineContent = normalizedRemainder
                     .dropFirst()
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                return (section, inlineContent)
+                return (title, inlineContent)
             }
         }
 
         return nil
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard indices.contains(index) else {
+            return nil
+        }
+
+        return self[index]
     }
 }
 
