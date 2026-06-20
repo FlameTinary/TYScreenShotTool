@@ -18,6 +18,7 @@ final class ScrollingCapturePreviewWindowService {
     )
     private let containerView = NSVisualEffectView()
     private let imageView = NSImageView()
+    private(set) var attachmentSide: PreviewPlacementSide?
 
     init() {
         panel.backgroundColor = .clear
@@ -56,6 +57,7 @@ final class ScrollingCapturePreviewWindowService {
         let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
         let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
         let placeOnLeft = leftAvailableWidth >= rightAvailableWidth
+        attachmentSide = placeOnLeft ? .left : .right
         let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
         let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
         let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
@@ -108,6 +110,7 @@ final class ScrollingCapturePreviewWindowService {
     func dismissPreview() {
         panel.orderOut(nil)
         imageView.image = nil
+        attachmentSide = nil
     }
 
     private func screenContaining(_ rect: CGRect) -> NSScreen? {
