@@ -12,8 +12,16 @@ final class ScrollingCapturePanelService {
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
-    var onOCRRequested: (() -> Void)?
-    var onAIRequested: (() -> Void)?
+    var onOCRRequested: (() -> Void)? {
+        didSet {
+            panelView?.onOCRRequested = makePanelActionHandler(for: onOCRRequested)
+        }
+    }
+    var onAIRequested: (() -> Void)? {
+        didSet {
+            panelView?.onAIRequested = makePanelActionHandler(for: onAIRequested)
+        }
+    }
 
     private var panel: ScrollingCapturePanel?
     private weak var panelView: ScrollingCapturePanelView?
@@ -29,12 +37,8 @@ final class ScrollingCapturePanelService {
         panelView.onCancelRequested = { [weak self] in
             self?.onCancelRequested?()
         }
-        panelView.onOCRRequested = { [weak self] in
-            self?.onOCRRequested?()
-        }
-        panelView.onAIRequested = { [weak self] in
-            self?.onAIRequested?()
-        }
+        panelView.onOCRRequested = makePanelActionHandler(for: onOCRRequested)
+        panelView.onAIRequested = makePanelActionHandler(for: onAIRequested)
         panelView.configureForLiveCapture()
 
         let panel = ScrollingCapturePanel(contentRect: panelView.bounds)
@@ -66,6 +70,16 @@ final class ScrollingCapturePanelService {
             width: size.width,
             height: size.height
         )
+    }
+
+    private func makePanelActionHandler(for action: (() -> Void)?) -> (() -> Void)? {
+        guard let action else {
+            return nil
+        }
+
+        return {
+            action()
+        }
     }
 }
 
@@ -105,8 +119,16 @@ private final class ScrollingCapturePanelView: NSView {
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
-    var onOCRRequested: (() -> Void)?
-    var onAIRequested: (() -> Void)?
+    var onOCRRequested: (() -> Void)? {
+        didSet {
+            ocrButton.isEnabled = onOCRRequested != nil
+        }
+    }
+    var onAIRequested: (() -> Void)? {
+        didSet {
+            aiButton.isEnabled = onAIRequested != nil
+        }
+    }
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
@@ -131,8 +153,10 @@ private final class ScrollingCapturePanelView: NSView {
         cancelButton.action = #selector(cancelAction)
         ocrButton.target = self
         ocrButton.action = #selector(ocrAction)
+        ocrButton.isEnabled = false
         aiButton.target = self
         aiButton.action = #selector(aiAction)
+        aiButton.isEnabled = false
     }
 
     @available(*, unavailable)
