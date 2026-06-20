@@ -303,6 +303,7 @@ Expected: 普通截图菜单骨架、共享模式定义和最小 app 接线兼�
 
 **Files:**
 - Modify: `TYScreenShotTool/Services/ScrollingCapturePanelService.swift`
+- Modify: `TYScreenShotTool/App/TYScreenShotToolApp.swift`
 
 - [ ] **Step 1: 将长截图 AI 回调改为携带模式**
 
@@ -368,11 +369,17 @@ private func aiAction() {
 
 Expected: 长截图点击 `AI` 后也先弹相同菜单。
 
-- [ ] **Step 3: 暂不修改 app 入口接线**
+- [ ] **Step 3: 在 app 入口兼容新的长截图 AI 回调签名**
 
-Do not update `TYScreenShotToolApp.swift` in this task.
+Update `TYScreenShotTool/App/TYScreenShotToolApp.swift`:
 
-Expected: 避免在 `CaptureSessionService` 新签名尚未落地前，提前引入编译错误。
+```swift
+scrollingCapturePanelService.onAIRequested = { _ in
+    sessionService.analyzeScrollingCaptureResult()
+}
+```
+
+Expected: 长截图菜单选择可以先安全接到 app 层并恢复全项目可编译；当前阶段允许先不在 session 层消费 `mode`，实际模式消费在 Task 7 完成。
 
 - [ ] **Step 4: 运行构建，确认长截图菜单骨架可独立编译**
 
@@ -383,11 +390,11 @@ Expected: `** BUILD SUCCEEDED **`
 - [ ] **Step 5: 提交这一任务**
 
 ```bash
-git add TYScreenShotTool/Services/ScrollingCapturePanelService.swift
+git add TYScreenShotTool/Services/ScrollingCapturePanelService.swift TYScreenShotTool/App/TYScreenShotToolApp.swift
 git commit -m "feat(sprint-35): 接入长截图 AI 菜单"
 ```
 
-Expected: 长截图菜单骨架独立成一个小提交，不提前耦合 app 入口改造。
+Expected: 长截图菜单骨架和最小 app 接线兼容独立成一个小提交；模式值的业务消费放在 Task 7。
 
 ---
 
