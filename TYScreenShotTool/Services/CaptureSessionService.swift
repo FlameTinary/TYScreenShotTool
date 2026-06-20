@@ -538,6 +538,7 @@ final class CaptureSessionService {
             return
         }
 
+        invalidateScrollingOCRRequest()
         ocrPreviewWindowService.dismiss()
         let requestID = UUID()
         scrollingAIRequestID = requestID
