@@ -1178,20 +1178,17 @@ final class CaptureSessionService {
     private func installScrollingEventMonitor(for selectionRect: CGRect) {
         removeScrollingEventMonitor()
         scrollingEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel]) { [weak self] event in
-            Task { @MainActor [weak self] in
-                guard let self else {
-                    return
-                }
+            guard let self else {
+                return
+            }
 
-                guard self.isInScrollingCaptureMode else {
-                    return
-                }
+            if Thread.isMainThread {
+                self.handleScrollingEvent(event, selectionRect: selectionRect)
+                return
+            }
 
-                guard event.scrollingDeltaY != 0 || event.scrollingDeltaX != 0 else {
-                    return
-                }
-
-                self.scheduleScrollingAppend(for: selectionRect)
+            DispatchQueue.main.sync {
+                self.handleScrollingEvent(event, selectionRect: selectionRect)
             }
         }
     }
@@ -1203,9 +1200,22 @@ final class CaptureSessionService {
         }
     }
 
-    private func scheduleScrollingAppend(for selectionRect: CGRect) {
+    @MainActor
+    private func handleScrollingEvent(_ event: NSEvent, selectionRect: CGRect) {
+        guard isInScrollingCaptureMode else {
+            return
+        }
+
+        guard event.scrollingDeltaY != 0 || event.scrollingDeltaX != 0 else {
+            return
+        }
+
         invalidateScrollingAIRequest()
         aiAnalysisPreviewWindowService.dismiss()
+        scheduleScrollingAppend(for: selectionRect)
+    }
+
+    private func scheduleScrollingAppend(for selectionRect: CGRect) {
         scrollingAppendTask?.cancel()
         scrollingAppendTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 120_000_000)
