@@ -88,8 +88,12 @@ struct TYScreenShotToolApp: App {
         overlayService.onOCRRequested = { style, annotations in
             sessionService.ocrPendingCapture(style: style, annotations: annotations)
         }
-        overlayService.onAIRequested = { _, style, annotations in
-            sessionService.analyzePendingCapture(style: style, annotations: annotations)
+        overlayService.onAIRequested = { mode, style, annotations in
+            sessionService.analyzePendingCapture(
+                mode: mode,
+                style: style,
+                annotations: annotations
+            )
         }
         overlayService.onPinRequested = { style, annotations in
             sessionService.pinPendingCapture(style: style, annotations: annotations)

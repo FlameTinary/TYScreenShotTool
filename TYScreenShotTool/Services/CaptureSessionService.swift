@@ -72,6 +72,7 @@ final class CaptureSessionService {
     private var scrollingOCRTask: Task<Void, Never>?
     private var scrollingAIRequestID = UUID()
     private var isAIAnalysisInProgress = false
+    private var pendingAIAnalysisMode: AIAnalysisMode?
 
     init(
         overlayService: CaptureOverlayService,
@@ -334,7 +335,11 @@ final class CaptureSessionService {
         }
     }
 
-    func analyzePendingCapture(style _: CapturePreviewStyle, annotations _: [CaptureAnnotation]) {
+    func analyzePendingCapture(
+        mode: AIAnalysisMode,
+        style _: CapturePreviewStyle,
+        annotations _: [CaptureAnnotation]
+    ) {
         guard state == .selectionCompleted, let pendingCaptureSource else {
             return
         }
@@ -344,12 +349,14 @@ final class CaptureSessionService {
             return
         }
 
+        pendingAIAnalysisMode = mode
         let selectionRect = pendingCaptureSource.selectionRect
         isAIAnalysisInProgress = true
         overlayService.setAIButtonEnabled(false)
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.presentLoading(
             selectionRect: selectionRect,
+            message: mode.loadingMessage,
             onClose: { [weak self] in
                 self?.aiAnalysisPreviewWindowService.dismiss()
             }
@@ -360,7 +367,7 @@ final class CaptureSessionService {
                 return
             }
 
-            await self.performAIAnalysis(for: pendingCaptureSource)
+            await self.performAIAnalysis(for: pendingCaptureSource, mode: mode)
         }
     }
 
@@ -657,6 +664,7 @@ final class CaptureSessionService {
 
     private func clearPendingCapture() {
         pendingCaptureSource = nil
+        pendingAIAnalysisMode = nil
         pendingScreenImages.removeAll()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
@@ -722,24 +730,25 @@ final class CaptureSessionService {
     }
 
     @MainActor
-    private func performAIAnalysis(for source: PendingCaptureSource) async {
+    private func performAIAnalysis(
+        for source: PendingCaptureSource,
+        mode: AIAnalysisMode
+    ) async {
         let selectionRect = source.selectionRect
         let strategy = currentAITextInputStrategy()
 
-        print("[AI Analysis] Start normal capture analysis")
+        print("[AI Analysis] mode: \(mode.menuTitle)")
         print("[AI Analysis] strategy: \(strategy.logName)")
-        print("[AI Analysis] selection: \(Int(selectionRect.width))x\(Int(selectionRect.height))")
 
         defer {
             isAIAnalysisInProgress = false
             overlayService.setAIButtonEnabled(true)
-            print("[AI Analysis] Finish normal capture analysis")
         }
 
         do {
             let image = try await captureImageForPendingSource(source)
             let text = try await resolveAIText(from: image, strategy: strategy)
-            let result = try await aiAnalysisService.analyzeDeveloperError(text: text)
+            let result = try await aiAnalysisService.analyze(text: text, mode: mode)
 
             aiAnalysisPreviewWindowService.presentResult(
                 result: result,
@@ -748,7 +757,10 @@ final class CaptureSessionService {
                     self?.copyAIAnalysisResult(result.formattedText)
                 },
                 onCopyNextSteps: { [weak self] in
-                    self?.copyAIAnalysisNextSteps(result.nextSteps)
+                    self?.copyAIAnalysisSecondaryText(
+                        result.secondaryCopyText,
+                        successMessage: result.mode.secondaryCopySuccessMessage
+                    )
                 },
                 onRetry: { [weak self] in
                     self?.retryAIAnalysis()
@@ -758,18 +770,25 @@ final class CaptureSessionService {
                 }
             )
         } catch let error as OCRError {
-            toastService.showToast(message: "OCR 未识别到有效文本")
-            aiAnalysisPreviewWindowService.presentError(
-                title: "AI 分析失败",
-                message: error.localizedDescription,
-                selectionRect: selectionRect,
-                onRetry: { [weak self] in
-                    self?.retryAIAnalysis()
-                },
-                onClose: { [weak self] in
-                    self?.aiAnalysisPreviewWindowService.dismiss()
-                }
-            )
+            switch error {
+            case .noTextRecognized, .emptyText:
+                print("[AI Analysis] Local OCR produced no useful text: \(error.localizedDescription)")
+                toastService.showToast(message: "AI 未识别到有效文字")
+                aiAnalysisPreviewWindowService.dismiss()
+            case .requestFailed:
+                toastService.showToast(message: "OCR 识别失败")
+                aiAnalysisPreviewWindowService.presentError(
+                    title: "OCR 识别失败",
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
         } catch let error as AIImageTextExtractionError {
             handleVisionAIExtractionError(
                 error,
@@ -850,7 +869,8 @@ final class CaptureSessionService {
 
     @MainActor
     private func retryAIAnalysis() {
-        guard let pendingCaptureSource else {
+        guard let pendingCaptureSource,
+              let pendingAIAnalysisMode else {
             return
         }
 
@@ -863,6 +883,7 @@ final class CaptureSessionService {
         overlayService.setAIButtonEnabled(false)
         aiAnalysisPreviewWindowService.presentLoading(
             selectionRect: pendingSelectionRect,
+            message: pendingAIAnalysisMode.loadingMessage,
             onClose: { [weak self] in
                 self?.aiAnalysisPreviewWindowService.dismiss()
             }
@@ -873,7 +894,7 @@ final class CaptureSessionService {
                 return
             }
 
-            await self.performAIAnalysis(for: pendingCaptureSource)
+            await self.performAIAnalysis(for: pendingCaptureSource, mode: pendingAIAnalysisMode)
         }
     }
 
@@ -1038,14 +1059,25 @@ final class CaptureSessionService {
     }
 
     @MainActor
-    private func copyAIAnalysisNextSteps(_ text: String) {
+    private func copyAIAnalysisSecondaryText(
+        _ text: String,
+        successMessage: String
+    ) {
         do {
             try clipboardService.copyText(text)
-            toastService.showToast(message: "建议下一步已复制")
+            toastService.showToast(message: successMessage)
         } catch {
-            print("AI next steps clipboard copy failed: \(error.localizedDescription)")
-            toastService.showToast(message: "建议复制失败")
+            print("AI secondary clipboard copy failed: \(error.localizedDescription)")
+            toastService.showToast(message: "AI 结果复制失败")
         }
+    }
+
+    @MainActor
+    private func copyAIAnalysisNextSteps(_ text: String) {
+        copyAIAnalysisSecondaryText(
+            text,
+            successMessage: AIAnalysisMode.developerError.secondaryCopySuccessMessage
+        )
     }
 
     private func finishFailedSaveSession() {
