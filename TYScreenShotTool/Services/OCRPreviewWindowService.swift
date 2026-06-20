@@ -198,7 +198,11 @@ final class OCRPreviewWindowService {
         if let preferredPlaceOnLeft {
             let preferredWidth = preferredPlaceOnLeft ? leftEffectiveWidth : rightEffectiveWidth
             let oppositeWidth = preferredPlaceOnLeft ? rightEffectiveWidth : leftEffectiveWidth
-            placeOnLeft = preferredWidth >= minWidth || preferredWidth >= oppositeWidth
+            if preferredWidth >= minWidth || preferredWidth >= oppositeWidth {
+                placeOnLeft = preferredPlaceOnLeft
+            } else {
+                placeOnLeft = preferredPlaceOnLeft == false
+            }
         } else {
             placeOnLeft = defaultPlaceOnLeft
         }

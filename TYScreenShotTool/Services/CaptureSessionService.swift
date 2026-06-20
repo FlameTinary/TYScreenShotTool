@@ -1069,6 +1069,7 @@ final class CaptureSessionService {
         do {
             try clipboardService.copyText(text)
             toastService.showToast(message: "AI 分析结果已复制")
+            aiAnalysisPreviewWindowService.dismiss()
         } catch {
             print("AI analysis clipboard copy failed: \(error.localizedDescription)")
             toastService.showToast(message: "AI 结果复制失败")
@@ -1083,6 +1084,7 @@ final class CaptureSessionService {
         do {
             try clipboardService.copyText(text)
             toastService.showToast(message: successMessage)
+            aiAnalysisPreviewWindowService.dismiss()
         } catch {
             print("AI secondary clipboard copy failed: \(error.localizedDescription)")
             toastService.showToast(message: "AI 结果复制失败")
@@ -1219,7 +1221,26 @@ final class CaptureSessionService {
     }
 
     private func preferredResultSideForScrollingPreview() -> PreviewPlacementSide? {
-        scrollingCapturePreviewWindowService.attachmentSide?.opposite
+        guard let previewSide = scrollingCapturePreviewWindowService.attachmentSide,
+              let selectionRect = pendingCaptureSource?.selectionRect,
+              let screen = screenContaining(selectionRect) else {
+            return nil
+        }
+
+        let visibleFrame = screen.visibleFrame
+        let outerMargin: CGFloat = 24
+        let gap: CGFloat = 20
+        let minAIWindowWidth: CGFloat = 320
+        let leftAvailableWidth = max(selectionRect.minX - visibleFrame.minX - gap - outerMargin, 0)
+        let rightAvailableWidth = max(visibleFrame.maxX - selectionRect.maxX - gap - outerMargin, 0)
+
+        let preferredSide = previewSide.opposite
+        switch preferredSide {
+        case .left:
+            return leftAvailableWidth >= minAIWindowWidth ? .left : previewSide
+        case .right:
+            return rightAvailableWidth >= minAIWindowWidth ? .right : previewSide
+        }
     }
 
     private func beginScrollingOCRRequest(for resultRevision: Int) -> Int {
