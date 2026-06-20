@@ -1204,6 +1204,8 @@ final class CaptureSessionService {
     }
 
     private func scheduleScrollingAppend(for selectionRect: CGRect) {
+        invalidateScrollingAIRequest()
+        aiAnalysisPreviewWindowService.dismiss()
         scrollingAppendTask?.cancel()
         scrollingAppendTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 120_000_000)
