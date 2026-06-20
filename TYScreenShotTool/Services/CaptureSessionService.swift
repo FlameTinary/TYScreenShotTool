@@ -459,6 +459,40 @@ final class CaptureSessionService {
         }
     }
 
+    func ocrScrollingCaptureResult() {
+        guard isInScrollingCaptureMode,
+              let image = scrollingCaptureResultImage,
+              let selectionRect = pendingCaptureSource?.selectionRect else {
+            return
+        }
+
+        aiAnalysisPreviewWindowService.dismiss()
+
+        Task {
+            do {
+                let text = try ocrService.recognizeText(in: image)
+                let preferredSide = await MainActor.run { self.preferredResultSideForScrollingPreview() }
+                await MainActor.run {
+                    ocrPreviewWindowService.present(
+                        text: text,
+                        selectionRect: selectionRect,
+                        preferredSide: preferredSide,
+                        onCopy: { [weak self] in
+                            self?.copyScrollingOCRPreviewText(text)
+                        },
+                        onCancel: { [weak self] in
+                            self?.ocrPreviewWindowService.dismiss()
+                        }
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    toastService.showToast(message: "OCR 识别失败")
+                }
+            }
+        }
+    }
+
     private func frozenSelectionImage(for selectionRect: CGRect) throws -> CGImage {
         guard selectionRect.width > 1, selectionRect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -575,6 +609,17 @@ final class CaptureSessionService {
             transition(to: .idle)
         } catch {
             print("OCR clipboard copy failed: \(error.localizedDescription)")
+            toastService.showToast(message: "OCR 复制失败")
+        }
+    }
+
+    @MainActor
+    private func copyScrollingOCRPreviewText(_ text: String) {
+        do {
+            try clipboardService.copyText(text)
+            toastService.showToast(message: "OCR 已复制到剪贴板")
+            ocrPreviewWindowService.dismiss()
+        } catch {
             toastService.showToast(message: "OCR 复制失败")
         }
     }
@@ -812,6 +857,10 @@ final class CaptureSessionService {
         }
 
         sourceApplication.activate(options: [])
+    }
+
+    private func preferredResultSideForScrollingPreview() -> PreviewPlacementSide? {
+        scrollingCapturePreviewWindowService.attachmentSide?.opposite
     }
 
     private func captureInitialScrollingFrame(for selectionRect: CGRect) {
