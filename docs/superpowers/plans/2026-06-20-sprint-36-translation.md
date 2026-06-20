@@ -246,24 +246,7 @@ case .translation:
     return "译文已复制"
 ```
 
-- [ ] **Step 4: 补一个顶层菜单标题辅助属性**
-
-Append to `AIAnalysisMode.swift`:
-
-```swift
-var topLevelMenuTitle: String {
-    switch self {
-    case .developerError, .summary:
-        return menuTitle
-    case .translation:
-        return "翻译语言"
-    }
-}
-```
-
-Expected: 菜单渲染可以区分顶层项与翻译子项，不需要在 view 层继续硬编码字符串。
-
-- [ ] **Step 5: 构建验证并提交**
+- [ ] **Step 4: 构建验证并提交**
 
 Run:
 
@@ -404,7 +387,19 @@ private func buildPrompt(
 ) -> String
 ```
 
-Inside it, prepend translation target only for translation mode:
+Inside it, derive an output language instruction and prepend translation target only for translation mode:
+
+```swift
+let outputLanguageInstruction: String
+switch mode {
+case .developerError, .summary:
+    outputLanguageInstruction = "请基于下面的\\(definition.inputLabel)，用简洁中文输出，并严格使用以下结构："
+case .translation:
+    outputLanguageInstruction = "请基于下面的\\(definition.inputLabel)，严格按要求输出译文："
+}
+```
+
+Then keep translation target only for translation mode:
 
 ```swift
 let targetLanguageInstruction: String
@@ -421,13 +416,15 @@ default:
 }
 ```
 
-And include:
+And build the final prompt with:
 
 ```swift
+\(outputLanguageInstruction)
+
 \(targetLanguageInstruction.isEmpty ? "" : targetLanguageInstruction + "\n\n")
 ```
 
-before the structure description.
+before the structure description block, so `翻译成英文` does not inherit the old fixed wording `用简洁中文输出`.
 
 - [ ] **Step 3: 调整 analyze 调用链**
 
@@ -490,16 +487,16 @@ No new UI container is needed. Confirm `configureForResult(_:)` already supports
 let sectionViews = [summarySectionView, causesSectionView, nextStepsSectionView]
 ```
 
-It should render the first section and hide the rest.
-
-If hidden sections still leave stale content visible, explicitly reset them:
+It should render the first section and hide the rest. For every unused section view, always reset it before hiding:
 
 ```swift
 sectionView.setTitle("")
 sectionView.setContent("")
+sectionView.isHidden = true
+sectionView.frame = .zero
 ```
 
-before setting `frame = .zero`.
+Expected: when the previous result had 3 sections and the next result has only 1 `译文`, the old `可能原因` / `建议下一步` content never remains visible or copyable.
 
 - [ ] **Step 2: 让翻译方向按钮文案正确映射**
 
