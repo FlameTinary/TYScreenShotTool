@@ -9,6 +9,8 @@ import AppKit
 
 @MainActor
 final class AIAnalysisPreviewWindowService {
+    private static let defaultSecondaryCopyButtonTitle = "复制建议"
+
     private let panel = NSPanel(
         contentRect: .zero,
         styleMask: [.borderless, .nonactivatingPanel],
@@ -25,12 +27,16 @@ final class AIAnalysisPreviewWindowService {
     private let nextStepsSectionView = SectionView(title: "建议下一步")
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let copyAllButton = NSButton(title: "复制全部", target: nil, action: nil)
-    private let copyNextStepsButton = NSButton(title: "复制建议", target: nil, action: nil)
+    private let copyNextStepsButton = NSButton(
+        title: AIAnalysisPreviewWindowService.defaultSecondaryCopyButtonTitle,
+        target: nil,
+        action: nil
+    )
     private let retryButton = NSButton(title: "重试", target: nil, action: nil)
     private let closeButton = NSButton(title: "关闭", target: nil, action: nil)
 
     private var onCopyAll: (() -> Void)?
-    private var onCopyNextSteps: (() -> Void)?
+    private var onCopySecondary: (() -> Void)?
     private var onRetry: (() -> Void)?
     private var onClose: (() -> Void)?
 
@@ -102,13 +108,14 @@ final class AIAnalysisPreviewWindowService {
         onClose: @escaping () -> Void
     ) {
         statusLabel.stringValue = message
+        copyNextStepsButton.title = Self.defaultSecondaryCopyButtonTitle
         messageLabel.stringValue = ""
         configureForLoadingOrError(messageVisible: false)
         copyAllButton.isEnabled = false
         copyNextStepsButton.isEnabled = false
         retryButton.isEnabled = false
         onCopyAll = nil
-        onCopyNextSteps = nil
+        onCopySecondary = nil
         onRetry = nil
         self.onClose = onClose
         presentPanel(
@@ -133,7 +140,7 @@ final class AIAnalysisPreviewWindowService {
         copyNextStepsButton.isEnabled = true
         retryButton.isEnabled = true
         self.onCopyAll = onCopyAll
-        self.onCopyNextSteps = onCopySecondary
+        self.onCopySecondary = onCopySecondary
         self.onRetry = onRetry
         self.onClose = onClose
         presentPanel(
@@ -151,13 +158,14 @@ final class AIAnalysisPreviewWindowService {
         onClose: @escaping () -> Void
     ) {
         statusLabel.stringValue = title
+        copyNextStepsButton.title = Self.defaultSecondaryCopyButtonTitle
         messageLabel.stringValue = message
         configureForLoadingOrError(messageVisible: true)
         copyAllButton.isEnabled = false
         copyNextStepsButton.isEnabled = false
         retryButton.isEnabled = true
         onCopyAll = nil
-        onCopyNextSteps = nil
+        onCopySecondary = nil
         self.onRetry = onRetry
         self.onClose = onClose
         presentPanel(
@@ -169,7 +177,7 @@ final class AIAnalysisPreviewWindowService {
     func dismiss() {
         panel.orderOut(nil)
         onCopyAll = nil
-        onCopyNextSteps = nil
+        onCopySecondary = nil
         onRetry = nil
         onClose = nil
         copyAllButton.isEnabled = true
@@ -182,7 +190,7 @@ final class AIAnalysisPreviewWindowService {
     }
 
     @objc private func copyNextStepsRequested() {
-        onCopyNextSteps?()
+        onCopySecondary?()
     }
 
     @objc private func retryRequested() {
@@ -201,6 +209,17 @@ final class AIAnalysisPreviewWindowService {
     }
 
     private func configureForResult(_ result: AIAnalysisResult) {
+        assert(
+            result.sections.count <= 3,
+            "AIAnalysisPreviewWindowService supports up to 3 sections, got \(result.sections.count)"
+        )
+        if result.sections.count > 3 {
+            NSLog(
+                "AIAnalysisPreviewWindowService only renders the first 3 sections, received %ld",
+                result.sections.count
+            )
+        }
+
         let sectionViews = [summarySectionView, causesSectionView, nextStepsSectionView]
 
         for (index, sectionView) in sectionViews.enumerated() {
