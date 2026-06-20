@@ -48,9 +48,13 @@ final class CaptureSessionService {
     private var isInScrollingCaptureMode = false
     private var scrollingCaptureFrames: [CGImage] = []
     private var scrollingCaptureResultImage: CGImage?
+    private var scrollingCaptureResultRevision = 0
     private var isAppendingScrollingFrame = false
     private var scrollingEventMonitor: Any?
     private var scrollingAppendTask: Task<Void, Never>?
+    private var scrollingOCRRequestID = 0
+    private var scrollingOCRInFlightRevision: Int?
+    private var scrollingOCRTask: Task<Void, Never>?
     private var isAIAnalysisInProgress = false
 
     init(
@@ -383,8 +387,10 @@ final class CaptureSessionService {
 
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.dismiss()
+        invalidateScrollingOCRRequest()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
+        scrollingCaptureResultRevision = 0
         isAppendingScrollingFrame = false
         isInScrollingCaptureMode = true
         overlayService.enterLongCaptureGuideMode()
@@ -415,6 +421,8 @@ final class CaptureSessionService {
             return
         }
 
+        invalidateScrollingOCRRequest()
+
         do {
             try clipboardService.copyImage(image)
             print("Scrolling Capture Copy Success")
@@ -429,6 +437,8 @@ final class CaptureSessionService {
         guard isInScrollingCaptureMode, let image = scrollingCaptureResultImage else {
             return
         }
+
+        invalidateScrollingOCRRequest()
 
         Task { @MainActor [weak self] in
             guard let self else {
@@ -466,14 +476,32 @@ final class CaptureSessionService {
             return
         }
 
-        aiAnalysisPreviewWindowService.dismiss()
+        let resultRevision = scrollingCaptureResultRevision
+        guard scrollingOCRInFlightRevision != resultRevision else {
+            return
+        }
 
-        Task {
+        aiAnalysisPreviewWindowService.dismiss()
+        let requestID = beginScrollingOCRRequest(for: resultRevision)
+        let preferredSide = preferredResultSideForScrollingPreview()
+
+        scrollingOCRTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+
             do {
-                let text = try ocrService.recognizeText(in: image)
-                let preferredSide = await MainActor.run { self.preferredResultSideForScrollingPreview() }
+                let text = try self.ocrService.recognizeText(in: image)
                 await MainActor.run {
-                    ocrPreviewWindowService.present(
+                    guard self.shouldAcceptScrollingOCRResult(
+                        requestID: requestID,
+                        resultRevision: resultRevision
+                    ) else {
+                        return
+                    }
+
+                    self.finishScrollingOCRRequest(requestID: requestID)
+                    self.ocrPreviewWindowService.present(
                         text: text,
                         selectionRect: selectionRect,
                         preferredSide: preferredSide,
@@ -487,7 +515,15 @@ final class CaptureSessionService {
                 }
             } catch {
                 await MainActor.run {
-                    toastService.showToast(message: "OCR 识别失败")
+                    guard self.shouldAcceptScrollingOCRResult(
+                        requestID: requestID,
+                        resultRevision: resultRevision
+                    ) else {
+                        return
+                    }
+
+                    self.finishScrollingOCRRequest(requestID: requestID)
+                    self.toastService.showToast(message: "OCR 识别失败")
                 }
             }
         }
@@ -565,10 +601,12 @@ final class CaptureSessionService {
         pendingScreenImages.removeAll()
         scrollingCaptureFrames.removeAll()
         scrollingCaptureResultImage = nil
+        scrollingCaptureResultRevision = 0
         isAppendingScrollingFrame = false
         removeScrollingEventMonitor()
         scrollingAppendTask?.cancel()
         scrollingAppendTask = nil
+        invalidateScrollingOCRRequest()
         isInScrollingCaptureMode = false
         isAIAnalysisInProgress = false
     }
@@ -808,6 +846,7 @@ final class CaptureSessionService {
     }
 
     private func cancelScrollingCapture() {
+        invalidateScrollingOCRRequest()
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
@@ -822,6 +861,7 @@ final class CaptureSessionService {
 
     @MainActor
     private func finishScrollingCaptureSession() {
+        invalidateScrollingOCRRequest()
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
@@ -836,6 +876,7 @@ final class CaptureSessionService {
     @MainActor
     private func failScrollingCapture(message: String, error: Error) {
         print("\(message): \(error.localizedDescription)")
+        invalidateScrollingOCRRequest()
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
@@ -861,6 +902,49 @@ final class CaptureSessionService {
 
     private func preferredResultSideForScrollingPreview() -> PreviewPlacementSide? {
         scrollingCapturePreviewWindowService.attachmentSide?.opposite
+    }
+
+    private func beginScrollingOCRRequest(for resultRevision: Int) -> Int {
+        scrollingOCRRequestID &+= 1
+        scrollingOCRTask?.cancel()
+        scrollingOCRTask = nil
+        scrollingOCRInFlightRevision = resultRevision
+        return scrollingOCRRequestID
+    }
+
+    private func shouldAcceptScrollingOCRResult(
+        requestID: Int,
+        resultRevision: Int
+    ) -> Bool {
+        guard isInScrollingCaptureMode else {
+            return false
+        }
+
+        guard scrollingOCRRequestID == requestID else {
+            return false
+        }
+
+        guard scrollingCaptureResultRevision == resultRevision else {
+            return false
+        }
+
+        return scrollingCaptureResultImage != nil
+    }
+
+    private func finishScrollingOCRRequest(requestID: Int) {
+        guard scrollingOCRRequestID == requestID else {
+            return
+        }
+
+        scrollingOCRTask = nil
+        scrollingOCRInFlightRevision = nil
+    }
+
+    private func invalidateScrollingOCRRequest() {
+        scrollingOCRRequestID &+= 1
+        scrollingOCRTask?.cancel()
+        scrollingOCRTask = nil
+        scrollingOCRInFlightRevision = nil
     }
 
     private func captureInitialScrollingFrame(for selectionRect: CGRect) {
@@ -958,7 +1042,10 @@ final class CaptureSessionService {
 
     private func rebuildScrollingCaptureResult(for selectionRect: CGRect) throws {
         let image = try scrollingCaptureService.buildCurrentPreviewImage(from: scrollingCaptureFrames)
+        invalidateScrollingOCRRequest()
         scrollingCaptureResultImage = image
+        scrollingCaptureResultRevision &+= 1
+        ocrPreviewWindowService.dismiss()
         scrollingCapturePreviewWindowService.presentOrUpdatePreview(image: image, selectionRect: selectionRect)
     }
 
