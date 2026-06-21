@@ -24,6 +24,8 @@ struct SettingsView: View {
     private var aiUseVisionTextExtraction = AppSettings.aiUseVisionTextExtractionDefaultValue
     @AppStorage(AppSettings.appLanguageKey)
     private var appLanguageStorageValue = AppSettings.appLanguageDefaultValue
+    @AppStorage(AppSettings.appAppearanceKey)
+    private var appAppearanceStorageValue = AppSettings.appAppearanceDefaultValue
     @State private var displayedHotKeyValue = ScreenshotHotKey.screenshot.displayName
     @State private var isRecordingHotKey = false
     @State private var pendingHotKey: ScreenshotHotKey?
@@ -45,6 +47,18 @@ struct SettingsView: View {
         )
     }
 
+    private var appAppearanceSelection: Binding<AppAppearance> {
+        Binding(
+            get: {
+                AppAppearance(rawValue: appAppearanceStorageValue) ?? .system
+            },
+            set: { newValue in
+                appAppearanceStorageValue = newValue.storageValue
+                AppThemeCoordinator.shared.applyCurrentAppearance()
+            }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(AppLocalization.text("settings.title"))
@@ -58,6 +72,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 hotKeyPicker
                 languageSettings
+                appearanceSettings
                 aiAnalysisSettings
                 saveDirectoryPicker
             }
@@ -150,6 +165,24 @@ struct SettingsView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var appearanceSettings: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(AppLocalization.text("settings.appearance.section"))
+                .font(.headline)
+
+            Picker(
+                AppLocalization.text("settings.appearance.label"),
+                selection: appAppearanceSelection
+            ) {
+                Text(AppLocalization.text("settings.appearance.option.system")).tag(AppAppearance.system)
+                Text(AppLocalization.text("settings.appearance.option.light")).tag(AppAppearance.light)
+                Text(AppLocalization.text("settings.appearance.option.dark")).tag(AppAppearance.dark)
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 240, alignment: .leading)
         }
     }
 

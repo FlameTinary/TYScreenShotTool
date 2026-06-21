@@ -25,6 +25,8 @@ struct TYScreenShotToolApp: App {
     private let toastService: ToastService
 
     init() {
+        AppThemeCoordinator.shared.applyCurrentAppearance()
+
         let overlayService = CaptureOverlayService()
         let screenCaptureService = ScreenCaptureService()
         let clipboardService = ClipboardService()
