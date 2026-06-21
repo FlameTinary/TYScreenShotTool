@@ -61,6 +61,9 @@ struct HotKeyRecorderField: NSViewRepresentable {
     }
 }
 
+/// 快捷键录制文本框
+///
+/// 处理键盘事件捕获和录制状态的 NSTextField。
 final class HotKeyRecorderTextField: NSTextField {
     weak var recorderDelegate: HotKeyRecorderField.Coordinator?
     private var outsideClickMonitor: Any?

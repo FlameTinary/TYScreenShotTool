@@ -7,6 +7,9 @@
 
 import AppKit
 
+/// AI 分析预览窗口服务
+///
+/// 显示 AI 分析结果的浮动面板。
 @MainActor
 final class AIAnalysisPreviewWindowService {
     private static let defaultSecondaryCopyButtonTitle = "复制建议"

@@ -7,6 +7,9 @@
 
 import AppKit
 
+/// 截图覆盖层视图
+///
+/// 处理截图选择、窗口高亮和预览交互的核心视图。
 final class CaptureOverlayView: NSView {
     private static let maximumCornerRadius: Double = 100
 

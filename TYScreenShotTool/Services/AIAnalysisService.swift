@@ -7,18 +7,28 @@
 
 import Foundation
 
+/// AI 分析结果分段
 struct AIAnalysisSection {
+    /// 分段标题
     let title: String
+    /// 分段内容
     let content: String
 }
 
+/// AI 分析结果
 struct AIAnalysisResult {
+    /// 分析模式
     let mode: AIAnalysisMode
+    /// 状态标题
     let statusTitle: String
+    /// 分析分段
     let sections: [AIAnalysisSection]
+    /// 原始文本
     let rawText: String
+    /// 备用复制文本
     let secondaryCopyText: String
 
+    /// 摘要内容（第一个分段）
     var summary: String {
         sections[safe: 0]?.content ?? ""
     }
@@ -39,6 +49,9 @@ struct AIAnalysisResult {
     }
 }
 
+/// AI 分析服务
+///
+/// 提供开发报错分析、内容摘要、翻译和界面结构识别功能。
 final class AIAnalysisService {
     private let session: URLSession
     private let userDefaults: UserDefaults
@@ -48,6 +61,13 @@ final class AIAnalysisService {
         userDefaults: UserDefaults = .standard
     ) {
         self.session = session
+    /// 分析文本内容
+    ///
+    /// - Parameters:
+    ///   - text: 输入文本
+    ///   - mode: 分析模式
+    /// - Returns: 分析结果
+    /// - Throws: 分析失败时抛出错误
         self.userDefaults = userDefaults
     }
 
@@ -74,6 +94,11 @@ final class AIAnalysisService {
         }
     }
 
+    /// 分析开发报错
+    ///
+    /// - Parameter text: 报错文本
+    /// - Returns: 分析结果
+    /// - Throws: 分析失败时抛出错误
     func analyzeDeveloperError(text: String) async throws -> AIAnalysisResult {
         try await analyze(text: text, mode: .developerError)
     }

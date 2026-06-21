@@ -10,6 +10,9 @@ import CoreGraphics
 import CoreImage
 import Foundation
 
+/// 截图会话服务
+///
+/// 协调整个截图流程，管理状态转换和各服务间的交互。
 final class CaptureSessionService {
     private enum PendingCaptureSource {
         case frozenScreenRect(CGRect)

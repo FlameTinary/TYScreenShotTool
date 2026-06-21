@@ -8,6 +8,9 @@
 import AppKit
 import CoreGraphics
 
+/// 长截图预览窗口服务
+///
+/// 在屏幕边缘显示长截图实时预览。
 @MainActor
 final class ScrollingCapturePreviewWindowService {
     private let panel = NSPanel(
@@ -107,6 +110,7 @@ final class ScrollingCapturePreviewWindowService {
         panel.orderFrontRegardless()
     }
 
+    /// 关闭预览窗口
     func dismissPreview() {
         panel.orderOut(nil)
         imageView.image = nil
