@@ -10,7 +10,7 @@
 
 ### 1. 分支合并使用 Rebase
 
-合并代码到目标分支时，必须使用 `git rebase`，禁止使用 `git merge`。
+合并代码到目标分支时，建议使用 `git rebase`，非必要不使用 `git merge`。
 
 推荐流程：
 
