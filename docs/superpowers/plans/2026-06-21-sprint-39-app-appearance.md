@@ -217,7 +217,119 @@ init() {
 
     let overlayService = CaptureOverlayService()
     let screenCaptureService = ScreenCaptureService()
-    // ... keep the remaining setup unchanged
+    let clipboardService = ClipboardService()
+    let imageSaveService = ImageSaveService()
+    let pinWindowService = PinWindowService()
+    let toastService = ToastService()
+    let scrollingCaptureService = ScrollingCaptureService()
+    let scrollingCapturePanelService = ScrollingCapturePanelService()
+    let scrollingCapturePreviewWindowService = ScrollingCapturePreviewWindowService()
+    let ocrPreviewWindowService = OCRPreviewWindowService()
+    let aiImageTextExtractionService = AIImageTextExtractionService()
+    let aiAnalysisService = AIAnalysisService()
+    let aiAnalysisPreviewWindowService = AIAnalysisPreviewWindowService()
+    let windowSelectionService = WindowSelectionService()
+    let hotKeyService = GlobalHotKeyService(
+        hotKey: Self.loadConfiguredHotKey(),
+        onHotKeyPressed: {}
+    )
+    let settingsOpenCoordinator = SettingsOpenCoordinator()
+    settingsOpenCoordinator.configure {
+        SettingsView(globalHotKeyService: hotKeyService)
+    }
+
+    let sessionService = CaptureSessionService(
+        overlayService: overlayService,
+        screenCaptureService: screenCaptureService,
+        clipboardService: clipboardService,
+        imageSaveService: imageSaveService,
+        ocrService: OCRService(),
+        aiImageTextExtractionService: aiImageTextExtractionService,
+        aiAnalysisService: aiAnalysisService,
+        pinWindowService: pinWindowService,
+        toastService: toastService,
+        settingsOpenCoordinator: settingsOpenCoordinator,
+        scrollingCaptureService: scrollingCaptureService,
+        scrollingCapturePanelService: scrollingCapturePanelService,
+        scrollingCapturePreviewWindowService: scrollingCapturePreviewWindowService,
+        ocrPreviewWindowService: ocrPreviewWindowService,
+        aiAnalysisPreviewWindowService: aiAnalysisPreviewWindowService
+    )
+
+    overlayService.onCancel = {
+        sessionService.cancelSession()
+    }
+    overlayService.onDragStarted = {
+        sessionService.beginDragging()
+    }
+    overlayService.onSelectionCompleted = { rect in
+        sessionService.completeSelection(rect)
+    }
+    overlayService.onWindowSelectionConfirmed = { candidate in
+        sessionService.confirmWindowSelection(candidate)
+    }
+    overlayService.windowCandidateProvider = { screenPoint in
+        windowSelectionService.candidateWindow(at: screenPoint)
+    }
+    overlayService.onPreviewSelectionChanged = { rect in
+        sessionService.updatePendingSelection(rect)
+    }
+    overlayService.onCopyRequested = { style, annotations in
+        sessionService.copyPendingCapture(style: style, annotations: annotations)
+    }
+    overlayService.onSaveRequested = { style, annotations in
+        sessionService.savePendingCapture(style: style, annotations: annotations)
+    }
+    overlayService.onOCRRequested = { style, annotations in
+        sessionService.ocrPendingCapture(style: style, annotations: annotations)
+    }
+    overlayService.onAIRequested = { mode, style, annotations in
+        sessionService.analyzePendingCapture(
+            mode: mode,
+            style: style,
+            annotations: annotations
+        )
+    }
+    overlayService.onPinRequested = { style, annotations in
+        sessionService.pinPendingCapture(style: style, annotations: annotations)
+    }
+    overlayService.onLongCaptureRequested = { annotations in
+        sessionService.startScrollingCapture(annotations: annotations)
+    }
+    scrollingCapturePanelService.onCancelRequested = {
+        sessionService.cancelSession()
+    }
+    scrollingCapturePanelService.onCopyRequested = {
+        sessionService.copyScrollingCaptureResult()
+    }
+    scrollingCapturePanelService.onOCRRequested = {
+        sessionService.ocrScrollingCaptureResult()
+    }
+    scrollingCapturePanelService.onAIRequested = { mode in
+        sessionService.analyzeScrollingCaptureResult(mode: mode)
+    }
+    scrollingCapturePanelService.onSaveRequested = {
+        sessionService.saveScrollingCaptureResult()
+    }
+
+    hotKeyService.onHotKeyPressed = {
+        let sourceApplication = NSWorkspace.shared.frontmostApplication
+        sessionService.setSourceApplication(sourceApplication)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        sessionService.startSession()
+    }
+
+    _ = hotKeyService.register()
+
+    self.captureOverlayService = overlayService
+    self.captureSessionService = sessionService
+    self.clipboardService = clipboardService
+    self.imageSaveService = imageSaveService
+    self.screenCaptureService = screenCaptureService
+    self.globalHotKeyService = hotKeyService
+    self.settingsOpenCoordinator = settingsOpenCoordinator
+    self.pinWindowService = pinWindowService
+    self.toastService = toastService
 }
 ```
 
@@ -345,10 +457,33 @@ Add lightweight refresh hooks in long-lived services:
 ```swift
 // AIAnalysisPreviewWindowService.swift
 init() {
-    // existing setup...
+    panel.backgroundColor = .clear
+    panel.isOpaque = false
+    panel.hasShadow = true
+    panel.isFloatingPanel = true
+    panel.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 2)
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    panel.hidesOnDeactivate = false
+
+    containerView.material = .hudWindow
+    containerView.blendingMode = .withinWindow
+    containerView.state = .active
+    containerView.wantsLayer = true
+    containerView.layer?.cornerRadius = 14
+    containerView.layer?.borderWidth = 1
+
+    titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+    statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
+    messageLabel.font = .systemFont(ofSize: 13)
+    messageLabel.maximumNumberOfLines = 0
+    messageLabel.lineBreakMode = .byWordWrapping
+    messageLabel.isHidden = true
+
     AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
         self?.applyAppearanceStyling()
     }
+
+    applyAppearanceStyling()
 }
 
 deinit {
@@ -357,18 +492,38 @@ deinit {
 
 // OCRPreviewWindowService.swift
 init() {
-    // existing setup...
+    panel.backgroundColor = .clear
+    panel.isOpaque = false
+    panel.hasShadow = true
+    panel.isFloatingPanel = true
+    panel.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 2)
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    panel.hidesOnDeactivate = false
+
+    containerView.material = .hudWindow
+    containerView.blendingMode = .withinWindow
+    containerView.state = .active
+    containerView.wantsLayer = true
+    containerView.layer?.cornerRadius = 14
+    containerView.layer?.borderWidth = 1
+
+    titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+    textView.isEditable = false
+    textView.isSelectable = true
+    textView.drawsBackground = false
+    textView.font = .systemFont(ofSize: 13)
+
     AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
         self?.applyAppearanceStyling()
     }
+
+    applyAppearanceStyling()
 }
 
 deinit {
     AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
 }
 
-// ScrollingCapturePreviewWindowService.swift / ToastService.swift use the same pattern
-//
 // CaptureOverlayService.swift
 func presentOverlay(screenImages: [CGDirectDisplayID: CGImage]) {
     guard overlayWindows.isEmpty else {
@@ -380,17 +535,95 @@ func presentOverlay(screenImages: [CGDirectDisplayID: CGImage]) {
         self?.activeOverlayView?.applyAppearanceStyling()
     }
 
-    // existing overlay creation logic...
+    for screen in NSScreen.screens {
+        let overlayView = CaptureOverlayView(frame: screen.frame)
+        if let displayID = try? displayID(for: screen) {
+            overlayView.selectionSourceScreenImage = screenImages[displayID]
+        }
+
+        overlayView.onCancel = { [weak self] in self?.onCancel?() }
+        overlayView.onDragStarted = { [weak self] in self?.onDragStarted?() }
+        overlayView.onSelection = { [weak self] rect in
+            guard let self, let window = overlayView.window else {
+                return
+            }
+            self.onSelectionCompleted?(window.convertToScreen(rect))
+        }
+        overlayView.windowCandidateProvider = { [weak self] localPoint in
+            guard let self, let window = overlayView.window else {
+                return nil
+            }
+            let screenPoint = window.convertToScreen(CGRect(origin: localPoint, size: .zero)).origin
+            guard let candidate = self.windowCandidateProvider?(screenPoint) else {
+                return nil
+            }
+            return WindowSelectionCandidate(
+                frame: window.convertFromScreen(candidate.frame),
+                ownerName: candidate.ownerName,
+                windowID: candidate.windowID
+            )
+        }
+        overlayView.onWindowSelectionConfirmed = { [weak self] candidate in
+            guard let self, let window = overlayView.window else {
+                return
+            }
+            self.onWindowSelectionConfirmed?(
+                WindowSelectionCandidate(
+                    frame: window.convertToScreen(candidate.frame),
+                    ownerName: candidate.ownerName,
+                    windowID: candidate.windowID
+                )
+            )
+        }
+        overlayView.onPreviewSelectionChanged = { [weak self] rect in
+            guard let self, let window = overlayView.window else {
+                return
+            }
+            self.onPreviewSelectionChanged?(window.convertToScreen(rect))
+        }
+        overlayView.onCopyRequested = { [weak self] in self?.onCopyRequested?($0, $1) }
+        overlayView.onSaveRequested = { [weak self] in self?.onSaveRequested?($0, $1) }
+        overlayView.onOCRRequested = { [weak self] in self?.onOCRRequested?($0, $1) }
+        overlayView.onAIRequested = { [weak self] mode, style, annotations in
+            self?.onAIRequested?(mode, style, annotations)
+        }
+        overlayView.onPinRequested = { [weak self] in self?.onPinRequested?($0, $1) }
+        overlayView.onLongCaptureRequested = { [weak self] annotations in
+            self?.onLongCaptureRequested?(annotations)
+        }
+
+        let window = CaptureOverlayWindow(screen: screen, contentView: overlayView)
+        overlayWindows.append(window)
+    }
+
+    overlayWindows.forEach { $0.showOverlay() }
 }
 
 func dismissOverlay() {
     AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
-    // existing cleanup...
+    overlayWindows.forEach { window in
+        window.setMousePassthrough(false)
+        window.orderOut(nil)
+    }
+    overlayWindows.removeAll()
+    activeOverlayView = nil
+    activeOverlayWindow = nil
 }
 
 // ScrollingCapturePanelService.swift
 func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
-    // existing setup...
+    let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 440, height: 56))
+    panelView.onCopyRequested = { [weak self] in self?.onCopyRequested?() }
+    panelView.onSaveRequested = { [weak self] in self?.onSaveRequested?() }
+    panelView.onCancelRequested = { [weak self] in self?.onCancelRequested?() }
+    panelView.onOCRRequested = makePanelActionHandler(for: onOCRRequested)
+    panelView.onAIRequested = makePanelActionHandler(for: onAIRequested)
+    panelView.configureForLiveCapture()
+
+    let panel = ScrollingCapturePanel(contentRect: panelView.bounds)
+    panel.contentView = panelView
+    panel.setFrame(originRect(for: panel.frame.size, selectionRect: selectionRect, on: screen), display: true)
+
     AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
         guard let self, let panel = self.panel, let panelView = self.panelView else {
             return
@@ -398,11 +631,20 @@ func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
         AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
         panelView.applyAppearanceStyling()
     }
+
+    AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+    panelView.applyAppearanceStyling()
+    panel.orderFrontRegardless()
+
+    self.panel = panel
+    self.panelView = panelView
 }
 
 func dismissPanel() {
     AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
-    // existing cleanup...
+    panel?.orderOut(nil)
+    panel = nil
+    panelView = nil
 }
 ```
 
@@ -526,7 +768,7 @@ private func applyAppearanceStyling() {
 
 Expected: toast 在已经显示时也能通过已持有的 `toastContentView` 与 `messageLabel` 立即刷新外观。
 
-- [ ] **Step 6: 运行构建验证窗口级切换链路通过**
+- [ ] **Step 7: 运行构建验证窗口级切换链路通过**
 
 Run:
 
@@ -634,22 +876,59 @@ Ensure these methods exist and are called both from `present/show` and theme ref
 
 ```swift
 // AIAnalysisPreviewWindowService.swift
-private func applyAppearanceStyling() { ... }
+private func applyAppearanceStyling() {
+    containerView.material = .popover
+    containerView.layer?.borderColor = NSColor.separatorColor.cgColor
+    titleLabel.textColor = .labelColor
+    statusLabel.textColor = .secondaryLabelColor
+    messageLabel.textColor = .labelColor
+    summarySectionView.applyAppearanceStyling()
+    causesSectionView.applyAppearanceStyling()
+    nextStepsSectionView.applyAppearanceStyling()
+}
 
 // OCRPreviewWindowService.swift
-private func applyAppearanceStyling() { ... }
+private func applyAppearanceStyling() {
+    containerView.material = .popover
+    containerView.layer?.borderColor = NSColor.separatorColor.cgColor
+    titleLabel.textColor = .labelColor
+    textView.textColor = .labelColor
+}
 
 // ScrollingCapturePreviewWindowService.swift
-private func applyAppearanceStyling() { ... }
+private func applyAppearanceStyling() {
+    containerView.material = .popover
+    containerView.layer?.borderColor = NSColor.separatorColor.cgColor
+}
 
 // ToastService.swift
-private func applyAppearanceStyling() { ... }
+private func applyAppearanceStyling() {
+    toastContentView?.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+    toastContentView?.layer?.borderWidth = 1
+    toastContentView?.layer?.borderColor = NSColor.separatorColor.cgColor
+    messageLabel?.textColor = .labelColor
+}
 
 // ScrollingCapturePanelView
-func applyAppearanceStyling() { ... }
+func applyAppearanceStyling() {
+    layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+    layer?.borderWidth = 1
+    layer?.borderColor = NSColor.separatorColor.cgColor
+}
 
 // CaptureOverlayView / CaptureAnnotationCanvasView
-func applyAppearanceStyling() { ... }
+func applyAppearanceStyling() {
+    topBarContainerView.material = .popover
+    toolbarContainerView.material = .popover
+    sizeLabel.textColor = .labelColor
+    cornerRadiusLabel.textColor = .labelColor
+    shadowToggle.contentTintColor = .controlAccentColor
+    annotationCanvasView.applyAppearanceStyling()
+}
+
+func applyAppearanceStyling() {
+    activeTextField?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.92)
+}
 ```
 
 Expected: 当前已经显示出来的内容层不会只切换窗口壳，而会同步刷新内部 layer、材质、文字色和控件 tint。
