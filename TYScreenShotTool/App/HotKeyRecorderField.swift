@@ -9,18 +9,29 @@ import AppKit
 import Carbon
 import SwiftUI
 
+/// 快捷键录制字段
+///
+/// SwiftUI 包装的 NSTextField，用于录制用户按下的快捷键组合。
 struct HotKeyRecorderField: NSViewRepresentable {
+    /// 显示的快捷键文本
     @Binding var displayedValue: String
+    /// 是否正在录制
     @Binding var isRecording: Bool
+    /// 开始录制时的回调
     var onBeginRecording: () -> Void
+    /// 快捷键候选变化时的回调
     var onCandidateChanged: (ScreenshotHotKey?) -> Void
+    /// 确认录制时的回调
     var onCommit: () -> Void
+    /// 取消录制时的回调
     var onCancel: () -> Void
 
+    /// 创建协调器
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
 
+    /// 创建 NSTextField 视图
     func makeNSView(context: Context) -> HotKeyRecorderTextField {
         let textField = HotKeyRecorderTextField(frame: .zero)
         textField.isEditable = false
@@ -34,6 +45,7 @@ struct HotKeyRecorderField: NSViewRepresentable {
         return textField
     }
 
+    /// 更新 NSTextField 视图状态
     func updateNSView(_ nsView: HotKeyRecorderTextField, context _: Context) {
         if nsView.stringValue != displayedValue {
             nsView.stringValue = displayedValue

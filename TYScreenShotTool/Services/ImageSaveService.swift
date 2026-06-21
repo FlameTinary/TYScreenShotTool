@@ -10,11 +10,19 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+/// 图像保存服务
+///
+/// 提供将截图保存到文件系统的功能，支持临时文件保存和移动到用户配置的目录。
 final class ImageSaveService {
     private let fileManager: FileManager
     private let userDefaults: UserDefaults
     private let dateFormatter: DateFormatter
 
+    /// 初始化图像保存服务
+    ///
+    /// - Parameters:
+    ///   - fileManager: 文件管理器实例
+    ///   - userDefaults: 用户偏好设置存储
     init(
         fileManager: FileManager = .default,
         userDefaults: UserDefaults = .standard
@@ -29,12 +37,30 @@ final class ImageSaveService {
         self.dateFormatter = formatter
     }
 
+    /// 将图像保存为临时 PNG 文件
+    ///
+    /// 在系统临时目录创建 PNG 文件，文件名包含时间戳。
+    ///
+    /// - Parameter image: 要保存的 CGImage
+    /// - Returns: 临时文件的 URL
+    /// - Throws: `ImageSaveError.destinationCreationFailed` 如果无法创建文件目标
+    /// - Throws: `ImageSaveError.finalizeFailed` 如果无法完成文件写入
+    /// - Throws: `ImageSaveError.fileWriteFailed` 如果文件写入失败
     func saveTemporaryPNG(_ image: CGImage) throws -> URL {
         let temporaryURL = temporaryDirectoryURL().appendingPathComponent(fileName(for: Date()))
         try writePNG(image, to: temporaryURL)
         return temporaryURL
     }
 
+    /// 将临时文件移动到用户配置的保存目录
+    ///
+    /// 使用安全作用域资源访问用户选择的目录，验证目录有效性后移动文件。
+    ///
+    /// - Parameter temporaryURL: 临时文件的 URL
+    /// - Returns: 最终保存位置的 URL
+    /// - Throws: `ImageSaveError.saveDirectoryNotConfigured` 如果未配置保存目录
+    /// - Throws: `ImageSaveError.directoryBookmarkStale` 如果目录授权已过期
+    /// - Throws: `ImageSaveError.configuredDirectoryNotFound` 如果配置的目录不存在
     func moveImageToConfiguredDirectory(from temporaryURL: URL) throws -> URL {
         let destinationDirectoryURL = try configuredDirectoryURL()
         guard destinationDirectoryURL.startAccessingSecurityScopedResource() else {
@@ -68,6 +94,12 @@ final class ImageSaveService {
         return destinationURL
     }
 
+    /// 删除指定位置的图像文件
+    ///
+    /// 如果文件不存在则不执行任何操作。
+    ///
+    /// - Parameter url: 要删除的文件 URL
+    /// - Throws: `ImageSaveError.removeFailed` 如果删除操作失败
     func removeImage(at url: URL) throws {
         guard fileManager.fileExists(atPath: url.path) else {
             return
@@ -137,19 +169,34 @@ final class ImageSaveService {
     }
 }
 
+/// 图像保存错误类型
+///
+/// 定义图像保存过程中可能发生的各种错误情况。
 enum ImageSaveError: LocalizedError {
+    /// 未配置保存目录
     case saveDirectoryNotConfigured
+    /// 目录书签解析失败
     case directoryBookmarkResolutionFailed
+    /// 目录书签已过期
     case directoryBookmarkStale
+    /// 无法访问目录
     case directoryAccessFailed(URL)
+    /// 配置的目录不存在
     case configuredDirectoryNotFound(URL)
+    /// 配置的路径不是目录
     case configuredPathIsNotDirectory(URL)
+    /// 无法创建 PNG 文件目标
     case destinationCreationFailed(URL)
+    /// 无法完成 PNG 文件写入
     case finalizeFailed(URL)
+    /// 文件写入失败
     case fileWriteFailed(URL)
+    /// 无法移动文件到配置目录
     case moveToConfiguredDirectoryFailed(URL)
+    /// 无法删除文件
     case removeFailed(URL)
 
+    /// 错误的本地化描述
     var errorDescription: String? {
         switch self {
         case .saveDirectoryNotConfigured:

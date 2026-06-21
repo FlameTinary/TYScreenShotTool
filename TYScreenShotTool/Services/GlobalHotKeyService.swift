@@ -8,12 +8,22 @@
 import Carbon
 import Foundation
 
+/// 全局快捷键服务
+///
+/// 使用 Carbon API 注册和管理全局快捷键，支持动态更新快捷键配置。
 final class GlobalHotKeyService {
+    /// 当前注册的快捷键
     private var hotKey: ScreenshotHotKey
+    /// 快捷键按下时的回调
     var onHotKeyPressed: () -> Void
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
 
+    /// 初始化全局快捷键服务
+    ///
+    /// - Parameters:
+    ///   - hotKey: 要注册的快捷键配置
+    ///   - onHotKeyPressed: 快捷键按下时的回调
     init(hotKey: ScreenshotHotKey, onHotKeyPressed: @escaping () -> Void) {
         self.hotKey = hotKey
         self.onHotKeyPressed = onHotKeyPressed
@@ -29,6 +39,11 @@ final class GlobalHotKeyService {
         }
     }
 
+    /// 注册快捷键
+    ///
+    /// 安装事件处理器并注册当前快捷键。如果已注册则跳过。
+    ///
+    /// - Returns: 注册是否成功
     @discardableResult
     func register() -> Bool {
         guard installEventHandlerIfNeeded() else {
@@ -38,6 +53,12 @@ final class GlobalHotKeyService {
         return registerCurrentHotKey()
     }
 
+    /// 更新快捷键配置
+    ///
+    /// 注销旧快捷键并注册新快捷键。如果注册失败则恢复原配置。
+    ///
+    /// - Parameter newHotKey: 新的快捷键配置
+    /// - Returns: 更新是否成功
     @discardableResult
     func updateHotKey(_ newHotKey: ScreenshotHotKey) -> Bool {
         guard newHotKey != hotKey else {

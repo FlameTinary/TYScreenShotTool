@@ -8,6 +8,10 @@
 import SwiftUI
 import AppKit
 
+/// 截图工具应用入口
+///
+/// 菜单栏应用，提供全局快捷键截图功能。
+/// 初始化所有服务组件并配置回调链。
 @main
 struct TYScreenShotToolApp: App {
     private let captureOverlayService: CaptureOverlayService
@@ -137,6 +141,9 @@ struct TYScreenShotToolApp: App {
         self.toastService = toastService
     }
 
+    /// 应用主体
+    ///
+    /// 显示菜单栏图标和菜单内容。
     var body: some Scene {
         MenuBarExtra {
             MenuBarContentView(settingsOpenCoordinator: settingsOpenCoordinator)
@@ -148,6 +155,11 @@ struct TYScreenShotToolApp: App {
         .menuBarExtraStyle(.menu)
     }
 
+    /// 加载用户配置的快捷键
+    ///
+    /// 从 UserDefaults 读取快捷键配置，如果未配置则使用默认值。
+    ///
+    /// - Returns: 用户配置或默认的快捷键
     private static func loadConfiguredHotKey() -> ScreenshotHotKey {
         let storageValue = UserDefaults.standard.string(forKey: AppSettings.screenshotHotKeyKey)
             ?? AppSettings.screenshotHotKeyDefaultValue
