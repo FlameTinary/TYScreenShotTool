@@ -274,7 +274,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.isBordered = false
         textField.focusRingType = .none
         textField.drawsBackground = true
-        textField.placeholderString = "输入文字"
+        textField.placeholderString = AppText.captureTextInputPlaceholder
         textField.alignment = .left
         textField.target = self
         textField.action = #selector(commitTextInput)

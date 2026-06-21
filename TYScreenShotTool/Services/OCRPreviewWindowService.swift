@@ -19,11 +19,11 @@ final class OCRPreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private let titleLabel = NSTextField(labelWithString: "OCR Result")
+    private let titleLabel = NSTextField(labelWithString: "")
     private let scrollView = NSScrollView()
     private let textView = NSTextView()
-    private let copyButton = NSButton(title: "复制", target: nil, action: nil)
-    private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
+    private let copyButton = NSButton(title: "", target: nil, action: nil)
+    private let cancelButton = NSButton(title: "", target: nil, action: nil)
     private var onCopy: (() -> Void)?
     private var onCancel: (() -> Void)?
 
@@ -68,6 +68,7 @@ final class OCRPreviewWindowService {
         cancelButton.target = self
         cancelButton.action = #selector(cancelRequested)
         cancelButton.bezelStyle = .rounded
+        applyLocalizedStrings()
 
         scrollView.documentView = textView
         panel.contentView = containerView
@@ -98,11 +99,12 @@ final class OCRPreviewWindowService {
         }
 
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayText = normalizedText.isEmpty ? "未识别到文字" : text
+        let displayText = normalizedText.isEmpty ? AppText.ocrEmpty : text
         self.onCopy = onCopy
         self.onCancel = onCancel
         textView.string = displayText
         copyButton.isEnabled = normalizedText.isEmpty == false
+        applyLocalizedStrings()
 
         let panelFrame = frame(
             for: selectionRect,
@@ -128,6 +130,12 @@ final class OCRPreviewWindowService {
 
     @objc private func cancelRequested() {
         onCancel?()
+    }
+
+    private func applyLocalizedStrings() {
+        titleLabel.stringValue = AppText.ocrWindowTitle
+        copyButton.title = AppText.captureCopy
+        cancelButton.title = AppText.captureCancel
     }
 
     private func layoutContent(in size: CGSize) {

@@ -65,19 +65,19 @@ final class CaptureOverlayView: NSView {
     private let annotationCanvasView = CaptureAnnotationCanvasView()
     private let topBarContainerView = NSVisualEffectView()
     private let sizeLabel = NSTextField(labelWithString: "")
-    private let cornerRadiusLabel = NSTextField(labelWithString: "圆角")
+    private let cornerRadiusLabel = NSTextField(labelWithString: "")
     private let cornerRadiusSlider = NSSlider(value: 0, minValue: 0, maxValue: maximumCornerRadius, target: nil, action: nil)
-    private let shadowToggle = NSButton(checkboxWithTitle: "阴影", target: nil, action: nil)
+    private let shadowToggle = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let toolbarContainerView = NSVisualEffectView()
     private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
-    private let undoButton = NSButton(title: "撤销", target: nil, action: nil)
-    private let longCaptureButton = NSButton(title: "长截图", target: nil, action: nil)
+    private let undoButton = NSButton(title: "", target: nil, action: nil)
+    private let longCaptureButton = NSButton(title: "", target: nil, action: nil)
     private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
     private let aiButton = NSButton(title: "AI", target: nil, action: nil)
-    private let pinButton = NSButton(title: "Pin", target: nil, action: nil)
-    private let copyButton = NSButton(title: "复制", target: nil, action: nil)
-    private let saveButton = NSButton(title: "保存", target: nil, action: nil)
-    private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
+    private let pinButton = NSButton(title: "", target: nil, action: nil)
+    private let copyButton = NSButton(title: "", target: nil, action: nil)
+    private let saveButton = NSButton(title: "", target: nil, action: nil)
+    private let cancelButton = NSButton(title: "", target: nil, action: nil)
     private var currentAnnotationTool: AnnotationTool?
 
     override init(frame frameRect: NSRect) {
@@ -326,6 +326,7 @@ final class CaptureOverlayView: NSView {
         aiButton.isEnabled = true
 
         updateAnnotationSourceImage()
+        applyLocalizedStrings()
         updatePreviewAppearance()
         needsLayout = true
         needsDisplay = true
@@ -820,6 +821,7 @@ final class CaptureOverlayView: NSView {
         shadowToggle.target = self
         shadowToggle.action = #selector(toggleShadow)
         shadowToggle.contentTintColor = .white
+        applyLocalizedStrings()
         topBarContainerView.addSubview(sizeLabel)
         topBarContainerView.addSubview(cornerRadiusLabel)
         topBarContainerView.addSubview(cornerRadiusSlider)
@@ -853,7 +855,7 @@ final class CaptureOverlayView: NSView {
 
         let annotationButtons = AnnotationTool.allCases.map { tool -> NSButton in
             let button = NSButton(title: tool.title, target: self, action: #selector(selectAnnotationTool(_:)))
-            button.identifier = NSUserInterfaceItemIdentifier(tool.title)
+            button.identifier = NSUserInterfaceItemIdentifier(tool.rawIdentifier)
             annotationToolButtons[tool] = button
             return button
         }
@@ -871,6 +873,21 @@ final class CaptureOverlayView: NSView {
         toolbarContainerView.addSubview(saveButton)
         toolbarContainerView.addSubview(cancelButton)
         addSubview(toolbarContainerView)
+    }
+
+    private func applyLocalizedStrings() {
+        cornerRadiusLabel.stringValue = AppText.captureCornerRadius
+        shadowToggle.title = AppText.captureShadow
+        undoButton.title = AppText.captureUndo
+        longCaptureButton.title = AppText.captureLongCapture
+        pinButton.title = AppText.capturePin
+        copyButton.title = AppText.captureCopy
+        saveButton.title = AppText.captureSave
+        cancelButton.title = AppText.captureCancel
+
+        for tool in AnnotationTool.allCases {
+            annotationToolButtons[tool]?.title = tool.title
+        }
     }
 
     private func layoutPreviewInterface() {
@@ -1057,7 +1074,11 @@ final class CaptureOverlayView: NSView {
             menu.addItem(item)
         }
 
-        let translationItem = NSMenuItem(title: "翻译语言", action: nil, keyEquivalent: "")
+        let translationItem = NSMenuItem(
+            title: AppText.aiTranslationMenu,
+            action: nil,
+            keyEquivalent: ""
+        )
         let translationMenu = NSMenu()
 
         for language in AITranslationLanguage.allCases {

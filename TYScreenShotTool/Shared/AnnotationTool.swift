@@ -27,20 +27,37 @@ enum AnnotationTool: CaseIterable, Equatable {
     /// 工具的中文标题
     ///
     /// 用于工具栏按钮显示。
+    var rawIdentifier: String {
+        switch self {
+        case .rectangle:
+            return "rectangle"
+        case .ellipse:
+            return "ellipse"
+        case .arrow:
+            return "arrow"
+        case .pen:
+            return "pen"
+        case .mosaic:
+            return "mosaic"
+        case .text:
+            return "text"
+        }
+    }
+
     var title: String {
         switch self {
         case .rectangle:
-            return "矩形"
+            return AppText.annotationRectangle
         case .ellipse:
-            return "圆形"
+            return AppText.annotationEllipse
         case .arrow:
-            return "箭头"
+            return AppText.annotationArrow
         case .pen:
-            return "画笔"
+            return AppText.annotationPen
         case .mosaic:
-            return "马赛克"
+            return AppText.annotationMosaic
         case .text:
-            return "文字"
+            return AppText.annotationText
         }
     }
 }

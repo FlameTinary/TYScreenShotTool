@@ -27,7 +27,9 @@ final class OCRService {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
-        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        request.recognitionLanguages = AppLocalization.currentLanguage(
+            userDefaults: .standard
+        ).ocrRecognitionLanguages
 
         if #available(macOS 13.0, *) {
             request.automaticallyDetectsLanguage = true
@@ -73,11 +75,11 @@ enum OCRError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .requestFailed(reason):
-            return "Failed to perform OCR request: \(reason)"
+            return AppText.ocrErrorRequestFailedPrefix + ": \(reason)"
         case .noTextRecognized:
-            return "No text recognized from screenshot."
+            return AppText.ocrErrorNoText
         case .emptyText:
-            return "Recognized text is empty."
+            return AppText.ocrErrorEmptyText
         }
     }
 }
