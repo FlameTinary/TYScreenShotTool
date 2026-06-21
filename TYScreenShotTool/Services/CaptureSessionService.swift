@@ -1613,10 +1613,27 @@ final class CaptureSessionService {
 
         for annotation in annotations {
             switch annotation {
-            case let .rectangle(rect):
-                context.setStrokeColor(CaptureAnnotation.strokeColor)
-                context.setLineWidth(CaptureAnnotation.lineWidth)
-                context.stroke(rect.standardized)
+            case let .rectangle(rect, props):
+                let standardizedRect = rect.standardized
+                let color = props.color.toNSColor().withAlphaComponent(props.opacity).cgColor
+
+                if props.cornerRadius > 0 {
+                    let path = CGPath(roundedRect: standardizedRect,
+                                      cornerWidth: props.cornerRadius,
+                                      cornerHeight: props.cornerRadius, transform: nil)
+                    context.addPath(path)
+                } else {
+                    context.addRect(standardizedRect)
+                }
+
+                if props.isFilled {
+                    context.setFillColor(color)
+                    context.fillPath()
+                } else {
+                    context.setStrokeColor(color)
+                    context.setLineWidth(props.lineWidth)
+                    context.strokePath()
+                }
             case let .ellipse(rect):
                 context.setStrokeColor(CaptureAnnotation.strokeColor)
                 context.setLineWidth(CaptureAnnotation.lineWidth)
