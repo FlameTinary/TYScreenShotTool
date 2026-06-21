@@ -14,8 +14,22 @@ import Foundation
 @MainActor
 final class ToastService {
     private var toastWindow: NSWindow?
+    private var toastContentView: NSView?
     private var messageLabel: NSTextField?
     private var dismissTask: Task<Void, Never>?
+
+    init() {
+        AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+            self?.applyAppearanceStyling()
+        }
+    }
+
+    deinit {
+        let ownerID = ObjectIdentifier(self)
+        Task { @MainActor in
+            AppThemeCoordinator.shared.unregisterRefreshHandler(for: ownerID)
+        }
+    }
 
     func showToast(message: String) {
         let label = resolvedMessageLabel()
@@ -30,6 +44,8 @@ final class ToastService {
         )
 
         let window = resolvedWindow(with: label)
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
+        applyAppearanceStyling()
         window.setContentSize(contentSize)
 
         if let screen = NSScreen.main?.visibleFrame {
@@ -62,15 +78,14 @@ final class ToastService {
     }
 
     private func resolvedWindow(with label: NSTextField) -> NSWindow {
-        if let toastWindow {
-            toastWindow.contentView?.subviews.forEach { $0.removeFromSuperview() }
-            toastWindow.contentView?.addSubview(label)
+        if let toastWindow, let toastContentView {
+            toastContentView.subviews.forEach { $0.removeFromSuperview() }
+            toastContentView.addSubview(label)
             return toastWindow
         }
 
         let contentView = NSView(frame: .zero)
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.82).cgColor
         contentView.layer?.cornerRadius = 12
         contentView.addSubview(label)
 
@@ -89,6 +104,7 @@ final class ToastService {
         window.contentView = contentView
 
         toastWindow = window
+        toastContentView = contentView
         return window
     }
 
@@ -99,9 +115,15 @@ final class ToastService {
 
         let label = NSTextField(labelWithString: "")
         label.font = .systemFont(ofSize: 13, weight: .medium)
-        label.textColor = .white
         label.alignment = .center
         messageLabel = label
         return label
+    }
+
+    private func applyAppearanceStyling() {
+        toastContentView?.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+        toastContentView?.layer?.borderWidth = 1
+        toastContentView?.layer?.borderColor = NSColor.separatorColor.cgColor
+        messageLabel?.textColor = .labelColor
     }
 }

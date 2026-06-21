@@ -33,6 +33,7 @@ final class PinWindowService {
         imageView.image = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
 
         let window = resolvedWindow(with: imageView)
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
         let contentSize = fittedContentSize(for: image)
         window.setContentSize(contentSize)
         window.minSize = minimumWindowSize

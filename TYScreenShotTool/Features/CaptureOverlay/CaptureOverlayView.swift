@@ -85,6 +85,7 @@ final class CaptureOverlayView: NSView {
         configurePreviewViews()
         configureTopBar()
         configureToolbar()
+        applyAppearanceStyling()
         resetToSelectionMode()
     }
 
@@ -395,6 +396,15 @@ final class CaptureOverlayView: NSView {
 
     func setAIButtonEnabled(_ isEnabled: Bool) {
         aiButton.isEnabled = isEnabled
+    }
+
+    func applyAppearanceStyling() {
+        topBarContainerView.material = .popover
+        toolbarContainerView.material = .popover
+        sizeLabel.textColor = .labelColor
+        cornerRadiusLabel.textColor = .labelColor
+        shadowToggle.contentTintColor = .controlAccentColor
+        annotationCanvasView.applyAppearanceStyling()
     }
 
     private var selectionRect: CGRect? {
@@ -803,16 +813,14 @@ final class CaptureOverlayView: NSView {
     }
 
     private func configureTopBar() {
-        topBarContainerView.material = .hudWindow
+        topBarContainerView.material = .popover
         topBarContainerView.blendingMode = .withinWindow
         topBarContainerView.state = .active
         topBarContainerView.wantsLayer = true
         topBarContainerView.layer?.cornerRadius = 10
 
         sizeLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-        sizeLabel.textColor = .white
         cornerRadiusLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        cornerRadiusLabel.textColor = .white
 
         cornerRadiusSlider.target = self
         cornerRadiusSlider.action = #selector(adjustCornerRadius)
@@ -820,7 +828,6 @@ final class CaptureOverlayView: NSView {
 
         shadowToggle.target = self
         shadowToggle.action = #selector(toggleShadow)
-        shadowToggle.contentTintColor = .white
         applyLocalizedStrings()
         topBarContainerView.addSubview(sizeLabel)
         topBarContainerView.addSubview(cornerRadiusLabel)
@@ -830,7 +837,7 @@ final class CaptureOverlayView: NSView {
     }
 
     private func configureToolbar() {
-        toolbarContainerView.material = .hudWindow
+        toolbarContainerView.material = .popover
         toolbarContainerView.blendingMode = .withinWindow
         toolbarContainerView.state = .active
         toolbarContainerView.wantsLayer = true

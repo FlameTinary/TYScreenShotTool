@@ -36,9 +36,10 @@ final class AppThemeCoordinator {
         userDefaults: UserDefaults = .standard
     ) {
         let appearance = resolvedAppearance(userDefaults: userDefaults)
-        NSApp.appearance = appearance
+        let application = NSApplication.shared
+        application.appearance = appearance
 
-        for window in NSApp.windows {
+        for window in application.windows {
             applyCurrentAppearance(to: window, userDefaults: userDefaults)
         }
 
@@ -67,5 +68,11 @@ final class AppThemeCoordinator {
         for owner: AnyObject
     ) {
         refreshHandlers.removeValue(forKey: ObjectIdentifier(owner))
+    }
+
+    func unregisterRefreshHandler(
+        for ownerID: ObjectIdentifier
+    ) {
+        refreshHandlers.removeValue(forKey: ownerID)
     }
 }

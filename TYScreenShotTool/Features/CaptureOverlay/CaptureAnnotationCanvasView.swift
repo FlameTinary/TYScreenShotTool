@@ -270,7 +270,6 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.delegate = self
         textField.font = .systemFont(ofSize: CaptureAnnotation.fontSize, weight: .semibold)
         textField.textColor = NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed
-        textField.backgroundColor = NSColor.black.withAlphaComponent(0.18)
         textField.isBordered = false
         textField.focusRingType = .none
         textField.drawsBackground = true
@@ -278,6 +277,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.alignment = .left
         textField.target = self
         textField.action = #selector(commitTextInput)
+        style(textField: textField)
 
         addSubview(textField)
         activeTextField = textField
@@ -714,6 +714,16 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     @objc
     private func commitTextInput() {
         commitActiveTextIfNeeded()
+    }
+
+    func applyAppearanceStyling() {
+        if let activeTextField {
+            style(textField: activeTextField)
+        }
+    }
+
+    private func style(textField: NSTextField) {
+        textField.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.92)
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {

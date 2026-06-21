@@ -49,6 +49,7 @@ final class CaptureOverlayWindow: NSWindow {
     ///
     /// 将窗口置于最前，设置十字光标，并使其成为关键窗口。
     func showOverlay() {
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: self)
         orderFrontRegardless()
         makeKeyAndOrderFront(nil)
         if let contentView {

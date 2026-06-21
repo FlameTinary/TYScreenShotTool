@@ -36,16 +36,14 @@ final class OCRPreviewWindowService {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
 
-        containerView.material = .hudWindow
+        containerView.material = .popover
         containerView.blendingMode = .withinWindow
         containerView.state = .active
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 14
         containerView.layer?.borderWidth = 1
-        containerView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
 
         titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        titleLabel.textColor = .white
 
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -55,7 +53,6 @@ final class OCRPreviewWindowService {
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
-        textView.textColor = .white
         textView.font = .systemFont(ofSize: 13)
         textView.textContainerInset = CGSize(width: 8, height: 8)
         textView.textContainer?.lineFragmentPadding = 0
@@ -76,6 +73,18 @@ final class OCRPreviewWindowService {
         containerView.addSubview(scrollView)
         containerView.addSubview(copyButton)
         containerView.addSubview(cancelButton)
+
+        AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+            self?.applyAppearanceStyling()
+        }
+        applyAppearanceStyling()
+    }
+
+    deinit {
+        let ownerID = ObjectIdentifier(self)
+        Task { @MainActor in
+            AppThemeCoordinator.shared.unregisterRefreshHandler(for: ownerID)
+        }
     }
 
     /// 显示 OCR 结果
@@ -111,7 +120,9 @@ final class OCRPreviewWindowService {
             on: screen,
             preferredSide: preferredSide
         )
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
         panel.setFrame(panelFrame, display: true)
+        applyAppearanceStyling()
         layoutContent(in: panelFrame.size)
         panel.orderFrontRegardless()
     }
@@ -136,6 +147,13 @@ final class OCRPreviewWindowService {
         titleLabel.stringValue = AppText.ocrWindowTitle
         copyButton.title = AppText.captureCopy
         cancelButton.title = AppText.captureCancel
+    }
+
+    private func applyAppearanceStyling() {
+        containerView.material = .popover
+        containerView.layer?.borderColor = NSColor.separatorColor.cgColor
+        titleLabel.textColor = .labelColor
+        textView.textColor = .labelColor
     }
 
     private func layoutContent(in size: CGSize) {

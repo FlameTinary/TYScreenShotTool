@@ -11,6 +11,7 @@ import CoreGraphics
 /// 截图覆盖层服务
 ///
 /// 管理截图时的全屏覆盖层窗口，处理用户选区交互和回调。
+@MainActor
 final class CaptureOverlayService {
     /// 取消截图时的回调
     var onCancel: (() -> Void)?
@@ -49,6 +50,17 @@ final class CaptureOverlayService {
     func presentOverlay(screenImages: [CGDirectDisplayID: CGImage]) {
         guard overlayWindows.isEmpty else {
             return
+        }
+
+        AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+            guard let self else {
+                return
+            }
+
+            for window in self.overlayWindows {
+                AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
+                (window.contentView as? CaptureOverlayView)?.applyAppearanceStyling()
+            }
         }
 
         for screen in NSScreen.screens {
@@ -208,6 +220,7 @@ final class CaptureOverlayService {
     ///
     /// 清理所有覆盖层窗口和相关状态。
     func dismissOverlay() {
+        AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
         overlayWindows.forEach { window in
             window.setMousePassthrough(false)
             window.orderOut(nil)

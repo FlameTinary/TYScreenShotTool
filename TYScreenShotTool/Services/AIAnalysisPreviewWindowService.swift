@@ -46,19 +46,16 @@ final class AIAnalysisPreviewWindowService {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
 
-        containerView.material = .hudWindow
+        containerView.material = .popover
         containerView.blendingMode = .withinWindow
         containerView.state = .active
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 14
         containerView.layer?.borderWidth = 1
-        containerView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
 
         titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        titleLabel.textColor = .white
 
         statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        statusLabel.textColor = NSColor.white.withAlphaComponent(0.82)
 
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -67,7 +64,6 @@ final class AIAnalysisPreviewWindowService {
         documentContentView.wantsLayer = false
 
         messageLabel.font = .systemFont(ofSize: 13)
-        messageLabel.textColor = .white
         messageLabel.maximumNumberOfLines = 0
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.isHidden = true
@@ -97,6 +93,17 @@ final class AIAnalysisPreviewWindowService {
         documentContentView.addSubview(nextStepsSectionView)
         documentContentView.addSubview(messageLabel)
         applyLocalizedStrings()
+        AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+            self?.applyAppearanceStyling()
+        }
+        applyAppearanceStyling()
+    }
+
+    deinit {
+        let ownerID = ObjectIdentifier(self)
+        Task { @MainActor in
+            AppThemeCoordinator.shared.unregisterRefreshHandler(for: ownerID)
+        }
     }
 
     func presentLoading(
@@ -212,6 +219,17 @@ final class AIAnalysisPreviewWindowService {
         }
     }
 
+    private func applyAppearanceStyling() {
+        containerView.material = .popover
+        containerView.layer?.borderColor = NSColor.separatorColor.cgColor
+        titleLabel.textColor = .labelColor
+        statusLabel.textColor = .secondaryLabelColor
+        messageLabel.textColor = .labelColor
+        summarySectionView.applyAppearanceStyling()
+        causesSectionView.applyAppearanceStyling()
+        nextStepsSectionView.applyAppearanceStyling()
+    }
+
     private func configureForLoadingOrError(messageVisible: Bool) {
         summarySectionView.isHidden = true
         causesSectionView.isHidden = true
@@ -264,7 +282,9 @@ final class AIAnalysisPreviewWindowService {
             on: screen,
             preferredSide: preferredSide
         )
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
         panel.setFrame(panelFrame, display: true)
+        applyAppearanceStyling()
         layoutContent(in: panelFrame.size)
         panel.orderFrontRegardless()
     }
@@ -521,15 +541,14 @@ private final class SectionView: NSView {
         super.init(frame: .zero)
 
         titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        titleLabel.textColor = NSColor.white.withAlphaComponent(0.9)
 
         contentLabel.font = .systemFont(ofSize: 13)
-        contentLabel.textColor = .white
         contentLabel.maximumNumberOfLines = 0
         contentLabel.lineBreakMode = .byWordWrapping
 
         addSubview(titleLabel)
         addSubview(contentLabel)
+        applyAppearanceStyling()
     }
 
     @available(*, unavailable)
@@ -553,6 +572,11 @@ private final class SectionView: NSView {
             CGSize(width: width, height: .greatestFiniteMagnitude)
         ).height
         return titleHeight + 6 + contentHeight
+    }
+
+    func applyAppearanceStyling() {
+        titleLabel.textColor = .secondaryLabelColor
+        contentLabel.textColor = .labelColor
     }
 
     override func layout() {

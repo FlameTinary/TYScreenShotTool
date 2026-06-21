@@ -33,19 +33,30 @@ final class ScrollingCapturePreviewWindowService {
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
 
-        containerView.material = .hudWindow
+        containerView.material = .popover
         containerView.blendingMode = .withinWindow
         containerView.state = .active
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 14
         containerView.layer?.borderWidth = 1
-        containerView.layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.imageAlignment = .alignCenter
 
         panel.contentView = containerView
         containerView.addSubview(imageView)
+
+        AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+            self?.applyAppearanceStyling()
+        }
+        applyAppearanceStyling()
+    }
+
+    deinit {
+        let ownerID = ObjectIdentifier(self)
+        Task { @MainActor in
+            AppThemeCoordinator.shared.unregisterRefreshHandler(for: ownerID)
+        }
     }
 
     func presentOrUpdatePreview(image: CGImage, selectionRect: CGRect) {
@@ -107,6 +118,8 @@ final class ScrollingCapturePreviewWindowService {
         containerView.frame = CGRect(origin: .zero, size: previewSize)
         imageView.frame = containerView.bounds.insetBy(dx: 12, dy: 12)
         imageView.image = NSImage(cgImage: image, size: imageSize)
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        applyAppearanceStyling()
         panel.orderFrontRegardless()
     }
 
@@ -121,5 +134,10 @@ final class ScrollingCapturePreviewWindowService {
         NSScreen.screens.first { screen in
             screen.frame.contains(CGPoint(x: rect.midX, y: rect.midY))
         }
+    }
+
+    private func applyAppearanceStyling() {
+        containerView.material = .popover
+        containerView.layer?.borderColor = NSColor.separatorColor.cgColor
     }
 }

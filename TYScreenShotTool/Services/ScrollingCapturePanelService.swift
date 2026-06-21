@@ -8,6 +8,7 @@
 import AppKit
 import Foundation
 
+@MainActor
 final class ScrollingCapturePanelService {
     var onCopyRequested: (() -> Void)?
     var onSaveRequested: (() -> Void)?
@@ -49,6 +50,16 @@ final class ScrollingCapturePanelService {
         let panel = ScrollingCapturePanel(contentRect: panelView.bounds)
         panel.contentView = panelView
         panel.setFrame(originRect(for: panel.frame.size, selectionRect: selectionRect, on: screen), display: true)
+        AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+            guard let self, let panel = self.panel, let panelView = self.panelView else {
+                return
+            }
+
+            AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+            panelView.applyAppearanceStyling()
+        }
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        panelView.applyAppearanceStyling()
         panel.orderFrontRegardless()
 
         self.panel = panel
@@ -57,6 +68,7 @@ final class ScrollingCapturePanelService {
 
     /// 关闭面板
     func dismissPanel() {
+        AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
         panel?.orderOut(nil)
         panel = nil
         panelView = nil
@@ -154,13 +166,13 @@ private final class ScrollingCapturePanelView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 12
         [cancelButton, ocrButton, aiButton, saveButton, copyButton].forEach {
             $0.bezelStyle = .rounded
             addSubview($0)
         }
         applyLocalizedStrings()
+        applyAppearanceStyling()
 
         copyButton.target = self
         copyButton.action = #selector(copyAction)
@@ -199,7 +211,14 @@ private final class ScrollingCapturePanelView: NSView {
 
     func configureForLiveCapture() {
         applyLocalizedStrings()
+        applyAppearanceStyling()
         needsLayout = true
+    }
+
+    func applyAppearanceStyling() {
+        layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.separatorColor.cgColor
     }
 
     @objc
