@@ -2,7 +2,7 @@
 //  AIImageTextExtractionService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/20.
+//  Created by Ethan on 2026/6/20.
 //
 
 import CoreGraphics

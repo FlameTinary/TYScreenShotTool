@@ -2,7 +2,7 @@
 //  OCRService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/6.
+//  Created by Ethan on 2026/6/6.
 //
 
 import CoreGraphics

@@ -2,7 +2,7 @@
 //  ScreenCaptureService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/5.
+//  Created by Ethan on 2026/6/5.
 //
 
 import CoreGraphics

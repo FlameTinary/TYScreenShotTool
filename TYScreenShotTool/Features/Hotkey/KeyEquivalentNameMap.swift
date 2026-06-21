@@ -2,7 +2,7 @@
 //  KeyEquivalentNameMap.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/20.
+//  Created by Ethan on 2026/6/20.
 //
 
 import Carbon

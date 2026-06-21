@@ -2,7 +2,7 @@
 //  ScrollingCaptureService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/14.
+//  Created by Ethan on 2026/6/14.
 //
 
 import CoreGraphics

@@ -2,7 +2,7 @@
 //  CaptureAnnotation.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/7.
+//  Created by Ethan on 2026/6/7.
 //
 
 import CoreGraphics

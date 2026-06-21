@@ -2,7 +2,7 @@
 //  OCRPreviewWindowService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/18.
+//  Created by Ethan on 2026/6/18.
 //
 
 import AppKit
