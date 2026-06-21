@@ -28,6 +28,8 @@
   - 覆盖层窗口创建和显示时同步应用当前外观
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift`
   - 顶部浮层和底部工具栏由固定白字 / 固定 HUD 风格收口为自适应风格
+- Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureAnnotationCanvasView.swift`
+  - 活动文本输入框背景与输入态颜色按当前外观自适应
 - Modify: `TYScreenShotTool/Services/OCRPreviewWindowService.swift`
   - OCR 结果窗接入外观切换，并改用语义文本色
 - Modify: `TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift`
@@ -35,7 +37,7 @@
 - Modify: `TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift`
   - 长截图预览窗接入外观切换
 - Modify: `TYScreenShotTool/Services/ScrollingCapturePanelService.swift`
-  - 长截图控制面板接入外观切换
+  - 长截图控制面板接入外观切换，并收口浅色/深色下的控制面板可读性
 - Modify: `TYScreenShotTool/Services/PinWindowService.swift`
   - 图钉窗口接入外观切换
 - Modify: `TYScreenShotTool/Services/ToastService.swift`
@@ -118,6 +120,7 @@ final class AppThemeCoordinator {
     static let shared = AppThemeCoordinator()
 
     private init() {}
+    private var refreshHandlers: [ObjectIdentifier: @MainActor () -> Void] = [:]
 
     func userSelectedAppearance(
         userDefaults: UserDefaults = .standard
@@ -142,6 +145,10 @@ final class AppThemeCoordinator {
         for window in NSApp.windows {
             applyCurrentAppearance(to: window, userDefaults: userDefaults)
         }
+
+        for refresh in refreshHandlers.values {
+            refresh()
+        }
     }
 
     func applyCurrentAppearance(
@@ -151,6 +158,19 @@ final class AppThemeCoordinator {
         window.appearance = resolvedAppearance(userDefaults: userDefaults)
         window.invalidateShadow()
         window.displayIfNeeded()
+    }
+
+    func registerRefreshHandler(
+        for owner: AnyObject,
+        _ refresh: @escaping @MainActor () -> Void
+    ) {
+        refreshHandlers[ObjectIdentifier(owner)] = refresh
+    }
+
+    func unregisterRefreshHandler(
+        for owner: AnyObject
+    ) {
+        refreshHandlers.removeValue(forKey: ObjectIdentifier(owner))
     }
 }
 ```
@@ -315,7 +335,41 @@ Expected: 提交只包含启动与 Settings 外观切换接入。
 - Modify: `TYScreenShotTool/Services/PinWindowService.swift`
 - Modify: `TYScreenShotTool/Services/ToastService.swift`
 
-- [ ] **Step 1: 覆盖层窗口显示时应用当前外观**
+- [ ] **Step 1: 为需要即时刷新的窗口服务注册样式刷新入口**
+
+Add lightweight refresh hooks in long-lived services:
+
+```swift
+// AIAnalysisPreviewWindowService.swift
+init() {
+    // existing setup...
+    AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+        self?.applyAppearanceStyling()
+    }
+}
+
+deinit {
+    AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
+}
+
+// OCRPreviewWindowService.swift
+init() {
+    // existing setup...
+    AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+        self?.applyAppearanceStyling()
+    }
+}
+
+deinit {
+    AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
+}
+
+// ScrollingCapturePreviewWindowService.swift / ToastService.swift use the same pattern
+```
+
+Expected: 当用户在 Settings 切换外观时，已打开窗口除了切 `window.appearance`，还会重新执行内部样式刷新。
+
+- [ ] **Step 2: 覆盖层窗口显示时应用当前外观**
 
 Update `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayWindow.swift`:
 
@@ -332,13 +386,14 @@ func showOverlay() {
 }
 ```
 
-- [ ] **Step 2: OCR 与 AI 结果窗显示前应用外观**
+- [ ] **Step 3: OCR 与 AI 结果窗显示前应用外观**
 
 Update `TYScreenShotTool/Services/OCRPreviewWindowService.swift` in `present(...)`:
 
 ```swift
 AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
 panel.setFrame(panelFrame, display: true)
+applyAppearanceStyling()
 layoutContent(in: panelFrame.size)
 panel.orderFrontRegardless()
 ```
@@ -347,15 +402,17 @@ Update `TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift` in `pres
 
 ```swift
 AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+applyAppearanceStyling()
 panel.orderFrontRegardless()
 ```
 
-- [ ] **Step 3: 长截图预览窗与控制面板显示前应用外观**
+- [ ] **Step 4: 长截图预览窗与控制面板显示前应用外观**
 
 Update `TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift`:
 
 ```swift
 AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+applyAppearanceStyling()
 panel.orderFrontRegardless()
 ```
 
@@ -363,10 +420,11 @@ Update `TYScreenShotTool/Services/ScrollingCapturePanelService.swift` inside `pr
 
 ```swift
 AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+panelView.applyAppearanceStyling()
 panel.orderFrontRegardless()
 ```
 
-- [ ] **Step 4: 图钉窗口与 Toast 窗口显示前应用外观**
+- [ ] **Step 5: 图钉窗口与 Toast 窗口显示前应用外观**
 
 Update `TYScreenShotTool/Services/PinWindowService.swift`:
 
@@ -382,10 +440,11 @@ Update `TYScreenShotTool/Services/ToastService.swift` in `showToast(message:)`:
 ```swift
 let window = resolvedWindow(with: label)
 AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
+applyAppearanceStyling()
 window.setContentSize(contentSize)
 ```
 
-- [ ] **Step 5: 运行构建验证窗口级切换链路通过**
+- [ ] **Step 6: 运行构建验证窗口级切换链路通过**
 
 Run:
 
@@ -395,7 +454,7 @@ Run:
 
 Expected: `** BUILD SUCCEEDED **`
 
-- [ ] **Step 6: 提交窗口级外观应用**
+- [ ] **Step 7: 提交窗口级外观应用**
 
 Run:
 
@@ -412,13 +471,15 @@ Expected: 已打开的窗口具备立即切换的基础能力。
 
 **Files:**
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift`
+- Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureAnnotationCanvasView.swift`
 - Modify: `TYScreenShotTool/Services/OCRPreviewWindowService.swift`
 - Modify: `TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift`
 - Modify: `TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift`
+- Modify: `TYScreenShotTool/Services/ScrollingCapturePanelService.swift`
 - Modify: `TYScreenShotTool/Services/ToastService.swift`
 - Modify: `TYScreenShotTool/Resources/Localizable.xcstrings`
 
-- [ ] **Step 1: 将结果窗和浮层文本色改为语义色**
+- [ ] **Step 1: 将结果窗、浮层和活动文本输入框的文本色改为语义色**
 
 Update these assignments:
 
@@ -439,9 +500,12 @@ contentLabel.textColor = .labelColor
 // CaptureOverlayView.swift
 sizeLabel.textColor = .labelColor
 cornerRadiusLabel.textColor = .labelColor
+
+// CaptureAnnotationCanvasView.swift
+textField.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.92)
 ```
 
-- [ ] **Step 2: 将固定深色材质调整为自适应材质**
+- [ ] **Step 2: 将固定深色材质调整为自适应材质，并给服务补上 applyAppearanceStyling()**
 
 Update these assignments:
 
@@ -461,6 +525,12 @@ containerView.layer?.borderColor = NSColor.separatorColor.cgColor
 // CaptureOverlayView.swift
 topBarContainerView.material = .popover
 toolbarContainerView.material = .popover
+
+// ScrollingCapturePanelService.swift
+// add applyAppearanceStyling() on ScrollingCapturePanelView:
+layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+layer?.borderWidth = 1
+layer?.borderColor = NSColor.separatorColor.cgColor
 ```
 
 - [ ] **Step 3: Toast 改为按当前外观自适应的前景与背景**
@@ -475,7 +545,33 @@ contentView.layer?.borderColor = NSColor.separatorColor.cgColor
 label.textColor = .labelColor
 ```
 
-- [ ] **Step 4: 增加外观设置本地化文案**
+- [ ] **Step 4: 为已打开窗口的内容层增加立即刷新验证点**
+
+Ensure these methods exist and are called both from `present/show` and theme refresh handlers:
+
+```swift
+// AIAnalysisPreviewWindowService.swift
+private func applyAppearanceStyling() { ... }
+
+// OCRPreviewWindowService.swift
+private func applyAppearanceStyling() { ... }
+
+// ScrollingCapturePreviewWindowService.swift
+private func applyAppearanceStyling() { ... }
+
+// ToastService.swift
+private func applyAppearanceStyling() { ... }
+
+// ScrollingCapturePanelView
+func applyAppearanceStyling() { ... }
+
+// CaptureOverlayView / CaptureAnnotationCanvasView
+func applyAppearanceStyling() { ... }
+```
+
+Expected: 当前已经显示出来的内容层不会只切换窗口壳，而会同步刷新内部 layer、材质和文字色。
+
+- [ ] **Step 5: 增加外观设置本地化文案**
 
 Add keys to `TYScreenShotTool/Resources/Localizable.xcstrings`:
 
@@ -531,7 +627,7 @@ de: Dunkel
 fr: Sombre
 ```
 
-- [ ] **Step 5: 运行构建验证浅色/深色视觉收口通过**
+- [ ] **Step 6: 运行构建验证浅色/深色视觉收口通过**
 
 Run:
 
@@ -541,12 +637,12 @@ Run:
 
 Expected: `** BUILD SUCCEEDED **`
 
-- [ ] **Step 6: 提交面板样式与本地化收口**
+- [ ] **Step 7: 提交面板样式与本地化收口**
 
 Run:
 
 ```bash
-git add TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift TYScreenShotTool/Services/OCRPreviewWindowService.swift TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift TYScreenShotTool/Services/ToastService.swift TYScreenShotTool/Resources/Localizable.xcstrings
+git add TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift TYScreenShotTool/Features/CaptureOverlay/CaptureAnnotationCanvasView.swift TYScreenShotTool/Services/OCRPreviewWindowService.swift TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePanelService.swift TYScreenShotTool/Services/ToastService.swift TYScreenShotTool/Resources/Localizable.xcstrings
 git commit -m "feat(sprint-39): 收口外观切换面板样式"
 ```
 
@@ -637,7 +733,7 @@ Expected: Sprint 39 进入完成态，文档与实现状态一致。
   - `AppAppearance` 与 `AppThemeCoordinator` 由 Task 1 覆盖
   - Settings 三选项与立即切换由 Task 2 覆盖
   - 当前已打开窗口立即切换由 Task 3 覆盖
-  - 浅色 / 深色下真实可读的视觉收口与本地化文案由 Task 4 覆盖
+  - 浅色 / 深色下真实可读的视觉收口、活动文本输入框、长截图控制面板与本地化文案由 Task 4 覆盖
   - 构建验证、人工验证和收尾文档由 Task 5 覆盖
 - Placeholder scan:
   - 计划中未使用 `TBD / TODO / later` 占位语句
@@ -646,4 +742,4 @@ Expected: Sprint 39 进入完成态，文档与实现状态一致。
   - 设置键统一使用 `appAppearanceKey / appAppearanceDefaultValue`
   - 模型统一使用 `AppAppearance`
   - 协调器统一使用 `AppThemeCoordinator.shared.applyCurrentAppearance(...)`
-
+  - 已打开窗口内容层刷新统一使用 `applyAppearanceStyling()`
