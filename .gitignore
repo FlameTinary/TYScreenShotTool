@@ -4,6 +4,7 @@ archived/
 build/
 .build/
 .trae/
+.reasonix/
 
 # User settings
 *.xcuserstate

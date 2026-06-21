@@ -41,6 +41,36 @@ Sprint 40 完成后，截图编辑态工具栏完成了一轮更贴近 macOS 原
 
 ---
 
+# 2026-06-21
+
+## Settings 窗口显示修复
+
+### Bug Fix
+
+#### 保存目录配置项被窗口底部裁剪
+
+问题：
+
+- Settings 页面中保存目录配置项完全不可见
+- 窗口 content size 高度为 460pt，但全部 5 个配置项（热键/语言/外观/AI 分析/保存目录）共需约 574pt
+- 无 ScrollView 兜底，底部内容被直接裁剪
+
+修复：
+
+- 将 Settings 内容包裹在 `ScrollView` 中，用户可通过滚动查看全部配置项
+- 内容 VStack 增加 `.frame(maxWidth: .infinity, alignment: .leading)`，修复 ScrollView 宽度与窗口不一致的问题
+- 窗口默认高度从 460 增加到 580，默认打开即可看到全部配置项，无需滚动
+
+### 验证
+
+- `./scripts/build.sh` 构建通过
+
+### 结果
+
+Settings 窗口的所有配置项均已可见且布局完整，窗口宽度与 ScrollView 内容一致；窗口高度增大后大部分用户默认即可看到保存目录配置，`ScrollView` 作为安全网保留，手动缩小时仍可滚动访问。
+
+---
+
 ## Sprint 39 完成
 
 ### 主题

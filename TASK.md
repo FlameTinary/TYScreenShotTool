@@ -10,7 +10,8 @@ Current Sprint: Sprint 40 Completed
 
 Sprint 38 已完成实现、构建验证与人工验证。  
 Sprint 39 已完成实现、构建验证与人工验证。  
-Sprint 40 已完成实现、构建验证与人工验证。
+Sprint 40 已完成实现、构建验证与人工验证。  
+Bug Fix: Settings 窗口显示修复已完成、构建验证通过。
 
 ## 当前目标
 

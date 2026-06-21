@@ -60,27 +60,28 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(AppLocalization.text("settings.title"))
-                .font(.title2)
-                .fontWeight(.semibold)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(AppLocalization.text("settings.title"))
+                    .font(.title2)
+                    .fontWeight(.semibold)
 
-            Text(AppLocalization.text("settings.description"))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(AppLocalization.text("settings.description"))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 12) {
-                hotKeyPicker
-                languageSettings
-                appearanceSettings
-                aiAnalysisSettings
-                saveDirectoryPicker
+                VStack(alignment: .leading, spacing: 12) {
+                    hotKeyPicker
+                    languageSettings
+                    appearanceSettings
+                    aiAnalysisSettings
+                    saveDirectoryPicker
+                }
             }
-
-            Spacer()
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(24)
-        .frame(minWidth: 460, minHeight: 360, alignment: .topLeading)
+        .frame(minWidth: 460, minHeight: 360)
         .onAppear {
             resetHotKeyEditorState()
         }

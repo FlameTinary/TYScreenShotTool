@@ -36,7 +36,7 @@ final class SettingsOpenCoordinator {
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 460, height: 360)
-        window.setContentSize(NSSize(width: 520, height: 460))
+        window.setContentSize(NSSize(width: 520, height: 580))
         window.center()
         AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
         refreshContentViewController(for: window)
