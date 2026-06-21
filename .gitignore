@@ -3,6 +3,7 @@ DerivedData/
 archived/
 build/
 .build/
+.trae/
 
 # User settings
 *.xcuserstate
