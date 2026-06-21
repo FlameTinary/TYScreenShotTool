@@ -8,7 +8,33 @@
 
 ## 基本原则
 
-### 4. 只提交本轮相关内容
+### 1. 分支合并使用 Rebase
+
+合并代码到目标分支时，必须使用 `git rebase`，禁止使用 `git merge`。
+
+推荐流程：
+
+```bash
+# 切换到目标分支
+git checkout <target-branch>
+# 拉取最新代码
+git pull origin <target-branch>
+# 切换回特性分支
+git checkout <feature-branch>
+# 执行 rebase
+git rebase <target-branch>
+# 处理冲突（如果有）
+# 推送（可能需要 --force）
+git push origin <feature-branch> --force
+```
+
+要求：
+
+* 保持线性提交历史，便于追溯和审查
+* 在推送前解决所有冲突
+* 仅对自己创建的特性分支执行 rebase，不要 rebase 公共分支
+
+### 2. 只提交本轮相关内容
 
 执行提交时，只暂存当前 Sprint 或当前任务直接相关的文件。
 
