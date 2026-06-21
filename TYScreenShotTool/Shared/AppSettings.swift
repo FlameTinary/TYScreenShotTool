@@ -27,6 +27,10 @@ enum AppSettings {
     static let appLanguageKey = "settings.appLanguage"
     /// App 语言默认值
     static let appLanguageDefaultValue = AppLanguage.system.storageValue
+    /// App 外观设置键
+    static let appAppearanceKey = "settings.appAppearance"
+    /// App 外观默认值
+    static let appAppearanceDefaultValue = AppAppearance.system.storageValue
     /// AI 分析 API 密钥
     static let aiAnalysisAPIKeyKey = "local.aiAnalysis.openAIAPIKey"
     /// AI 分析 API 基础 URL
