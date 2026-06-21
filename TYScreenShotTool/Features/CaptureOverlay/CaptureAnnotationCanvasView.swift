@@ -53,7 +53,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var trackingArea: NSTrackingArea?
 
     /// 当前选中的标注索引（仅 rectangle 工具使用）
-    private var selectedAnnotationIndex: Int?
+    var selectedAnnotationIndex: Int?
     /// 选中状态变更回调：索引, 属性值
     var onAnnotationSelected: ((Int?, RectangleProperties?) -> Void)?
     /// 新矩形使用的默认属性（由 CaptureOverlayView 同步）

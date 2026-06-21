@@ -89,11 +89,17 @@ final class CaptureOverlayView: NSView {
     private let toolbarButtonDisabledTintColor = NSColor.white.withAlphaComponent(0.35)
     private var currentAnnotationTool: AnnotationTool?
 
+    /// 矩形属性面板
+    private let rectanglePanelView = RectanglePropertyPanelView()
+    /// 当前矩形属性（新矩形默认值 + 面板状态）
+    private var currentRectangleProperties = RectangleProperties.default
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         configurePreviewViews()
         configureTopBar()
         configureToolbar()
+        configurePropertyPanel()
         applyAppearanceStyling()
         resetToSelectionMode()
     }
@@ -327,6 +333,7 @@ final class CaptureOverlayView: NSView {
         cornerRadiusSlider.doubleValue = 0
         shadowToggle.state = .off
         currentAnnotationTool = nil
+        rectanglePanelView.isHidden = true
         annotationCanvasView.resetAnnotations()
         updateAnnotationToolSelection()
 
@@ -355,6 +362,7 @@ final class CaptureOverlayView: NSView {
         previewContainerView.isHidden = true
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
+        rectanglePanelView.isHidden = true
         needsDisplay = true
     }
 
@@ -400,6 +408,7 @@ final class CaptureOverlayView: NSView {
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
         toolbarTooltipView.isHidden = true
+        rectanglePanelView.isHidden = true
         aiButton.isEnabled = true
         needsDisplay = true
         NSCursor.crosshair.set()
@@ -848,6 +857,28 @@ final class CaptureOverlayView: NSView {
         addSubview(topBarContainerView)
     }
 
+    private func configurePropertyPanel() {
+        rectanglePanelView.onPropertyChanged = { [weak self] properties in
+            guard let self else { return }
+            self.currentRectangleProperties = properties
+            self.annotationCanvasView.currentRectangleProperties = properties
+            self.annotationCanvasView.updateSelectedAnnotation(with: properties)
+        }
+
+        annotationCanvasView.onAnnotationSelected = { [weak self] index, properties in
+            guard let self else { return }
+            if let properties {
+                self.rectanglePanelView.updateDisplay(with: properties)
+                self.rectanglePanelView.isHidden = false
+            } else {
+                self.rectanglePanelView.updateDisplay(with: self.currentRectangleProperties)
+            }
+        }
+
+        rectanglePanelView.isHidden = true
+        addSubview(rectanglePanelView)
+    }
+
     private func configureToolbar() {
         toolbarContainerView.material = .popover
         toolbarContainerView.blendingMode = .withinWindow
@@ -1090,6 +1121,15 @@ final class CaptureOverlayView: NSView {
         if toolbarTooltipView.isHidden == false {
             repositionToolbarTooltip()
         }
+
+        // 矩形属性面板布局（在工具栏下方）
+        let panelY = max(24, toolbarY - 90 - 8)  // 防止溢出屏幕底部
+        rectanglePanelView.frame = CGRect(
+            x: toolbarX + (toolbarWidth - 320) / 2,
+            y: panelY,
+            width: 320,
+            height: 90
+        )
     }
 
     private func updatePreviewAppearance() {
@@ -1213,6 +1253,16 @@ final class CaptureOverlayView: NSView {
         }
 
         annotationCanvasView.currentTool = currentAnnotationTool
+
+        // 控制矩形属性面板显隐
+        if currentAnnotationTool == .rectangle {
+            rectanglePanelView.isHidden = false
+            rectanglePanelView.updateDisplay(with: currentRectangleProperties)
+        } else {
+            rectanglePanelView.isHidden = true
+            annotationCanvasView.selectedAnnotationIndex = nil
+        }
+
         updateAnnotationToolSelection()
         window?.makeFirstResponder(annotationCanvasView)
         updateCursorFromCurrentEvent()
