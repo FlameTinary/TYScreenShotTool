@@ -703,3 +703,24 @@ App 外观切换
 - 标注工具选中时增加轻量缩放与透明度反馈
 - 重复点击同一个标注工具时保持选中状态
 - 为截图覆盖层补充自定义 hover 提示气泡
+
+---
+
+### Sprint 41
+
+矩形属性面板
+
+状态：
+🔄 In Progress
+
+目标：
+
+- 新增 RGBColor/RectangleProperties 数据模型
+- 新增 RectanglePropertyPanelView 属性面板
+- 画布选中交互与基于 RectangleProperties 的矩形渲染
+- 面板生命周期：点击矩形→显示；点击其他工具/取消→隐藏
+
+成果：
+
+- 设计文档已编写并 commit
+- 实现计划已编写并 commit
