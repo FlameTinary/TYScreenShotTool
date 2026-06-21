@@ -26,6 +26,8 @@
   - 创建和刷新 Settings 窗口时同步应用当前外观
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayWindow.swift`
   - 覆盖层窗口创建和显示时同步应用当前外观
+- Modify: `TYScreenShotTool/Services/CaptureOverlayService.swift`
+  - 为当前活动截图编辑窗注册外观刷新入口，保证已打开截图编辑态立即切换
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayView.swift`
   - 顶部浮层和底部工具栏由固定白字 / 固定 HUD 风格收口为自适应风格
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureAnnotationCanvasView.swift`
@@ -41,7 +43,7 @@
 - Modify: `TYScreenShotTool/Services/PinWindowService.swift`
   - 图钉窗口接入外观切换
 - Modify: `TYScreenShotTool/Services/ToastService.swift`
-  - Toast 改为按当前外观自适应底色和文字色
+  - Toast 改为按当前外观自适应底色和文字色，并持有可重复刷新的内容视图引用
 - Modify: `TYScreenShotTool/Resources/Localizable.xcstrings`
   - 增加外观设置相关文案的 6 语言翻译
 - Modify: `TASK.md`
@@ -327,6 +329,7 @@ Expected: 提交只包含启动与 Settings 外观切换接入。
 ### Task 3: 将外观应用到当前已打开的 App 自有窗口
 
 **Files:**
+- Modify: `TYScreenShotTool/Services/CaptureOverlayService.swift`
 - Modify: `TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayWindow.swift`
 - Modify: `TYScreenShotTool/Services/OCRPreviewWindowService.swift`
 - Modify: `TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift`
@@ -365,9 +368,45 @@ deinit {
 }
 
 // ScrollingCapturePreviewWindowService.swift / ToastService.swift use the same pattern
+//
+// CaptureOverlayService.swift
+func presentOverlay(screenImages: [CGDirectDisplayID: CGImage]) {
+    guard overlayWindows.isEmpty else {
+        return
+    }
+
+    AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+        self?.activeOverlayWindow.map { AppThemeCoordinator.shared.applyCurrentAppearance(to: $0) }
+        self?.activeOverlayView?.applyAppearanceStyling()
+    }
+
+    // existing overlay creation logic...
+}
+
+func dismissOverlay() {
+    AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
+    // existing cleanup...
+}
+
+// ScrollingCapturePanelService.swift
+func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
+    // existing setup...
+    AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
+        guard let self, let panel = self.panel, let panelView = self.panelView else {
+            return
+        }
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        panelView.applyAppearanceStyling()
+    }
+}
+
+func dismissPanel() {
+    AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
+    // existing cleanup...
+}
 ```
 
-Expected: 当用户在 Settings 切换外观时，已打开窗口除了切 `window.appearance`，还会重新执行内部样式刷新。
+Expected: 当用户在 Settings 切换外观时，已打开的截图编辑窗和长截图控制面板也会触发内部样式刷新，而不只是 OCR/AI/Toast 这类结果窗。
 
 - [ ] **Step 2: 覆盖层窗口显示时应用当前外观**
 
@@ -444,6 +483,49 @@ applyAppearanceStyling()
 window.setContentSize(contentSize)
 ```
 
+- [ ] **Step 6: 让 Toast 的内容视图具备可重复刷新入口**
+
+Update `TYScreenShotTool/Services/ToastService.swift` structure:
+
+```swift
+private var toastWindow: NSWindow?
+private var toastContentView: NSView?
+private var messageLabel: NSTextField?
+
+private func resolvedWindow(with label: NSTextField) -> NSWindow {
+    if let toastWindow, let toastContentView {
+        toastContentView.subviews.forEach { $0.removeFromSuperview() }
+        toastContentView.addSubview(label)
+        return toastWindow
+    }
+
+    let contentView = NSView(frame: .zero)
+    contentView.wantsLayer = true
+    contentView.addSubview(label)
+
+    let window = NSWindow(
+        contentRect: .zero,
+        styleMask: .borderless,
+        backing: .buffered,
+        defer: false
+    )
+    window.contentView = contentView
+
+    toastWindow = window
+    toastContentView = contentView
+    return window
+}
+
+private func applyAppearanceStyling() {
+    toastContentView?.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
+    toastContentView?.layer?.borderWidth = 1
+    toastContentView?.layer?.borderColor = NSColor.separatorColor.cgColor
+    messageLabel?.textColor = .labelColor
+}
+```
+
+Expected: toast 在已经显示时也能通过已持有的 `toastContentView` 与 `messageLabel` 立即刷新外观。
+
 - [ ] **Step 6: 运行构建验证窗口级切换链路通过**
 
 Run:
@@ -454,12 +536,12 @@ Run:
 
 Expected: `** BUILD SUCCEEDED **`
 
-- [ ] **Step 7: 提交窗口级外观应用**
+- [ ] **Step 8: 提交窗口级外观应用**
 
 Run:
 
 ```bash
-git add TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayWindow.swift TYScreenShotTool/Services/OCRPreviewWindowService.swift TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePanelService.swift TYScreenShotTool/Services/PinWindowService.swift TYScreenShotTool/Services/ToastService.swift
+git add TYScreenShotTool/Services/CaptureOverlayService.swift TYScreenShotTool/Features/CaptureOverlay/CaptureOverlayWindow.swift TYScreenShotTool/Services/OCRPreviewWindowService.swift TYScreenShotTool/Services/AIAnalysisPreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePreviewWindowService.swift TYScreenShotTool/Services/ScrollingCapturePanelService.swift TYScreenShotTool/Services/PinWindowService.swift TYScreenShotTool/Services/ToastService.swift
 git commit -m "feat(sprint-39): 应用外观到浮层窗口"
 ```
 
@@ -500,6 +582,7 @@ contentLabel.textColor = .labelColor
 // CaptureOverlayView.swift
 sizeLabel.textColor = .labelColor
 cornerRadiusLabel.textColor = .labelColor
+shadowToggle.contentTintColor = .controlAccentColor
 
 // CaptureAnnotationCanvasView.swift
 textField.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.92)
@@ -569,7 +652,7 @@ func applyAppearanceStyling() { ... }
 func applyAppearanceStyling() { ... }
 ```
 
-Expected: 当前已经显示出来的内容层不会只切换窗口壳，而会同步刷新内部 layer、材质和文字色。
+Expected: 当前已经显示出来的内容层不会只切换窗口壳，而会同步刷新内部 layer、材质、文字色和控件 tint。
 
 - [ ] **Step 5: 增加外观设置本地化文案**
 
@@ -733,7 +816,7 @@ Expected: Sprint 39 进入完成态，文档与实现状态一致。
   - `AppAppearance` 与 `AppThemeCoordinator` 由 Task 1 覆盖
   - Settings 三选项与立即切换由 Task 2 覆盖
   - 当前已打开窗口立即切换由 Task 3 覆盖
-  - 浅色 / 深色下真实可读的视觉收口、活动文本输入框、长截图控制面板与本地化文案由 Task 4 覆盖
+  - 浅色 / 深色下真实可读的视觉收口、活动文本输入框、长截图控制面板、Toast 刷新抓手与本地化文案由 Task 4 覆盖
   - 构建验证、人工验证和收尾文档由 Task 5 覆盖
 - Placeholder scan:
   - 计划中未使用 `TBD / TODO / later` 占位语句
