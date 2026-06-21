@@ -158,6 +158,10 @@ final class CaptureSessionService {
         transition(to: .dragging)
     }
 
+    /// 完成截图选择
+    ///
+    /// - Parameters:
+    ///   - rect: 选择区域
     func completeSelection(_ rect: CGRect) {
         guard state == .dragging else {
             return
@@ -177,6 +181,12 @@ final class CaptureSessionService {
         overlayService.showSelectionPreview(selectionRect: rect, screenImages: pendingScreenImages)
     }
 
+    /// 确认窗口选择
+    ///
+    /// - Parameters:
+    ///   - candidate: 窗口选择候选
+    /// - Returns: 确认结果
+    /// - Throws: 确认失败时抛出错误
     func confirmWindowSelection(_ candidate: WindowSelectionCandidate) {
         guard state == .overlayPresented else {
             return
@@ -193,6 +203,10 @@ final class CaptureSessionService {
         overlayService.showSelectionPreview(selectionRect: rect, screenImages: pendingScreenImages)
     }
 
+    /// 更新待截图选择区域
+    ///
+    /// - Parameters:
+    ///   - rect: 新的选择区域
     func updatePendingSelection(_ rect: CGRect) {
         guard state == .selectionCompleted else {
             return
@@ -204,7 +218,9 @@ final class CaptureSessionService {
 
         pendingCaptureSource = .frozenScreenRect(rect)
     }
-
+    /// 取消截图会话
+    ///
+    /// 清除所有待截图数据并关闭会话。
     func cancelSession() {
         if isInScrollingCaptureMode {
             cancelScrollingCapture()
@@ -222,6 +238,13 @@ final class CaptureSessionService {
         transition(to: .idle)
     }
 
+    /// 复制待截图到剪贴板
+    ///
+    /// - Parameters:
+    ///   - style: 截图预览样式
+    ///   - annotations: 截图注释
+    /// - Returns: 复制结果
+    /// - Throws: 复制失败时抛出错误
     func copyPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingCaptureSource else {
             return
@@ -257,6 +280,13 @@ final class CaptureSessionService {
         }
     }
 
+    /// 保存待截图
+    ///
+    /// - Parameters:
+    ///   - style: 截图预览样式
+    ///   - annotations: 截图注释
+    /// - Returns: 保存的文件 URL
+    /// - Throws: 保存失败时抛出错误
     func savePendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingCaptureSource else {
             return
@@ -304,7 +334,12 @@ final class CaptureSessionService {
             }
         }
     }
-
+    /// 对待截图进行 OCR 识别
+    ///
+    /// - Parameters:
+    ///   - style: 截图预览样式
+    ///   - annotations: 截图注释
+    /// - Returns: 识别到的文本
     func ocrPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingCaptureSource else {
             return
@@ -436,6 +471,9 @@ final class CaptureSessionService {
         installScrollingEventMonitor(for: pendingSelectionRect)
     }
 
+    /// 追加长截图帧
+    ///
+    /// 追加当前选择区域的长截图帧到滚动截图结果中。
     func appendScrollingCaptureFrame() {
         guard isInScrollingCaptureMode, let pendingSelectionRect = pendingCaptureSource?.selectionRect else {
             return
@@ -444,6 +482,9 @@ final class CaptureSessionService {
         appendScrollingCaptureFrameIfNeeded(for: pendingSelectionRect, requiresVisualChange: true)
     }
 
+    /// 复制长截图结果到剪贴板
+    ///
+    /// 复制当前滚动截图结果到剪贴板。
     func copyScrollingCaptureResult() {
         guard isInScrollingCaptureMode, let image = scrollingCaptureResultImage else {
             return
@@ -497,6 +538,9 @@ final class CaptureSessionService {
         }
     }
 
+    /// 对长截图结果进行OCR识别
+    ///
+    /// 对当前滚动截图结果进行OCR识别，并在识别完成后展示预览窗口。
     func ocrScrollingCaptureResult() {
         guard isInScrollingCaptureMode,
               let image = scrollingCaptureResultImage,
