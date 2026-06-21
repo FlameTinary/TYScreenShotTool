@@ -574,8 +574,12 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
     /// 属性变更回调
     var onPropertyChanged: ((RectangleProperties) -> Void)?
 
+    /// 防止 updateDisplay 触发重复回调的标志
+    private var isUpdatingDisplay = false
+
     private var currentProperties = RectangleProperties.default {
         didSet {
+            guard !isUpdatingDisplay else { return }
             onPropertyChanged?(currentProperties)
         }
     }
@@ -771,6 +775,7 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
 
     /// 外部调用：将面板值同步到指定属性（用于选中矩形后同步）
     func updateDisplay(with properties: RectangleProperties) {
+        isUpdatingDisplay = true
         currentProperties = properties
 
         // 粗细
@@ -792,6 +797,8 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         if let colorIndex = RGBColor.presetColors.firstIndex(of: properties.color) {
             updateColorSelection(selectedIndex: colorIndex)
         }
+
+        isUpdatingDisplay = false
     }
 
     private func updateColorSelection(selectedIndex: Int) {
@@ -950,9 +957,10 @@ if currentAnnotationTool != .rectangle {
 
 ```swift
 // 矩形属性面板布局（在工具栏下方）
+let panelY = max(24, toolbarY - 90 - 8)  // 防止溢出屏幕底部
 rectanglePanelView.frame = CGRect(
     x: toolbarX + (toolbarWidth - 320) / 2,
-    y: toolbarY - 90 - 8,  // 工具栏底部 + 8px 间距
+    y: panelY,
     width: 320,
     height: 90
 )
@@ -1027,11 +1035,26 @@ func resetToSelectionMode() {
 同时在 `showSelectionPreview` 中确保面板初始隐藏：
 
 ```swift
-func showSelectionPreview() {
+func showSelectionPreview(selectionRect: CGRect, sourceScreenImage: CGImage?, screenFrame: CGRect) {
     // ...
-    currentAnnotationTool = nil  // 初始无工具选中
+    currentAnnotationTool = nil
     rectanglePanelView.isHidden = true  // 新增
     // ...
+}
+```
+
+同时让 `enterLongCaptureGuideMode` 也隐藏面板：
+
+```swift
+func enterLongCaptureGuideMode() {
+    guard mode == .preview, previewSelectionRect != nil else { return }
+    isLongCaptureGuideMode = true
+    suppressFrozenBackground = true
+    previewContainerView.isHidden = true
+    topBarContainerView.isHidden = true
+    toolbarContainerView.isHidden = true
+    rectanglePanelView.isHidden = true  // 新增
+    needsDisplay = true
 }
 ```
 
@@ -1073,11 +1096,7 @@ case let .rectangle(rect):
 ```swift
 case let .rectangle(rect, props):
     let standardizedRect = rect.standardized
-    let cgColor = props.color.toCGColor()
-    let alphaColor = CGColor(red: cgColor.components?[0] ?? 0,
-                              green: cgColor.components?[1] ?? 0,
-                              blue: cgColor.components?[2] ?? 0,
-                              alpha: props.opacity)
+    let color = props.color.toNSColor().withAlphaComponent(props.opacity).cgColor
 
     if props.cornerRadius > 0 {
         let path = CGPath(roundedRect: standardizedRect,
@@ -1089,10 +1108,10 @@ case let .rectangle(rect, props):
     }
 
     if props.isFilled {
-        context.setFillColor(alphaColor)
+        context.setFillColor(color)
         context.fillPath()
     } else {
-        context.setStrokeColor(alphaColor)
+        context.setStrokeColor(color)
         context.setLineWidth(props.lineWidth)
         context.strokePath()
     }
