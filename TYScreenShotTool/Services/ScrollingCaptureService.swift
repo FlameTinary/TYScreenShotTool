@@ -2,12 +2,15 @@
 //  ScrollingCaptureService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/14.
+//  Created by Ethan on 2026/6/14.
 //
 
 import CoreGraphics
 import Foundation
 
+/// 长截图服务
+///
+/// 支持滚动截图中多帧图像的拼接与处理。
 final class ScrollingCaptureService {
     func hasVisualChange(between lhs: CGImage, and rhs: CGImage) throws -> Bool {
         let lhsPixels = try ImagePixels(lhs)
@@ -305,6 +308,7 @@ final class ScrollingCaptureService {
     }
 }
 
+/// 长截图错误类型
 enum ScrollingCaptureError: LocalizedError {
     case noFrames
     case noUsableFrames

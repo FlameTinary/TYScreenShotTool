@@ -2,11 +2,14 @@
 //  OCRPreviewWindowService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/18.
+//  Created by Ethan on 2026/6/18.
 //
 
 import AppKit
 
+/// OCR 预览窗口服务
+///
+/// 显示 OCR 识别结果的浮动面板。
 @MainActor
 final class OCRPreviewWindowService {
     private let panel = NSPanel(
@@ -74,6 +77,14 @@ final class OCRPreviewWindowService {
         containerView.addSubview(cancelButton)
     }
 
+    /// 显示 OCR 结果
+    ///
+    /// - Parameters:
+    ///   - text: 识别的文本
+    ///   - selectionRect: 选择区域
+    ///   - preferredSide: 首选显示位置
+    ///   - onCopy: 复制按钮回调
+    ///   - onCancel: 取消按钮回调
     func present(
         text: String,
         selectionRect: CGRect,

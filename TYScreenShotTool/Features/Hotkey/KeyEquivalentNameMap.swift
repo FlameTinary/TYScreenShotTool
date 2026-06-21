@@ -2,13 +2,17 @@
 //  KeyEquivalentNameMap.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/20.
+//  Created by Ethan on 2026/6/20.
 //
 
 import Carbon
 import Foundation
 
+/// 键码到显示名称的映射
+///
+/// 将 Carbon 键码转换为用户可读的按键名称，用于快捷键显示。
 enum KeyEquivalentNameMap {
+    /// 支持的键码名称映射表
     private static let supportedKeyNames: [UInt32: String] = [
         UInt32(kVK_ANSI_A): "A",
         UInt32(kVK_ANSI_B): "B",
@@ -64,6 +68,10 @@ enum KeyEquivalentNameMap {
         UInt32(kVK_RightArrow): "→"
     ]
 
+    /// 获取键码对应的显示名称
+    ///
+    /// - Parameter keyCode: Carbon 键码
+    /// - Returns: 显示名称，如果不支持则返回 nil
     static func displayName(for keyCode: UInt32) -> String? {
         supportedKeyNames[keyCode]
     }

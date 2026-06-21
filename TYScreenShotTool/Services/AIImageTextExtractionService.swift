@@ -2,7 +2,7 @@
 //  AIImageTextExtractionService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/20.
+//  Created by Ethan on 2026/6/20.
 //
 
 import CoreGraphics
@@ -55,6 +55,11 @@ final class AIImageTextExtractionService {
 }
 
 extension AIImageTextExtractionService {
+    /// 从图像中提取文字
+    ///
+    /// - Parameter image: 输入图像
+    /// - Returns: 提取结果，包含标准化文本和原始文本
+    /// - Throws: 提取失败时抛出错误
     func extractText(from image: CGImage) async throws -> AIExtractedTextResult {
         let apiKey = try resolvedAPIKey()
         let dataURL = try makeImageDataURL(from: image)

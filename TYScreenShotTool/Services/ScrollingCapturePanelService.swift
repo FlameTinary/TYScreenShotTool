@@ -2,7 +2,7 @@
 //  ScrollingCapturePanelService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/14.
+//  Created by Ethan on 2026/6/14.
 //
 
 import AppKit
@@ -26,6 +26,11 @@ final class ScrollingCapturePanelService {
     private var panel: ScrollingCapturePanel?
     private weak var panelView: ScrollingCapturePanelView?
 
+    /// 显示长截图控制面板
+    ///
+    /// - Parameters:
+    ///   - selectionRect: 当前选择的区域
+    ///   - screen: 所在屏幕
     func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
         let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 440, height: 56))
         panelView.onCopyRequested = { [weak self] in
@@ -50,6 +55,7 @@ final class ScrollingCapturePanelService {
         self.panelView = panelView
     }
 
+    /// 关闭面板
     func dismissPanel() {
         panel?.orderOut(nil)
         panel = nil

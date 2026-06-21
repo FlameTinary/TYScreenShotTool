@@ -2,12 +2,15 @@
 //  SettingsView.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/6.
+//  Created by Ethan on 2026/6/6.
 //
 
 import AppKit
 import SwiftUI
 
+/// 设置视图
+///
+/// 提供快捷键配置、AI 分析设置和保存目录选择功能。
 struct SettingsView: View {
     private let globalHotKeyService: GlobalHotKeyService
 
@@ -114,6 +117,7 @@ struct SettingsView: View {
         }
     }
 
+    /// 保存目录配置区域
     private var saveDirectoryPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("保存目录配置")
@@ -205,6 +209,7 @@ struct SettingsView: View {
         hotKeyErrorMessage = ""
     }
 
+    /// 选择保存目录
     private func chooseSaveDirectory() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false

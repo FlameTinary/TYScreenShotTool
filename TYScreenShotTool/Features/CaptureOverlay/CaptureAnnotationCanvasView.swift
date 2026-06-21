@@ -2,13 +2,16 @@
 //  CaptureAnnotationCanvasView.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/7.
+//  Created by Ethan on 2026/6/7.
 //
 
 import AppKit
 import CoreImage
 import CoreText
 
+/// 截图标注画布视图
+///
+/// 支持矩形、椭圆、箭头、画笔、马赛克和文字等标注工具。
 final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     var annotationsDidChange: (([CaptureAnnotation]) -> Void)?
     var sourceImage: CGImage? {

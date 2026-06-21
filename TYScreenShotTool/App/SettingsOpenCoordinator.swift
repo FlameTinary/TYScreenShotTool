@@ -2,17 +2,25 @@
 //  SettingsOpenCoordinator.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/7.
+//  Created by Ethan on 2026/6/7.
 //
 
 import AppKit
 import SwiftUI
 
+/// 设置窗口协调器
+///
+/// 管理设置窗口的创建、显示和内容更新，确保窗口唯一性。
 @MainActor
 final class SettingsOpenCoordinator {
     private var settingsWindow: NSWindow?
     private var contentProvider: (() -> AnyView)?
 
+    /// 配置设置窗口内容
+    ///
+    /// 设置窗口内容提供者，如果窗口已存在则刷新内容。
+    ///
+    /// - Parameter content: 设置界面内容构建器
     func configure<Content: View>(@ViewBuilder content: @escaping () -> Content) {
         contentProvider = {
             AnyView(content())
@@ -34,6 +42,9 @@ final class SettingsOpenCoordinator {
         self.settingsWindow = window
     }
 
+    /// 打开设置窗口
+    ///
+    /// 激活应用并显示设置窗口，刷新窗口内容。
     func openSettings() {
         guard let settingsWindow else {
             return

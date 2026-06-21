@@ -2,27 +2,46 @@
 //  CaptureAnnotation.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/7.
+//  Created by Ethan on 2026/6/7.
 //
 
 import CoreGraphics
 import Foundation
 
+/// 截图标注类型
+///
+/// 定义截图上可添加的各种标注类型，包括矩形、圆形、箭头、画笔、马赛克和文字。
+/// 每种标注类型都包含其几何数据和渲染参数。
 enum CaptureAnnotation: Equatable {
+    /// 矩形标注
     case rectangle(CGRect)
+    /// 圆形标注
     case ellipse(CGRect)
+    /// 箭头标注，包含起点和终点
     case arrow(start: CGPoint, end: CGPoint)
+    /// 画笔标注，包含一系列点
     case pen(points: [CGPoint])
+    /// 马赛克标注
     case mosaic(CGRect)
+    /// 文字标注，包含文本内容和位置
     case text(value: String, origin: CGPoint)
 
+    /// 标注描边颜色（红色）
     static let strokeColor = CGColor(red: 0.93, green: 0.24, blue: 0.21, alpha: 1)
+    /// 标注线条宽度
     static let lineWidth: CGFloat = 3
+    /// 文字标注字体大小
     static let fontSize: CGFloat = 22
+    /// 马赛克模糊半径
     static let mosaicBlurRadius: CGFloat = 18
+    /// 马赛克覆盖层透明度
     static let mosaicOverlayAlpha: CGFloat = 0.10
+    /// 马赛克区域圆角半径
     static let mosaicCornerRadius: CGFloat = 6
 
+    /// 标注的边界矩形
+    ///
+    /// 计算标注在画布上占据的区域，用于渲染和碰撞检测。
     var bounds: CGRect {
         switch self {
         case let .rectangle(rect), let .ellipse(rect), let .mosaic(rect):

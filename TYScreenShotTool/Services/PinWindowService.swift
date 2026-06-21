@@ -2,12 +2,15 @@
 //  PinWindowService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/14.
+//  Created by Ethan on 2026/6/14.
 //
 
 import AppKit
 import CoreGraphics
 
+/// 截图固定窗口服务
+///
+/// 提供将截图固定在屏幕上悬浮显示的功能，支持调整窗口大小和位置。
 @MainActor
 final class PinWindowService {
     private var pinnedWindow: NSWindow?
@@ -17,6 +20,14 @@ final class PinWindowService {
     private let maximumInitialWidth: CGFloat = 420
     private let maximumInitialHeight: CGFloat = 280
 
+    /// 显示固定的截图图像
+    ///
+    /// 创建或更新悬浮窗口，显示指定的截图图像。
+    /// 窗口位置基于截图来源区域自动计算。
+    ///
+    /// - Parameters:
+    ///   - image: 要显示的截图图像
+    ///   - sourceRect: 截图的来源区域，用于定位窗口
     func presentPinnedImage(_ image: CGImage, sourceRect: CGRect) {
         let imageView = resolvedImageView()
         imageView.image = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))

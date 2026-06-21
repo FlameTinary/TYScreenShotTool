@@ -2,18 +2,27 @@
 //  WindowSelectionService.swift
 //  TYScreenShotTool
 //
-//  Created by Codex on 2026/6/19.
+//  Created by Ethan on 2026/6/19.
 //
 
 import AppKit
 import CoreGraphics
 
+/// 窗口选择候选
+///
+/// 表示一个可选择的窗口信息。
 struct WindowSelectionCandidate {
+    /// 窗口边框
     let frame: CGRect
+    /// 窗口所属应用名称
     let ownerName: String
+    /// 窗口 ID
     let windowID: CGWindowID
 }
 
+/// 窗口选择服务
+///
+/// 提供屏幕上窗口的检测和选择功能。
 final class WindowSelectionService {
     func candidateWindow(at screenPoint: CGPoint) -> WindowSelectionCandidate? {
         guard let screen = screenContaining(screenPoint) else {

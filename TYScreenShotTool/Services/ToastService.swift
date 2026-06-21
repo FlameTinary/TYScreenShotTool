@@ -2,12 +2,15 @@
 //  ToastService.swift
 //  TYScreenShotTool
 //
-//  Created by Sheldon on 2026/6/14.
+//  Created by Ethan on 2026/6/14.
 //
 
 import AppKit
 import Foundation
 
+/// Toast 提示服务
+///
+/// 显示临时提示消息，自动在 1.6 秒后消失。
 @MainActor
 final class ToastService {
     private var toastWindow: NSWindow?
