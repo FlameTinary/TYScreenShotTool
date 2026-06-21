@@ -52,6 +52,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var interactionStartMosaicRect: CGRect?
     private var trackingArea: NSTrackingArea?
 
+    /// 当前选中的标注索引（仅 rectangle 工具使用）
+    private var selectedAnnotationIndex: Int?
+    /// 选中状态变更回调：索引, 属性值
+    var onAnnotationSelected: ((Int?, RectangleProperties?) -> Void)?
+    /// 新矩形使用的默认属性（由 CaptureOverlayView 同步）
+    var currentRectangleProperties = RectangleProperties.default
+
     override var acceptsFirstResponder: Bool {
         true
     }
@@ -88,12 +95,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        for annotation in annotations {
-            draw(annotation: annotation)
+        for (index, annotation) in annotations.enumerated() {
+            draw(annotation: annotation, at: index)
         }
 
         if let temporaryAnnotation {
-            draw(annotation: temporaryAnnotation)
+            draw(annotation: temporaryAnnotation, at: nil)
         }
     }
 
@@ -118,7 +125,20 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             currentPoint = point
             temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point))
             needsDisplay = true
-        case .rectangle, .ellipse, .arrow:
+        case .rectangle:
+            // 先检测是否点击了已画矩形（从后往前）
+            if let hitIndex = hitTestRectangle(at: point) {
+                selectedAnnotationIndex = hitIndex
+                if case .rectangle(_, let props) = annotations[hitIndex] {
+                    onAnnotationSelected?(hitIndex, props)
+                }
+                needsDisplay = true
+                return
+            }
+            selectedAnnotationIndex = nil
+            onAnnotationSelected?(nil, nil)
+            fallthrough
+        case .ellipse, .arrow:
             dragStartPoint = point
             currentPoint = point
             temporaryAnnotation = makeDragAnnotation(from: point, to: point)
@@ -217,9 +237,19 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         dragStartPoint = nil
         currentPoint = nil
         temporaryAnnotation = nil
+        selectedAnnotationIndex = nil
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
+    }
+
+    /// 更新选中矩形的样式属性（由面板回调触发）
+    func updateSelectedAnnotation(with properties: RectangleProperties) {
+        guard let idx = selectedAnnotationIndex,
+              annotations.indices.contains(idx),
+              case .rectangle(let rect, _) = annotations[idx] else { return }
+        annotations[idx] = .rectangle(rect, properties)
+        needsDisplay = true
     }
 
     func undoLastAnnotation() {
@@ -230,6 +260,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         _ = annotations.removeLast()
+
+        // 如果删除的标注恰好是被选中的，清空选中
+        if let selectedIdx = selectedAnnotationIndex, !annotations.indices.contains(selectedIdx) {
+            selectedAnnotationIndex = nil
+            onAnnotationSelected?(nil, nil)
+        }
+
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
@@ -298,7 +335,15 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         switch annotation {
-        case let .rectangle(rect), let .ellipse(rect), let .mosaic(rect):
+        case let .rectangle(rect, _):
+            guard rect.standardized.width > 4, rect.standardized.height > 4 else {
+                return
+            }
+        case let .ellipse(rect):
+            guard rect.standardized.width > 4, rect.standardized.height > 4 else {
+                return
+            }
+        case let .mosaic(rect):
             guard rect.standardized.width > 4, rect.standardized.height > 4 else {
                 return
             }
@@ -335,7 +380,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private func makeDragAnnotation(from start: CGPoint, to end: CGPoint) -> CaptureAnnotation? {
         switch currentTool {
         case .rectangle:
-            return .rectangle(normalizedRect(from: start, to: end))
+            return .rectangle(normalizedRect(from: start, to: end), currentRectangleProperties)
         case .ellipse:
             return .ellipse(normalizedRect(from: start, to: end))
         case .arrow:
@@ -356,13 +401,46 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         )
     }
 
-    private func draw(annotation: CaptureAnnotation) {
+    private func draw(annotation: CaptureAnnotation, at index: Int?) {
         switch annotation {
-        case let .rectangle(rect):
-            let path = NSBezierPath(rect: rect.standardized)
-            configureStroke()
-            path.lineWidth = CaptureAnnotation.lineWidth
-            path.stroke()
+        case let .rectangle(rect, props):
+            let standardizedRect = rect.standardized
+            let path: NSBezierPath
+            if props.cornerRadius > 0 {
+                path = NSBezierPath(roundedRect: standardizedRect, xRadius: props.cornerRadius, yRadius: props.cornerRadius)
+            } else {
+                path = NSBezierPath(rect: standardizedRect)
+            }
+
+            let color = props.color.toNSColor().withAlphaComponent(props.opacity)
+
+            if props.isFilled {
+                color.setFill()
+                path.fill()
+                color.setStroke()
+                path.lineWidth = props.lineWidth / 2
+                path.stroke()
+            } else {
+                color.setStroke()
+                path.lineWidth = props.lineWidth
+                path.stroke()
+            }
+
+            // 选中高亮 — 青色虚线边框
+            if let index, index == selectedAnnotationIndex {
+                let highlightRect = standardizedRect.insetBy(dx: -4, dy: -4)
+                let highlightPath: NSBezierPath
+                if props.cornerRadius > 0 {
+                    highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: props.cornerRadius + 4, yRadius: props.cornerRadius + 4)
+                } else {
+                    highlightPath = NSBezierPath(rect: highlightRect)
+                }
+                NSColor.systemCyan.setStroke()
+                highlightPath.lineWidth = 2
+                let dashes: [CGFloat] = [6, 4]
+                highlightPath.setLineDash(dashes, count: 2, phase: 0)
+                highlightPath.stroke()
+            }
         case let .ellipse(rect):
             let path = NSBezierPath(ovalIn: rect.standardized)
             configureStroke()
@@ -681,6 +759,20 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
         }
 
+        return nil
+    }
+
+    /// 检测点击点是否落在某个已画矩形上
+    /// 从后往前遍历，返回最顶层矩形的索引
+    private func hitTestRectangle(at point: CGPoint) -> Int? {
+        for index in annotations.indices.reversed() {
+            guard case .rectangle(let rect, _) = annotations[index] else {
+                continue
+            }
+            if rect.standardized.contains(point) {
+                return index
+            }
+        }
         return nil
     }
 
