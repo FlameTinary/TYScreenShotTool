@@ -42,6 +42,7 @@ final class CaptureOverlayWindow: NSWindow {
         hasShadow = false
         level = .screenSaver
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        allowsToolTipsWhenApplicationIsInactive = true
         ignoresMouseEvents = false
     }
 

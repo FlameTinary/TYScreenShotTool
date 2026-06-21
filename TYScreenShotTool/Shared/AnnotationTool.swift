@@ -60,4 +60,21 @@ enum AnnotationTool: CaseIterable, Equatable {
             return AppText.annotationText
         }
     }
+
+    var symbolName: String {
+        switch self {
+        case .rectangle:
+            return "rectangle"
+        case .ellipse:
+            return "circle"
+        case .arrow:
+            return "arrow.up.right"
+        case .pen:
+            return "pencil.and.scribble"
+        case .mosaic:
+            return "rectangle.pattern.checkered"
+        case .text:
+            return "square.and.pencil"
+        }
+    }
 }

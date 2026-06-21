@@ -12,6 +12,7 @@ import AppKit
 /// 处理截图选择、窗口高亮和预览交互的核心视图。
 final class CaptureOverlayView: NSView {
     private static let maximumCornerRadius: Double = 100
+    private static let toolbarTooltipOffset: CGFloat = 10
 
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
@@ -69,15 +70,23 @@ final class CaptureOverlayView: NSView {
     private let cornerRadiusSlider = NSSlider(value: 0, minValue: 0, maxValue: maximumCornerRadius, target: nil, action: nil)
     private let shadowToggle = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let toolbarContainerView = NSVisualEffectView()
+    private let toolbarTooltipView = NSVisualEffectView()
+    private let toolbarTooltipLabel = NSTextField(labelWithString: "")
     private var annotationToolButtons: [AnnotationTool: NSButton] = [:]
-    private let undoButton = NSButton(title: "", target: nil, action: nil)
-    private let longCaptureButton = NSButton(title: "", target: nil, action: nil)
-    private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
-    private let aiButton = NSButton(title: "AI", target: nil, action: nil)
-    private let pinButton = NSButton(title: "", target: nil, action: nil)
-    private let copyButton = NSButton(title: "", target: nil, action: nil)
-    private let saveButton = NSButton(title: "", target: nil, action: nil)
-    private let cancelButton = NSButton(title: "", target: nil, action: nil)
+    private let undoButton = ToolbarHoverButton(title: "", target: nil, action: nil)
+    private let longCaptureButton = ToolbarHoverButton(title: "", target: nil, action: nil)
+    private let ocrButton = ToolbarHoverButton(title: "OCR", target: nil, action: nil)
+    private let aiButton = ToolbarHoverButton(title: "AI", target: nil, action: nil)
+    private let pinButton = ToolbarHoverButton(title: "", target: nil, action: nil)
+    private let copyButton = ToolbarHoverButton(title: "", target: nil, action: nil)
+    private let saveButton = ToolbarHoverButton(title: "", target: nil, action: nil)
+    private let cancelButton = ToolbarHoverButton(title: "", target: nil, action: nil)
+    private let toolbarSymbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+    private let toolbarSelectedTintColor = NSColor.systemCyan
+    private let toolbarButtonSize = CGSize(width: 30, height: 30)
+    private let toolbarTextButtonMinWidth: CGFloat = 44
+    private let toolbarButtonTintColor = NSColor.white
+    private let toolbarButtonDisabledTintColor = NSColor.white.withAlphaComponent(0.35)
     private var currentAnnotationTool: AnnotationTool?
 
     override init(frame frameRect: NSRect) {
@@ -324,6 +333,7 @@ final class CaptureOverlayView: NSView {
         previewContainerView.isHidden = false
         topBarContainerView.isHidden = false
         toolbarContainerView.isHidden = false
+        toolbarTooltipView.isHidden = true
         aiButton.isEnabled = true
 
         updateAnnotationSourceImage()
@@ -389,6 +399,7 @@ final class CaptureOverlayView: NSView {
         previewContainerView.isHidden = true
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
+        toolbarTooltipView.isHidden = true
         aiButton.isEnabled = true
         needsDisplay = true
         NSCursor.crosshair.set()
@@ -396,6 +407,7 @@ final class CaptureOverlayView: NSView {
 
     func setAIButtonEnabled(_ isEnabled: Bool) {
         aiButton.isEnabled = isEnabled
+        applyToolbarButtonAppearance(aiButton, isSelected: false)
     }
 
     func applyAppearanceStyling() {
@@ -843,33 +855,76 @@ final class CaptureOverlayView: NSView {
         toolbarContainerView.wantsLayer = true
         toolbarContainerView.layer?.cornerRadius = 12
 
-        undoButton.target = self
-        undoButton.action = #selector(requestUndo)
-        longCaptureButton.target = self
-        longCaptureButton.action = #selector(requestLongCapture)
-        ocrButton.target = self
-        ocrButton.action = #selector(requestOCR)
-        aiButton.target = self
-        aiButton.action = #selector(requestAI)
-        pinButton.target = self
-        pinButton.action = #selector(requestPin)
-        copyButton.target = self
-        copyButton.action = #selector(requestCopy)
-        saveButton.target = self
-        saveButton.action = #selector(requestSave)
-        cancelButton.target = self
-        cancelButton.action = #selector(requestCancel)
+        configureToolbarTooltip()
 
         let annotationButtons = AnnotationTool.allCases.map { tool -> NSButton in
-            let button = NSButton(title: tool.title, target: self, action: #selector(selectAnnotationTool(_:)))
+            let button = makeToolbarButton(
+                symbolName: tool.symbolName,
+                accessibilityDescription: tool.title,
+                toolTip: tool.title,
+                action: #selector(selectAnnotationTool(_:))
+            )
             button.identifier = NSUserInterfaceItemIdentifier(tool.rawIdentifier)
             annotationToolButtons[tool] = button
             return button
         }
 
-        (annotationButtons + [undoButton, longCaptureButton, ocrButton, aiButton, pinButton, copyButton, saveButton, cancelButton]).forEach { button in
-            button.bezelStyle = .rounded
-        }
+        configureToolbarButton(
+            undoButton,
+            symbolName: "arrow.uturn.backward",
+            accessibilityDescription: AppText.captureUndo,
+            toolTip: AppText.captureUndo,
+            action: #selector(requestUndo)
+        )
+        configureToolbarTextButton(
+            longCaptureButton,
+            title: AppText.captureLongCapture,
+            accessibilityDescription: AppText.captureLongCapture,
+            toolTip: AppText.captureLongCapture,
+            action: #selector(requestLongCapture)
+        )
+        configureToolbarTextButton(
+            ocrButton,
+            title: "OCR",
+            accessibilityDescription: "OCR",
+            toolTip: "OCR",
+            action: #selector(requestOCR)
+        )
+        configureToolbarTextButton(
+            aiButton,
+            title: "AI",
+            accessibilityDescription: "AI",
+            toolTip: "AI",
+            action: #selector(requestAI)
+        )
+        configureToolbarButton(
+            pinButton,
+            symbolName: "pin",
+            accessibilityDescription: AppText.capturePin,
+            toolTip: AppText.capturePin,
+            action: #selector(requestPin)
+        )
+        configureToolbarButton(
+            copyButton,
+            symbolName: "doc.on.doc",
+            accessibilityDescription: AppText.captureCopy,
+            toolTip: AppText.captureCopy,
+            action: #selector(requestCopy)
+        )
+        configureToolbarButton(
+            saveButton,
+            symbolName: "square.and.arrow.down",
+            accessibilityDescription: AppText.captureSave,
+            toolTip: AppText.captureSave,
+            action: #selector(requestSave)
+        )
+        configureToolbarButton(
+            cancelButton,
+            symbolName: "xmark",
+            accessibilityDescription: AppText.captureCancel,
+            toolTip: AppText.captureCancel,
+            action: #selector(requestCancel)
+        )
         annotationButtons.forEach(toolbarContainerView.addSubview)
         toolbarContainerView.addSubview(undoButton)
         toolbarContainerView.addSubview(longCaptureButton)
@@ -880,21 +935,36 @@ final class CaptureOverlayView: NSView {
         toolbarContainerView.addSubview(saveButton)
         toolbarContainerView.addSubview(cancelButton)
         addSubview(toolbarContainerView)
+        addSubview(toolbarTooltipView)
     }
 
     private func applyLocalizedStrings() {
         cornerRadiusLabel.stringValue = AppText.captureCornerRadius
         shadowToggle.title = AppText.captureShadow
-        undoButton.title = AppText.captureUndo
-        longCaptureButton.title = AppText.captureLongCapture
-        pinButton.title = AppText.capturePin
-        copyButton.title = AppText.captureCopy
-        saveButton.title = AppText.captureSave
-        cancelButton.title = AppText.captureCancel
 
         for tool in AnnotationTool.allCases {
-            annotationToolButtons[tool]?.title = tool.title
+            annotationToolButtons[tool]?.toolTip = tool.title
+            annotationToolButtons[tool]?.setAccessibilityLabel(tool.title)
         }
+
+        undoButton.toolTip = AppText.captureUndo
+        undoButton.setAccessibilityLabel(AppText.captureUndo)
+        longCaptureButton.toolTip = AppText.captureLongCapture
+        longCaptureButton.setAccessibilityLabel(AppText.captureLongCapture)
+        ocrButton.toolTip = "OCR"
+        ocrButton.setAccessibilityLabel("OCR")
+        aiButton.toolTip = "AI"
+        aiButton.setAccessibilityLabel("AI")
+        pinButton.toolTip = AppText.capturePin
+        pinButton.setAccessibilityLabel(AppText.capturePin)
+        copyButton.toolTip = AppText.captureCopy
+        copyButton.setAccessibilityLabel(AppText.captureCopy)
+        saveButton.toolTip = AppText.captureSave
+        saveButton.setAccessibilityLabel(AppText.captureSave)
+        cancelButton.toolTip = AppText.captureCancel
+        cancelButton.setAccessibilityLabel(AppText.captureCancel)
+
+        updateToolbarHoverTooltips()
     }
 
     private func layoutPreviewInterface() {
@@ -970,24 +1040,28 @@ final class CaptureOverlayView: NSView {
         )
 
         let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }
-        annotationButtons.forEach { $0.sizeToFit() }
-        undoButton.sizeToFit()
-        longCaptureButton.sizeToFit()
-        ocrButton.sizeToFit()
-        aiButton.sizeToFit()
-        pinButton.sizeToFit()
-        copyButton.sizeToFit()
-        saveButton.sizeToFit()
-        cancelButton.sizeToFit()
-        let toolbarButtons = annotationButtons + [undoButton, longCaptureButton, ocrButton, aiButton, pinButton, copyButton, saveButton, cancelButton]
+        let toolbarButtons = annotationButtons + [
+            undoButton,
+            longCaptureButton,
+            ocrButton,
+            aiButton,
+            pinButton,
+            copyButton,
+            saveButton,
+            cancelButton
+        ]
+        annotationButtons.forEach { button in
+            button.frame.size = toolbarButtonSize
+        }
+        [undoButton, pinButton, copyButton, saveButton, cancelButton].forEach { button in
+            button.frame.size = toolbarButtonSize
+        }
+        [longCaptureButton, ocrButton, aiButton].forEach(sizeToolbarTextButton(_:))
 
         let toolbarPaddingX: CGFloat = 12
         let toolbarPaddingY: CGFloat = 6
         let toolbarSpacing: CGFloat = 12
-        let toolbarContentHeight = max(
-            toolbarButtons.map(\.frame.height).max() ?? 0,
-            0
-        )
+        let toolbarContentHeight = toolbarButtons.map(\.frame.height).max() ?? toolbarButtonSize.height
         let toolbarWidth = toolbarPaddingX * 2
             + toolbarButtons.reduce(CGFloat(0)) { $0 + $1.frame.width }
             + (toolbarSpacing * CGFloat(max(toolbarButtons.count - 1, 0)))
@@ -1011,6 +1085,10 @@ final class CaptureOverlayView: NSView {
                 y: (toolbarHeight - button.frame.height) / 2
             )
             currentToolbarX += button.frame.width + toolbarSpacing
+        }
+
+        if toolbarTooltipView.isHidden == false {
+            repositionToolbarTooltip()
         }
     }
 
@@ -1130,9 +1208,7 @@ final class CaptureOverlayView: NSView {
             return
         }
 
-        if currentAnnotationTool == tool {
-            currentAnnotationTool = nil
-        } else {
+        if currentAnnotationTool != tool {
             currentAnnotationTool = tool
         }
 
@@ -1143,9 +1219,260 @@ final class CaptureOverlayView: NSView {
     }
 
     private func updateAnnotationToolSelection() {
-        for (tool, button) in annotationToolButtons {
-            button.state = tool == currentAnnotationTool ? .on : .off
+        for tool in AnnotationTool.allCases {
+            guard let button = annotationToolButtons[tool] else {
+                continue
+            }
+
+            let isSelected = tool == currentAnnotationTool
+            button.state = isSelected ? .on : .off
+            applyToolbarButtonAppearance(button, isSelected: isSelected)
+
+            if isSelected {
+                animateToolbarSelectionFeedback(for: button)
+            }
         }
+    }
+
+    private func makeToolbarButton(
+        symbolName: String,
+        accessibilityDescription: String,
+        toolTip: String,
+        action: Selector
+    ) -> ToolbarHoverButton {
+        let image = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: accessibilityDescription
+        )?.withSymbolConfiguration(toolbarSymbolConfiguration) ?? NSImage()
+
+        let button = ToolbarHoverButton(image: image, target: self, action: action)
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.focusRingType = .none
+        button.toolTip = toolTip
+        button.hoverToolTip = toolTip
+        button.onHoverChanged = { [weak self, weak button] isHovered in
+            guard let self, let button else {
+                return
+            }
+
+            self.handleToolbarButtonHover(isHovered: isHovered, button: button)
+        }
+        button.setAccessibilityLabel(accessibilityDescription)
+        applyToolbarButtonAppearance(button, isSelected: false)
+        return button
+    }
+
+    private func configureToolbarTextButton(
+        _ button: ToolbarHoverButton,
+        title: String,
+        accessibilityDescription: String,
+        toolTip: String,
+        action: Selector
+    ) {
+        button.image = nil
+        button.title = title
+        button.font = .systemFont(ofSize: 13, weight: .medium)
+        button.alignment = .center
+        button.imagePosition = .noImage
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.focusRingType = .none
+        button.toolTip = toolTip
+        button.hoverToolTip = toolTip
+        button.onHoverChanged = { [weak self, weak button] isHovered in
+            guard let self, let button else {
+                return
+            }
+
+            self.handleToolbarButtonHover(isHovered: isHovered, button: button)
+        }
+        button.target = self
+        button.action = action
+        button.setAccessibilityLabel(accessibilityDescription)
+        applyToolbarButtonAppearance(button, isSelected: false)
+    }
+
+    private func configureToolbarButton(
+        _ button: ToolbarHoverButton,
+        symbolName: String,
+        accessibilityDescription: String,
+        toolTip: String,
+        action: Selector
+    ) {
+        let image = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: accessibilityDescription
+        )?.withSymbolConfiguration(toolbarSymbolConfiguration) ?? NSImage()
+
+        button.title = ""
+        button.image = image
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.focusRingType = .none
+        button.toolTip = toolTip
+        button.hoverToolTip = toolTip
+        button.onHoverChanged = { [weak self, weak button] isHovered in
+            guard let self, let button else {
+                return
+            }
+
+            self.handleToolbarButtonHover(isHovered: isHovered, button: button)
+        }
+        button.target = self
+        button.action = action
+        button.setAccessibilityLabel(accessibilityDescription)
+        applyToolbarButtonAppearance(button, isSelected: false)
+    }
+
+    private func sizeToolbarTextButton(_ button: NSButton) {
+        button.sizeToFit()
+        let width = max(toolbarTextButtonMinWidth, button.frame.width + 10)
+        button.frame.size = CGSize(width: width, height: toolbarButtonSize.height)
+    }
+
+    private func animateToolbarSelectionFeedback(for button: NSButton) {
+        button.wantsLayer = true
+
+        let scaleAnimation = CABasicAnimation(keyPath: "transform.scale")
+        scaleAnimation.fromValue = 0.9
+        scaleAnimation.toValue = 1.0
+        scaleAnimation.duration = 0.18
+        scaleAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+        let opacityAnimation = CABasicAnimation(keyPath: "opacity")
+        opacityAnimation.fromValue = 0.7
+        opacityAnimation.toValue = 1.0
+        opacityAnimation.duration = 0.18
+        opacityAnimation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+        button.layer?.add(scaleAnimation, forKey: "toolbarSelectionScale")
+        button.layer?.add(opacityAnimation, forKey: "toolbarSelectionOpacity")
+    }
+
+    private func applyToolbarButtonAppearance(_ button: NSButton, isSelected: Bool) {
+        button.wantsLayer = false
+        button.layer?.backgroundColor = nil
+        if button.isEnabled == false {
+            button.contentTintColor = toolbarButtonDisabledTintColor
+        } else {
+            button.contentTintColor = isSelected ? toolbarSelectedTintColor : toolbarButtonTintColor
+        }
+        button.needsDisplay = true
+    }
+
+    private func configureToolbarTooltip() {
+        toolbarTooltipView.material = .popover
+        toolbarTooltipView.blendingMode = .withinWindow
+        toolbarTooltipView.state = .active
+        toolbarTooltipView.wantsLayer = true
+        toolbarTooltipView.layer?.cornerRadius = 8
+        toolbarTooltipView.layer?.masksToBounds = true
+        toolbarTooltipView.isHidden = true
+
+        toolbarTooltipLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        toolbarTooltipLabel.textColor = .labelColor
+        toolbarTooltipView.addSubview(toolbarTooltipLabel)
+    }
+
+    private func updateToolbarHoverTooltips() {
+        for tool in AnnotationTool.allCases {
+            (annotationToolButtons[tool] as? ToolbarHoverButton)?.hoverToolTip = tool.title
+        }
+
+        undoButton.hoverToolTip = AppText.captureUndo
+        longCaptureButton.hoverToolTip = AppText.captureLongCapture
+        ocrButton.hoverToolTip = "OCR"
+        aiButton.hoverToolTip = "AI"
+        pinButton.hoverToolTip = AppText.capturePin
+        copyButton.hoverToolTip = AppText.captureCopy
+        saveButton.hoverToolTip = AppText.captureSave
+        cancelButton.hoverToolTip = AppText.captureCancel
+    }
+
+    private func handleToolbarButtonHover(isHovered: Bool, button: ToolbarHoverButton) {
+        guard mode == .preview, toolbarContainerView.isHidden == false else {
+            hideToolbarTooltip()
+            return
+        }
+
+        if isHovered {
+            showToolbarTooltip(for: button)
+        } else {
+            hideToolbarTooltip()
+        }
+    }
+
+    private func showToolbarTooltip(for button: ToolbarHoverButton) {
+        let tooltip = button.hoverToolTip.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard tooltip.isEmpty == false else {
+            hideToolbarTooltip()
+            return
+        }
+
+        toolbarTooltipLabel.stringValue = tooltip
+        toolbarTooltipLabel.sizeToFit()
+
+        let paddingX: CGFloat = 10
+        let paddingY: CGFloat = 6
+        let width = toolbarTooltipLabel.frame.width + paddingX * 2
+        let height = toolbarTooltipLabel.frame.height + paddingY * 2
+        toolbarTooltipView.frame.size = CGSize(width: width, height: height)
+        toolbarTooltipLabel.frame.origin = CGPoint(
+            x: paddingX,
+            y: (height - toolbarTooltipLabel.frame.height) / 2
+        )
+
+        positionToolbarTooltip(relativeTo: button)
+        toolbarTooltipView.isHidden = false
+    }
+
+    private func repositionToolbarTooltip() {
+        guard let hoveredButton = currentHoveredToolbarButton() else {
+            hideToolbarTooltip()
+            return
+        }
+
+        positionToolbarTooltip(relativeTo: hoveredButton)
+    }
+
+    private func positionToolbarTooltip(relativeTo button: ToolbarHoverButton) {
+        let buttonFrameInOverlay = convert(button.bounds, from: button)
+        let preferredX = buttonFrameInOverlay.midX - toolbarTooltipView.frame.width / 2
+        let clampedX = min(
+            max(preferredX, 16),
+            bounds.width - toolbarTooltipView.frame.width - 16
+        )
+
+        var tooltipY = buttonFrameInOverlay.maxY + Self.toolbarTooltipOffset
+        if tooltipY + toolbarTooltipView.frame.height > bounds.maxY - 16 {
+            tooltipY = buttonFrameInOverlay.minY - toolbarTooltipView.frame.height - Self.toolbarTooltipOffset
+        }
+
+        toolbarTooltipView.frame.origin = CGPoint(x: clampedX, y: tooltipY)
+    }
+
+    private func hideToolbarTooltip() {
+        toolbarTooltipView.isHidden = true
+    }
+
+    private func currentHoveredToolbarButton() -> ToolbarHoverButton? {
+        let allButtons = annotationToolButtons.values.compactMap { $0 as? ToolbarHoverButton } + [
+            undoButton,
+            longCaptureButton,
+            ocrButton,
+            aiButton,
+            pinButton,
+            copyButton,
+            saveButton,
+            cancelButton
+        ]
+
+        return allButtons.first(where: \.isHovering)
     }
 
     private func updateAnnotationSourceImage() {
@@ -1210,6 +1537,41 @@ final class CaptureOverlayView: NSView {
         case resizeTopRight
         case resizeBottomLeft
         case resizeBottomRight
+    }
+}
+
+private final class ToolbarHoverButton: NSButton {
+    var hoverToolTip: String = ""
+    var onHoverChanged: ((Bool) -> Void)?
+
+    private var trackingArea: NSTrackingArea?
+    private(set) var isHovering = false
+
+    override func updateTrackingAreas() {
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        self.trackingArea = trackingArea
+
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovering = true
+        onHoverChanged?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovering = false
+        onHoverChanged?(false)
     }
 }
 
