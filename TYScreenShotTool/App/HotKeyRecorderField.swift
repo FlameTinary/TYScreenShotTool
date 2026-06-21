@@ -41,7 +41,7 @@ struct HotKeyRecorderField: NSViewRepresentable {
         textField.font = .systemFont(ofSize: 13)
         textField.focusRingType = .none
         textField.recorderDelegate = context.coordinator
-        textField.placeholderString = "点击后录制热键"
+        textField.placeholderString = AppLocalization.text("settings.hotkey.placeholder")
         return textField
     }
 
@@ -52,6 +52,10 @@ struct HotKeyRecorderField: NSViewRepresentable {
         }
 
         nsView.isRecording = isRecording
+        let placeholder = AppLocalization.text("settings.hotkey.placeholder")
+        if nsView.placeholderString != placeholder {
+            nsView.placeholderString = placeholder
+        }
 
         if isRecording, nsView.window?.firstResponder !== nsView {
             nsView.window?.makeFirstResponder(nsView)

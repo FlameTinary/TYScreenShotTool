@@ -19,18 +19,18 @@ struct MenuBarContentView: View {
     }
 
     var body: some View {
-        Button("TShot") {
+        Button(AppLocalization.text("app.name")) {
         }
 
         Divider()
 
-        Button("Settings") {
+        Button(AppLocalization.text("menu.settings")) {
             settingsOpenCoordinator.openSettings()
         }
 
         Divider()
 
-        Button("Quit") {
+        Button(AppLocalization.text("menu.quit")) {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")

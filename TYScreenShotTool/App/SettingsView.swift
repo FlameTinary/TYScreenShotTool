@@ -22,6 +22,8 @@ struct SettingsView: View {
     private var saveDirectoryBookmarkData = Data()
     @AppStorage(AppSettings.aiUseVisionTextExtractionKey)
     private var aiUseVisionTextExtraction = AppSettings.aiUseVisionTextExtractionDefaultValue
+    @AppStorage(AppSettings.appLanguageKey)
+    private var appLanguageStorageValue = AppSettings.appLanguageDefaultValue
     @State private var displayedHotKeyValue = ScreenshotHotKey.screenshot.displayName
     @State private var isRecordingHotKey = false
     @State private var pendingHotKey: ScreenshotHotKey?
@@ -32,18 +34,30 @@ struct SettingsView: View {
         self.globalHotKeyService = globalHotKeyService
     }
 
+    private var appLanguageSelection: Binding<AppLanguage> {
+        Binding(
+            get: {
+                AppLanguage(rawValue: appLanguageStorageValue) ?? .system
+            },
+            set: { newValue in
+                appLanguageStorageValue = newValue.storageValue
+            }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Settings")
+            Text(AppLocalization.text("settings.title"))
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("当前版本提供截图快捷键、AI 分析链路与保存目录配置。")
+            Text(AppLocalization.text("settings.description"))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 12) {
                 hotKeyPicker
+                languageSettings
                 aiAnalysisSettings
                 saveDirectoryPicker
             }
@@ -62,11 +76,11 @@ struct SettingsView: View {
 
     private var hotKeyPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("HotKey 配置")
+            Text(AppLocalization.text("settings.hotkey.section"))
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("截图快捷键")
+                Text(AppLocalization.text("settings.hotkey.label"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -96,21 +110,43 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("支持修饰键与字母、数字、功能键、方向键组合，按回车确认。")
+            Text(AppLocalization.text("settings.hotkey.help"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var aiAnalysisSettings: some View {
+    private var languageSettings: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("AI 分析配置")
+            Text(AppLocalization.text("settings.language.section"))
                 .font(.headline)
 
-            Toggle("AI 使用视觉取字", isOn: $aiUseVisionTextExtraction)
+            Picker(
+                AppLocalization.text("settings.language.label"),
+                selection: appLanguageSelection
+            ) {
+                Text(AppLocalization.text("settings.language.option.system")).tag(AppLanguage.system)
+                Text(AppLocalization.text("settings.language.option.zh_hans")).tag(AppLanguage.simplifiedChinese)
+                Text(AppLocalization.text("settings.language.option.en")).tag(AppLanguage.english)
+                Text(AppLocalization.text("settings.language.option.ja")).tag(AppLanguage.japanese)
+                Text(AppLocalization.text("settings.language.option.ko")).tag(AppLanguage.korean)
+                Text(AppLocalization.text("settings.language.option.de")).tag(AppLanguage.german)
+                Text(AppLocalization.text("settings.language.option.fr")).tag(AppLanguage.french)
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 240, alignment: .leading)
+        }
+    }
 
-            Text("关闭时使用本地 OCR，开启时使用 AI 先识别截图文字再分析。")
+    private var aiAnalysisSettings: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(AppLocalization.text("settings.ai.section"))
+                .font(.headline)
+
+            Toggle(AppLocalization.text("settings.ai.use_vision"), isOn: $aiUseVisionTextExtraction)
+
+            Text(AppLocalization.text("settings.ai.help"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -120,7 +156,7 @@ struct SettingsView: View {
     /// 保存目录配置区域
     private var saveDirectoryPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("保存目录配置")
+            Text(AppLocalization.text("settings.save.section"))
                 .font(.headline)
 
             Text(currentSaveDirectoryPath)
@@ -130,17 +166,17 @@ struct SettingsView: View {
                 .lineLimit(2)
 
             HStack(spacing: 12) {
-                Button("选择目录") {
+                Button(AppLocalization.text("settings.save.choose")) {
                     chooseSaveDirectory()
                 }
 
-                Button("清空配置") {
+                Button(AppLocalization.text("settings.save.clear")) {
                     saveDirectoryPath = ""
                     saveDirectoryBookmarkData = Data()
                 }
             }
 
-            Text("仅支持选择单个目录。保存前必须先选择保存目录。")
+            Text(AppLocalization.text("settings.save.help"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -149,7 +185,7 @@ struct SettingsView: View {
 
     private var currentSaveDirectoryPath: String {
         if saveDirectoryPath.isEmpty {
-            return "未配置保存目录"
+            return AppLocalization.text("settings.save.not_configured")
         }
 
         return saveDirectoryPath
@@ -188,7 +224,7 @@ struct SettingsView: View {
 
         guard let pendingHotKey else {
             displayedHotKeyValue = fallbackHotKey.displayName
-            hotKeyErrorMessage = "请至少输入一个主键"
+            hotKeyErrorMessage = AppLocalization.text("settings.hotkey.error.no_primary_key")
             return
         }
 
@@ -200,7 +236,7 @@ struct SettingsView: View {
 
         guard globalHotKeyService.updateHotKey(pendingHotKey) else {
             displayedHotKeyValue = fallbackHotKey.displayName
-            hotKeyErrorMessage = "快捷键注册失败，请更换组合"
+            hotKeyErrorMessage = AppLocalization.text("settings.hotkey.error.registration_failed")
             return
         }
 
@@ -216,8 +252,8 @@ struct SettingsView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = false
-        panel.prompt = "选择"
-        panel.message = "选择截图 PNG 的保存目录"
+        panel.prompt = AppLocalization.text("settings.save.choose")
+        panel.message = AppLocalization.text("settings.save.panel_message")
 
         if !saveDirectoryPath.isEmpty {
             panel.directoryURL = URL(fileURLWithPath: saveDirectoryPath, isDirectory: true)

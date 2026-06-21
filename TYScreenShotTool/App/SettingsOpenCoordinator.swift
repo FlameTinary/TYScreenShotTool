@@ -32,7 +32,7 @@ final class SettingsOpenCoordinator {
         }
 
         let window = NSWindow()
-        window.title = "Settings"
+        window.title = AppLocalization.text("window.settings.title")
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 460, height: 360)
@@ -60,6 +60,7 @@ final class SettingsOpenCoordinator {
             return
         }
 
+        window.title = AppLocalization.text("window.settings.title")
         let hostingController = NSHostingController(rootView: contentProvider())
         window.contentViewController = hostingController
     }
