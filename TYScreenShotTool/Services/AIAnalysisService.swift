@@ -88,7 +88,9 @@ final class AIAnalysisService {
         } catch let error as AIAnalysisError {
             throw error
         } catch let error as DecodingError {
-            throw AIAnalysisError.requestFailed("响应解析失败：\(error.localizedDescription)")
+            throw AIAnalysisError.requestFailed(
+                AppText.aiResponseDecodeFailedPrefix + ": \(error.localizedDescription)"
+            )
         } catch {
             throw AIAnalysisError.requestFailed(error.localizedDescription)
         }
@@ -164,7 +166,7 @@ final class AIAnalysisService {
         guard var components = URLComponents(string: rawValue),
               components.scheme?.isEmpty == false,
               components.host?.isEmpty == false else {
-            throw AIAnalysisError.requestFailed("AI Base URL 无效。")
+            throw AIAnalysisError.requestFailed(AppText.aiBaseURLInvalid)
         }
 
         var path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -174,10 +176,14 @@ final class AIAnalysisService {
         components.path = "/" + path + "/responses"
 
         guard let url = components.url else {
-            throw AIAnalysisError.requestFailed("AI Base URL 无效。")
+            throw AIAnalysisError.requestFailed(AppText.aiBaseURLInvalid)
         }
 
         return url
+    }
+
+    private func currentLanguage() -> AppLanguage {
+        AppLocalization.currentLanguage(userDefaults: userDefaults)
     }
 
     private func buildDeveloperErrorPrompt(from text: String) -> String {
@@ -197,24 +203,25 @@ final class AIAnalysisService {
         text: String,
         mode: AIAnalysisMode
     ) -> String {
+        let language = currentLanguage()
         let sectionsText: String
         switch mode {
         case .interfaceStructure:
             sectionsText = """
-            界面结构：
-            组件识别：
+            \(AppText.interfaceStructureTitle)：
+            \(AppText.interfaceComponentsTitle)：
             <这里填写内容>
 
-            结构层级：
+            \(AppText.interfaceHierarchyTitle)：
             <这里填写内容>
 
-            视觉特征：
+            \(AppText.interfaceVisualTitle)：
             <这里填写内容>
 
-            交互语义：
+            \(AppText.interfaceInteractionTitle)：
             <这里填写内容>
 
-            实现提示：
+            \(AppText.interfaceImplementationTitle)：
             <这里填写内容>
             """
         default:
@@ -230,11 +237,15 @@ final class AIAnalysisService {
         let outputLanguageInstruction: String
         switch mode {
         case .developerError, .summary:
-            outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，用简洁中文输出，并严格使用以下结构："
+            outputLanguageInstruction = """
+            Please use \(AppText.promptOutputLanguageName(for: language)) for the final answer and follow the required structure strictly based on the \(definition.inputLabel).
+            """
         case .interfaceStructure:
-            outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，严格按要求输出一段结构化界面说明，并确保 5 个固定小标题全部出现："
+            outputLanguageInstruction = """
+            Please use \(AppText.promptOutputLanguageName(for: language)) for the final answer, output a structured interface description based on the \(definition.inputLabel), and ensure all 5 fixed subheadings appear.
+            """
         case .translation:
-            outputLanguageInstruction = "请基于下面的\(definition.inputLabel)，严格按要求输出译文："
+            outputLanguageInstruction = "Please output only the translation result based on the \(definition.inputLabel)."
         }
 
         let targetLanguageInstruction: String
@@ -242,9 +253,9 @@ final class AIAnalysisService {
         case let .translation(language):
             switch language {
             case .simplifiedChinese:
-                targetLanguageInstruction = "目标语言：简体中文"
+                targetLanguageInstruction = "Target language: Simplified Chinese"
             case .english:
-                targetLanguageInstruction = "目标语言：英文"
+                targetLanguageInstruction = "Target language: English"
             }
         default:
             targetLanguageInstruction = ""
@@ -295,7 +306,7 @@ final class AIAnalysisService {
         }
 
         guard 200 ..< 300 ~= httpResponse.statusCode else {
-            let message = String(data: data, encoding: .utf8) ?? "未知服务端错误。"
+            let message = String(data: data, encoding: .utf8) ?? AppText.aiUnknownServerError
             throw AIAnalysisError.requestFailed(message)
         }
     }
@@ -304,99 +315,99 @@ final class AIAnalysisService {
         switch mode {
         case .developerError:
             return AnalysisModeDefinition(
-                instructions: "你负责分析开发报错文本，并用简洁中文输出结果。",
-                promptIntro: "你是一个帮助 macOS / iOS 开发者排查报错的助手。",
-                inputLabel: "报错文本",
+                instructions: "Analyze developer-facing error text and return a concise structured answer.",
+                promptIntro: "You help macOS and iOS developers understand and troubleshoot errors from screenshots.",
+                inputLabel: "error text",
                 requirements: [
-                    "三个部分都必须输出，不能缺省",
-                    "保持短而清晰",
-                    "如果信息不足，明确说明不确定点",
-                    "不要输出与截图无关的泛泛建议",
-                    "不要输出额外标题、前言、总结或 Markdown 代码块",
+                    "all three sections must be present",
+                    "keep the wording concise and clear",
+                    "if the information is insufficient, state the uncertainty explicitly",
+                    "do not provide generic advice unrelated to the screenshot",
+                    "do not add extra headings, prefaces, conclusions, or Markdown code blocks",
                 ],
                 sections: [
                     SectionDefinition(
-                        title: "报错大意",
-                        promptTitle: "报错大意",
-                        acceptedHeaders: [.exact("报错大意")]
+                        title: AppText.developerErrorSummaryTitle,
+                        promptTitle: AppText.developerErrorSummaryTitle,
+                        acceptedHeaders: [.exact(AppText.developerErrorSummaryTitle), .exact("报错大意"), .exact("Error Summary")]
                     ),
                     SectionDefinition(
-                        title: "可能原因",
-                        promptTitle: "可能原因",
-                        acceptedHeaders: [.exact("可能原因")]
+                        title: AppText.developerErrorCausesTitle,
+                        promptTitle: AppText.developerErrorCausesTitle,
+                        acceptedHeaders: [.exact(AppText.developerErrorCausesTitle), .exact("可能原因"), .exact("Possible Causes")]
                     ),
                     SectionDefinition(
-                        title: "建议下一步",
-                        promptTitle: "建议下一步",
-                        acceptedHeaders: [.exact("建议下一步")]
+                        title: AppText.developerErrorNextStepsTitle,
+                        promptTitle: AppText.developerErrorNextStepsTitle,
+                        acceptedHeaders: [.exact(AppText.developerErrorNextStepsTitle), .exact("建议下一步"), .exact("Suggested Next Steps")]
                     ),
                 ]
             )
         case .summary:
             return AnalysisModeDefinition(
-                instructions: "你负责总结截图文字重点，并用简洁中文输出结果。",
-                promptIntro: "你是一个帮助用户总结截图文字重点的助手。",
-                inputLabel: "文字内容",
+                instructions: "Summarize the key points from screenshot text and return a concise structured answer.",
+                promptIntro: "You help users extract the key points from screenshot text.",
+                inputLabel: "text content",
                 requirements: [
-                    "三个部分都必须输出，不能缺省",
-                    "每条尽量短句",
-                    "如果信息不足，明确说明信息不足",
-                    "不要输出额外标题、前言、总结或 Markdown 代码块",
+                    "all three sections must be present",
+                    "keep each point short",
+                    "if the information is insufficient, say so clearly",
+                    "do not add extra headings, prefaces, conclusions, or Markdown code blocks",
                 ],
                 sections: [
                     SectionDefinition(
-                        title: "重点 1",
-                        promptTitle: "重点 1",
-                        acceptedHeaders: [.exact("重点 1"), .exact("重点1"), .exact("重点一")]
+                        title: AppText.summaryPoint1Title,
+                        promptTitle: AppText.summaryPoint1Title,
+                        acceptedHeaders: [.exact(AppText.summaryPoint1Title), .exact("重点 1"), .exact("重点1"), .exact("重点一"), .exact("Point 1")]
                     ),
                     SectionDefinition(
-                        title: "重点 2",
-                        promptTitle: "重点 2",
-                        acceptedHeaders: [.exact("重点 2"), .exact("重点2"), .exact("重点二")]
+                        title: AppText.summaryPoint2Title,
+                        promptTitle: AppText.summaryPoint2Title,
+                        acceptedHeaders: [.exact(AppText.summaryPoint2Title), .exact("重点 2"), .exact("重点2"), .exact("重点二"), .exact("Point 2")]
                     ),
                     SectionDefinition(
-                        title: "重点 3",
-                        promptTitle: "重点 3",
-                        acceptedHeaders: [.exact("重点 3"), .exact("重点3"), .exact("重点三")]
+                        title: AppText.summaryPoint3Title,
+                        promptTitle: AppText.summaryPoint3Title,
+                        acceptedHeaders: [.exact(AppText.summaryPoint3Title), .exact("重点 3"), .exact("重点3"), .exact("重点三"), .exact("Point 3")]
                     ),
                 ]
             )
         case .translation:
             return AnalysisModeDefinition(
-                instructions: "你负责将截图中的文字翻译成指定目标语言，并仅输出译文结果。",
-                promptIntro: "你是一个帮助用户翻译截图文字内容的助手。",
-                inputLabel: "待翻译文本",
+                instructions: "Translate the screenshot text into the requested target language and output only the translation result.",
+                promptIntro: "You help users translate text extracted from screenshots.",
+                inputLabel: "source text",
                 requirements: [
-                    "只输出译文，不要输出原文",
-                    "不要输出解释、说明、前言、结语或 Markdown 代码块",
-                    "保持语义准确与表达自然",
-                    "若原文中存在明显的菜单、按钮或短句，仍然按自然语言翻译",
+                    "output only the translation, not the source text",
+                    "do not add explanations, notes, prefaces, conclusions, or Markdown code blocks",
+                    "keep the meaning accurate and the phrasing natural",
+                    "translate menus, buttons, and short phrases naturally",
                 ],
                 sections: [
                     SectionDefinition(
-                        title: "译文",
-                        promptTitle: "译文",
-                        acceptedHeaders: [.exact("译文")]
+                        title: AppText.translationSectionTitle,
+                        promptTitle: AppText.translationSectionTitle,
+                        acceptedHeaders: [.exact(AppText.translationSectionTitle), .exact("译文"), .exact("Translation")]
                     ),
                 ]
             )
         case .interfaceStructure:
             return AnalysisModeDefinition(
-                instructions: "你负责识别截图中的界面结构，并输出一段可供设计与开发继续复用的结构化说明。",
-                promptIntro: "你是一个帮助设计师和开发者理解截图界面结构的助手。",
-                inputLabel: "界面内容",
+                instructions: "Identify the interface structure from the screenshot and output a structured description that designers and developers can reuse.",
+                promptIntro: "You help designers and developers understand screenshot UI structure.",
+                inputLabel: "interface content",
                 requirements: [
-                    "必须按固定小标题输出",
-                    "保持简洁、具体、可复用",
-                    "优先描述组件类型、层级、视觉特征、交互语义与实现提示",
-                    "实现提示先给通用方向，再补一句前端或原生可参考的落地建议",
-                    "不要输出代码块、JSON、前言、结语或与截图无关的猜测",
+                    "use the fixed subheadings",
+                    "keep it concise, concrete, and reusable",
+                    "prioritize component types, hierarchy, visual traits, interaction semantics, and implementation notes",
+                    "give implementation notes as a general direction first, then one practical suggestion",
+                    "do not output code blocks, JSON, prefaces, conclusions, or irrelevant guesses",
                 ],
                 sections: [
                     SectionDefinition(
-                        title: "界面结构",
-                        promptTitle: "界面结构",
-                        acceptedHeaders: [.exact("界面结构")]
+                        title: AppText.interfaceStructureTitle,
+                        promptTitle: AppText.interfaceStructureTitle,
+                        acceptedHeaders: [.exact(AppText.interfaceStructureTitle), .exact("界面结构"), .exact("Interface Structure")]
                     ),
                 ]
             )
@@ -441,7 +452,7 @@ final class AIAnalysisService {
         print("[AI Analysis] Translation output missing explicit section header, fallback to raw translated text")
 
         let sections = [
-            AIAnalysisSection(title: "译文", content: normalized),
+            AIAnalysisSection(title: AppText.translationSectionTitle, content: normalized),
         ]
 
         return AIAnalysisResult(
@@ -469,7 +480,7 @@ final class AIAnalysisService {
         print("[AI Analysis] Interface structure output missing explicit section header, fallback to raw structured text")
 
         let sections = [
-            AIAnalysisSection(title: "界面结构", content: normalized),
+            AIAnalysisSection(title: AppText.interfaceStructureTitle, content: normalized),
         ]
 
         return AIAnalysisResult(
@@ -560,6 +571,8 @@ final class AIAnalysisService {
         }
 
         let candidates = [
+            "\(AppText.translationSectionTitle)：",
+            "\(AppText.translationSectionTitle):",
             "译文：",
             "译文:",
             "Translation:",
@@ -584,6 +597,8 @@ final class AIAnalysisService {
         }
 
         let candidates = [
+            "\(AppText.interfaceStructureTitle)：",
+            "\(AppText.interfaceStructureTitle):",
             "界面结构：",
             "界面结构:",
         ]
@@ -601,11 +616,11 @@ final class AIAnalysisService {
 
     private func hasAllInterfaceStructureHeadings(in text: String) -> Bool {
         let headings = [
-            "组件识别",
-            "结构层级",
-            "视觉特征",
-            "交互语义",
-            "实现提示",
+            AppText.interfaceComponentsTitle,
+            AppText.interfaceHierarchyTitle,
+            AppText.interfaceVisualTitle,
+            AppText.interfaceInteractionTitle,
+            AppText.interfaceImplementationTitle,
         ]
 
         return headings.allSatisfy { heading in
@@ -729,17 +744,17 @@ enum AIAnalysisError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "OpenAI API Key 未配置。"
+            return AppText.aiMissingAPIKey
         case .emptyInput:
-            return "OCR 文本为空。"
+            return AppText.aiEmptyInput
         case .invalidResponse:
-            return "AI 返回格式无效。"
+            return AppText.aiInvalidResponse
         case .emptyOutput:
-            return "AI 返回内容为空。"
+            return AppText.aiEmptyOutput
         case .lowQualityOutput:
-            return "AI 返回结果不完整，请重试或调整截图范围后再试。"
+            return AppText.aiLowQualityOutput
         case let .requestFailed(reason):
-            return "AI 请求失败：\(reason)"
+            return AppText.aiRequestFailedPrefix + ": \(reason)"
         }
     }
 }

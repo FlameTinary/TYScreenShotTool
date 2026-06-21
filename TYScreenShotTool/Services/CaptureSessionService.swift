@@ -265,7 +265,7 @@ final class CaptureSessionService {
                 try clipboardService.copyImage(exportedImage)
                 print("Clipboard Copy Success")
                 await MainActor.run {
-                    toastService.showToast(message: "已复制截图到剪贴板")
+                    toastService.showToast(message: AppText.screenshotCopiedToast)
                     overlayService.dismissOverlay()
                 }
                 clearPendingCapture()
@@ -311,7 +311,7 @@ final class CaptureSessionService {
                 print("Save Success")
                 print("path: \(savedFileURL.path)")
                 await MainActor.run {
-                    toastService.showToast(message: "截图已保存")
+                    toastService.showToast(message: AppText.screenshotSavedToast)
                     overlayService.dismissOverlay()
                 }
                 clearPendingCapture()
@@ -367,7 +367,7 @@ final class CaptureSessionService {
             } catch {
                 print("OCR failed: \(error.localizedDescription)")
                 await MainActor.run {
-                    toastService.showToast(message: "OCR 识别失败")
+                    toastService.showToast(message: AppText.ocrFailedToast)
                 }
             }
         }
@@ -383,7 +383,7 @@ final class CaptureSessionService {
         }
 
         guard isAIAnalysisInProgress == false else {
-            toastService.showToast(message: "AI 正在分析中")
+            toastService.showToast(message: AppText.aiInProgressToast)
             return
         }
 
@@ -444,7 +444,7 @@ final class CaptureSessionService {
 
         guard annotations.isEmpty else {
             print("Scrolling capture failed: current selection contains annotations.")
-            toastService.showToast(message: "长截图暂不支持标注后进入")
+            toastService.showToast(message: AppText.scrollingCaptureAnnotationBlocked)
             return
         }
 
@@ -495,7 +495,7 @@ final class CaptureSessionService {
         do {
             try clipboardService.copyImage(image)
             print("Scrolling Capture Copy Success")
-            toastService.showToast(message: "已复制长截图到剪贴板")
+            toastService.showToast(message: AppText.longScreenshotCopiedToast)
             finishScrollingCaptureSession()
         } catch {
             print("Scrolling capture copy failed: \(error.localizedDescription)")
@@ -521,7 +521,7 @@ final class CaptureSessionService {
                 let savedFileURL = try self.imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
                 print("Scrolling Capture Save Success")
                 print("path: \(savedFileURL.path)")
-                self.toastService.showToast(message: "长截图已保存")
+                self.toastService.showToast(message: AppText.longScreenshotSavedToast)
                 self.finishScrollingCaptureSession()
             } catch let error as ImageSaveError {
                 if let temporaryFileURL {
@@ -596,7 +596,7 @@ final class CaptureSessionService {
                     }
 
                     self.finishScrollingOCRRequest(requestID: requestID)
-                    self.toastService.showToast(message: "OCR 识别失败")
+                    self.toastService.showToast(message: AppText.ocrFailedToast)
                 }
             }
         }
@@ -757,14 +757,14 @@ final class CaptureSessionService {
         do {
             try clipboardService.copyText(text)
             print("Clipboard Copy Success")
-            toastService.showToast(message: "OCR 已复制到剪贴板")
+            toastService.showToast(message: AppText.ocrCopiedToast)
             ocrPreviewWindowService.dismiss()
             overlayService.dismissOverlay()
             clearPendingCapture()
             transition(to: .idle)
         } catch {
             print("OCR clipboard copy failed: \(error.localizedDescription)")
-            toastService.showToast(message: "OCR 复制失败")
+            toastService.showToast(message: AppText.ocrCopyFailedToast)
         }
     }
 
@@ -772,10 +772,10 @@ final class CaptureSessionService {
     private func copyScrollingOCRPreviewText(_ text: String) {
         do {
             try clipboardService.copyText(text)
-            toastService.showToast(message: "OCR 已复制到剪贴板")
+            toastService.showToast(message: AppText.ocrCopiedToast)
             ocrPreviewWindowService.dismiss()
         } catch {
-            toastService.showToast(message: "OCR 复制失败")
+            toastService.showToast(message: AppText.ocrCopyFailedToast)
         }
     }
 
@@ -826,9 +826,9 @@ final class CaptureSessionService {
                 toastService.showToast(message: emptyContentMessage(for: mode))
                 aiAnalysisPreviewWindowService.dismiss()
             case .requestFailed:
-                toastService.showToast(message: "OCR 识别失败")
+                toastService.showToast(message: AppText.ocrFailedToast)
                 aiAnalysisPreviewWindowService.presentError(
-                    title: "OCR 识别失败",
+                    title: AppText.ocrFailedToast,
                     message: error.localizedDescription,
                     selectionRect: selectionRect,
                     onRetry: { [weak self] in
@@ -855,9 +855,9 @@ final class CaptureSessionService {
                 toastService.showToast(message: emptyContentMessage(for: mode))
                 aiAnalysisPreviewWindowService.dismiss()
             case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
-                toastService.showToast(message: "AI 分析失败")
+                toastService.showToast(message: AppText.aiFailedToast)
                 aiAnalysisPreviewWindowService.presentError(
-                    title: "AI 分析失败",
+                    title: AppText.aiResultError,
                     message: error.localizedDescription,
                     selectionRect: selectionRect,
                     onRetry: { [weak self] in
@@ -869,9 +869,9 @@ final class CaptureSessionService {
                 )
             }
         } catch {
-            toastService.showToast(message: "AI 分析失败")
+            toastService.showToast(message: AppText.aiFailedToast)
             aiAnalysisPreviewWindowService.presentError(
-                title: "AI 分析失败",
+                title: AppText.aiResultError,
                 message: error.localizedDescription,
                 selectionRect: selectionRect,
                 onRetry: { [weak self] in
@@ -913,9 +913,9 @@ final class CaptureSessionService {
             aiAnalysisPreviewWindowService.dismiss()
         case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
             print("[AI Analysis] Vision extraction failed with recoverable error")
-            toastService.showToast(message: "AI 识别失败")
+            toastService.showToast(message: AppText.aiVisionFailedToast)
             aiAnalysisPreviewWindowService.presentError(
-                title: "AI 识别失败",
+                title: AppText.aiVisionFailedToast,
                 message: error.localizedDescription,
                 selectionRect: selectionRect,
                 onRetry: onRetry,
@@ -1019,9 +1019,9 @@ final class CaptureSessionService {
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .requestFailed:
-                    toastService.showToast(message: "OCR 识别失败")
+                    toastService.showToast(message: AppText.ocrFailedToast)
                     aiAnalysisPreviewWindowService.presentError(
-                        title: "OCR 识别失败",
+                        title: AppText.ocrFailedToast,
                         message: error.localizedDescription,
                         selectionRect: selectionRect,
                         preferredSide: preferredSide,
@@ -1050,9 +1050,9 @@ final class CaptureSessionService {
                     aiAnalysisPreviewWindowService.dismiss()
                 case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
                     print("[AI Analysis] Scrolling vision extraction failed with recoverable error")
-                    toastService.showToast(message: "AI 识别失败")
+                    toastService.showToast(message: AppText.aiVisionFailedToast)
                     aiAnalysisPreviewWindowService.presentError(
-                        title: "AI 识别失败",
+                        title: AppText.aiVisionFailedToast,
                         message: error.localizedDescription,
                         selectionRect: selectionRect,
                         preferredSide: preferredSide,
@@ -1080,8 +1080,9 @@ final class CaptureSessionService {
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
-                    toastService.showToast(message: "AI 分析失败")
+                    toastService.showToast(message: AppText.aiFailedToast)
                     aiAnalysisPreviewWindowService.presentError(
+                        title: AppText.aiResultError,
                         message: error.localizedDescription,
                         selectionRect: selectionRect,
                         preferredSide: preferredSide,
@@ -1102,8 +1103,9 @@ final class CaptureSessionService {
                 ) else {
                     return
                 }
-                toastService.showToast(message: "AI 分析失败")
+                toastService.showToast(message: AppText.aiFailedToast)
                 aiAnalysisPreviewWindowService.presentError(
+                    title: AppText.aiResultError,
                     message: error.localizedDescription,
                     selectionRect: selectionRect,
                     preferredSide: preferredSide,
@@ -1121,9 +1123,9 @@ final class CaptureSessionService {
     private func emptyContentMessage(for mode: AIAnalysisMode) -> String {
         switch mode {
         case .interfaceStructure:
-            return "AI 未识别到有效内容"
+            return AppText.aiNoValidContent
         default:
-            return "AI 未识别到有效文字"
+            return AppText.aiNoValidText
         }
     }
 
@@ -1141,11 +1143,11 @@ final class CaptureSessionService {
     private func copyAIAnalysisResult(_ text: String) {
         do {
             try clipboardService.copyText(text)
-            toastService.showToast(message: "AI 分析结果已复制")
+            toastService.showToast(message: AppText.aiCopiedToast)
             aiAnalysisPreviewWindowService.dismiss()
         } catch {
             print("AI analysis clipboard copy failed: \(error.localizedDescription)")
-            toastService.showToast(message: "AI 结果复制失败")
+            toastService.showToast(message: AppText.aiCopyFailedToast)
         }
     }
 
@@ -1160,7 +1162,7 @@ final class CaptureSessionService {
             aiAnalysisPreviewWindowService.dismiss()
         } catch {
             print("AI secondary clipboard copy failed: \(error.localizedDescription)")
-            toastService.showToast(message: "AI 结果复制失败")
+            toastService.showToast(message: AppText.aiCopyFailedToast)
         }
     }
 
@@ -1197,8 +1199,8 @@ final class CaptureSessionService {
         alert.alertStyle = .warning
         alert.messageText = alertContent.title
         alert.informativeText = alertContent.message
-        alert.addButton(withTitle: "打开设置")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: AppText.openSettingsButton)
+        alert.addButton(withTitle: AppText.cancelButton)
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else {
@@ -1212,18 +1214,18 @@ final class CaptureSessionService {
         switch error {
         case .saveDirectoryNotConfigured:
             return (
-                title: "未配置保存目录",
-                message: "请前往 Settings 选择截图 PNG 的保存目录，然后再执行保存。"
+                title: AppText.saveDirNotConfiguredTitle,
+                message: AppText.saveDirNotConfiguredMessage
             )
         case .directoryBookmarkResolutionFailed, .directoryBookmarkStale:
             return (
-                title: "保存目录授权已失效",
-                message: "当前保存目录无法访问，请前往 Settings 重新选择保存目录。"
+                title: AppText.saveDirAuthExpiredTitle,
+                message: AppText.saveDirAuthExpiredMessage
             )
         case .directoryAccessFailed, .configuredDirectoryNotFound, .configuredPathIsNotDirectory:
             return (
-                title: "保存目录不可用",
-                message: "当前保存目录无法访问，请前往 Settings 检查或重新选择保存目录。"
+                title: AppText.saveDirUnavailableTitle,
+                message: AppText.saveDirUnavailableMessage
             )
         case .destinationCreationFailed, .finalizeFailed, .fileWriteFailed, .moveToConfiguredDirectoryFailed, .removeFailed:
             return nil
@@ -1282,7 +1284,7 @@ final class CaptureSessionService {
         scrollingAppendTask = nil
         isInScrollingCaptureMode = false
         overlayService.exitLongCaptureGuideMode()
-        toastService.showToast(message: "长截图失败，请调整滚动步进后重试")
+        toastService.showToast(message: AppText.longScreenshotFailedToast)
     }
 
     private func reactivateSourceApplicationForScrolling() {

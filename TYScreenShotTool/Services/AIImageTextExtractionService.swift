@@ -26,17 +26,17 @@ enum AIImageTextExtractionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "OpenAI API Key 未配置。"
+            return AppText.aiImageMissingAPIKey
         case .imageEncodingFailed:
-            return "截图编码失败。"
+            return AppText.aiImageEncodingFailed
         case .invalidResponse:
-            return "AI 识别返回格式无效。"
+            return AppText.aiImageInvalidResponse
         case .emptyOutput:
-            return "AI 识别返回内容为空。"
+            return AppText.aiImageEmptyOutput
         case .noUsefulText:
-            return "AI 未识别到有效文字。"
+            return AppText.aiNoValidText
         case let .requestFailed(reason):
-            return "AI 识别请求失败：\(reason)"
+            return AppText.aiImageRequestFailedPrefix + ": \(reason)"
         }
     }
 }
@@ -81,7 +81,9 @@ extension AIImageTextExtractionService {
             print("[AI Vision] Extraction failed: \(error.localizedDescription)")
             throw error
         } catch let error as DecodingError {
-            throw AIImageTextExtractionError.requestFailed("响应解析失败：\(error.localizedDescription)")
+            throw AIImageTextExtractionError.requestFailed(
+                AppText.aiResponseDecodeFailedPrefix + ": \(error.localizedDescription)"
+            )
         } catch {
             throw AIImageTextExtractionError.requestFailed(error.localizedDescription)
         }
@@ -135,7 +137,7 @@ private extension AIImageTextExtractionService {
         guard var components = URLComponents(string: rawValue),
               components.scheme?.isEmpty == false,
               components.host?.isEmpty == false else {
-            throw AIImageTextExtractionError.requestFailed("AI Base URL 无效。")
+            throw AIImageTextExtractionError.requestFailed(AppText.aiBaseURLInvalid)
         }
 
         var path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -145,7 +147,7 @@ private extension AIImageTextExtractionService {
         components.path = "/" + path + "/responses"
 
         guard let url = components.url else {
-            throw AIImageTextExtractionError.requestFailed("AI Base URL 无效。")
+            throw AIImageTextExtractionError.requestFailed(AppText.aiBaseURLInvalid)
         }
 
         return url
@@ -173,15 +175,7 @@ private extension AIImageTextExtractionService {
     }
 
     func buildExtractionPrompt() -> String {
-        """
-        你负责从截图中尽量忠实提取可见文字。
-        要求：
-        - 只输出截图中的文字内容
-        - 不要解释、不要总结、不要补充前言
-        - 不要输出 Markdown 代码块
-        - 保持关键信息原始顺序
-        - 如果没有可识别的有效文字，返回空字符串
-        """
+        AppText.aiVisionExtractionPrompt
     }
 
     func makeRequest(apiKey: String, imageDataURL: String) throws -> URLRequest {
@@ -194,7 +188,7 @@ private extension AIImageTextExtractionService {
 
         let body = VisionResponseRequestBody(
             model: resolvedModel(),
-            instructions: "你负责从截图图片中提取文字。",
+            instructions: AppText.aiVisionExtractionInstructions,
             input: [
                 .init(
                     role: "user",
@@ -219,7 +213,7 @@ private extension AIImageTextExtractionService {
         print("[AI Vision] HTTP status: \(httpResponse.statusCode)")
 
         guard 200 ..< 300 ~= httpResponse.statusCode else {
-            let message = String(data: data, encoding: .utf8) ?? "未知服务端错误。"
+            let message = String(data: data, encoding: .utf8) ?? AppText.aiUnknownServerError
             throw AIImageTextExtractionError.requestFailed(message)
         }
     }

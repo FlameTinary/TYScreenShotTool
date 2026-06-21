@@ -28,11 +28,11 @@ enum AIAnalysisMode {
     var menuTitle: String {
         switch self {
         case .developerError:
-            return "开发报错分析"
+            return AppText.aiModeDeveloperError
         case .summary:
-            return "摘要总结"
+            return AppText.aiModeSummary
         case .interfaceStructure:
-            return "界面结构识别"
+            return AppText.aiModeInterfaceStructure
         case let .translation(language):
             return language.menuTitle
         }
@@ -44,11 +44,11 @@ enum AIAnalysisMode {
     var loadingMessage: String {
         switch self {
         case .developerError:
-            return "AI 正在分析..."
+            return AppText.aiLoadingDeveloperError
         case .summary:
-            return "AI 正在总结..."
+            return AppText.aiLoadingSummary
         case .interfaceStructure:
-            return "AI 正在识别界面结构..."
+            return AppText.aiLoadingInterfaceStructure
         case let .translation(language):
             return language.loadingMessage
         }
@@ -60,11 +60,11 @@ enum AIAnalysisMode {
     var resultStatusTitle: String {
         switch self {
         case .developerError:
-            return "AI 分析结果"
+            return AppText.aiResultTitle
         case .summary:
-            return "摘要总结"
+            return AppText.aiResultSummaryTitle
         case .interfaceStructure:
-            return "界面结构识别"
+            return AppText.aiResultInterfaceStructureTitle
         case let .translation(language):
             return language.resultStatusTitle
         }
@@ -73,26 +73,26 @@ enum AIAnalysisMode {
     var secondaryCopyButtonTitle: String {
         switch self {
         case .developerError:
-            return "复制建议"
+            return AppText.aiResultCopySuggestion
         case .summary:
-            return "复制重点"
+            return AppText.aiResultCopySummary
         case .interfaceStructure:
-            return "复制结构"
+            return AppText.aiResultCopyStructure
         case .translation:
-            return "复制译文"
+            return AppText.aiResultCopyTranslation
         }
     }
 
     var secondaryCopySuccessMessage: String {
         switch self {
         case .developerError:
-            return "建议下一步已复制"
+            return AppText.aiResultCopiedSuggestion
         case .summary:
-            return "摘要重点已复制"
+            return AppText.aiResultCopiedSummary
         case .interfaceStructure:
-            return "界面结构已复制"
+            return AppText.aiResultCopiedStructure
         case .translation:
-            return "译文已复制"
+            return AppText.aiResultCopiedTranslation
         }
     }
 }

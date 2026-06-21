@@ -145,9 +145,9 @@ private final class ScrollingCapturePanelView: NSView {
             aiButton.isEnabled = onAIRequested != nil
         }
     }
-    private let copyButton = NSButton(title: "复制", target: nil, action: nil)
-    private let saveButton = NSButton(title: "保存", target: nil, action: nil)
-    private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
+    private let copyButton = NSButton(title: "", target: nil, action: nil)
+    private let saveButton = NSButton(title: "", target: nil, action: nil)
+    private let cancelButton = NSButton(title: "", target: nil, action: nil)
     private let ocrButton = NSButton(title: "OCR", target: nil, action: nil)
     private let aiButton = NSButton(title: "AI", target: nil, action: nil)
 
@@ -160,6 +160,7 @@ private final class ScrollingCapturePanelView: NSView {
             $0.bezelStyle = .rounded
             addSubview($0)
         }
+        applyLocalizedStrings()
 
         copyButton.target = self
         copyButton.action = #selector(copyAction)
@@ -197,6 +198,7 @@ private final class ScrollingCapturePanelView: NSView {
     }
 
     func configureForLiveCapture() {
+        applyLocalizedStrings()
         needsLayout = true
     }
 
@@ -235,7 +237,11 @@ private final class ScrollingCapturePanelView: NSView {
             menu.addItem(item)
         }
 
-        let translationItem = NSMenuItem(title: "翻译语言", action: nil, keyEquivalent: "")
+        let translationItem = NSMenuItem(
+            title: AppText.aiTranslationMenu,
+            action: nil,
+            keyEquivalent: ""
+        )
         let translationMenu = NSMenu()
 
         for language in AITranslationLanguage.allCases {
@@ -260,5 +266,11 @@ private final class ScrollingCapturePanelView: NSView {
         }
 
         onAIRequested?(mode)
+    }
+
+    private func applyLocalizedStrings() {
+        copyButton.title = AppText.captureCopy
+        saveButton.title = AppText.captureSave
+        cancelButton.title = AppText.captureCancel
     }
 }

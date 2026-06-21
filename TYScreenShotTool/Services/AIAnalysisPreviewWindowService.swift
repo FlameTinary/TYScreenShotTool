@@ -12,8 +12,6 @@ import AppKit
 /// 显示 AI 分析结果的浮动面板。
 @MainActor
 final class AIAnalysisPreviewWindowService {
-    private static let defaultSecondaryCopyButtonTitle = "复制建议"
-
     private let panel = NSPanel(
         contentRect: .zero,
         styleMask: [.borderless, .nonactivatingPanel],
@@ -21,22 +19,18 @@ final class AIAnalysisPreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private let titleLabel = NSTextField(labelWithString: "AI 分析")
+    private let titleLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(labelWithString: "")
     private let scrollView = NSScrollView()
     private let documentContentView = FlippedContentView()
-    private let summarySectionView = SectionView(title: "报错大意")
-    private let causesSectionView = SectionView(title: "可能原因")
-    private let nextStepsSectionView = SectionView(title: "建议下一步")
+    private let summarySectionView = SectionView(title: "")
+    private let causesSectionView = SectionView(title: "")
+    private let nextStepsSectionView = SectionView(title: "")
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
-    private let copyAllButton = NSButton(title: "复制全部", target: nil, action: nil)
-    private let copyNextStepsButton = NSButton(
-        title: AIAnalysisPreviewWindowService.defaultSecondaryCopyButtonTitle,
-        target: nil,
-        action: nil
-    )
-    private let retryButton = NSButton(title: "重试", target: nil, action: nil)
-    private let closeButton = NSButton(title: "关闭", target: nil, action: nil)
+    private let copyAllButton = NSButton(title: "", target: nil, action: nil)
+    private let copyNextStepsButton = NSButton(title: "", target: nil, action: nil)
+    private let retryButton = NSButton(title: "", target: nil, action: nil)
+    private let closeButton = NSButton(title: "", target: nil, action: nil)
 
     private var onCopyAll: (() -> Void)?
     private var onCopySecondary: (() -> Void)?
@@ -102,16 +96,18 @@ final class AIAnalysisPreviewWindowService {
         documentContentView.addSubview(causesSectionView)
         documentContentView.addSubview(nextStepsSectionView)
         documentContentView.addSubview(messageLabel)
+        applyLocalizedStrings()
     }
 
     func presentLoading(
         selectionRect: CGRect,
         preferredSide: PreviewPlacementSide? = nil,
-        message: String = "AI 正在分析...",
+        message: String? = nil,
         onClose: @escaping () -> Void
     ) {
-        statusLabel.stringValue = message
-        copyNextStepsButton.title = Self.defaultSecondaryCopyButtonTitle
+        applyLocalizedStrings()
+        statusLabel.stringValue = message ?? AppText.aiLoadingDeveloperError
+        copyNextStepsButton.title = AppText.aiResultCopySuggestion
         messageLabel.stringValue = ""
         configureForLoadingOrError(messageVisible: false)
         copyAllButton.isEnabled = false
@@ -136,6 +132,7 @@ final class AIAnalysisPreviewWindowService {
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
+        applyLocalizedStrings()
         statusLabel.stringValue = result.statusTitle
         copyNextStepsButton.title = result.mode.secondaryCopyButtonTitle
         configureForResult(result)
@@ -153,15 +150,16 @@ final class AIAnalysisPreviewWindowService {
     }
 
     func presentError(
-        title: String = "AI 分析失败",
+        title: String? = nil,
         message: String,
         selectionRect: CGRect,
         preferredSide: PreviewPlacementSide? = nil,
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
-        statusLabel.stringValue = title
-        copyNextStepsButton.title = Self.defaultSecondaryCopyButtonTitle
+        applyLocalizedStrings()
+        statusLabel.stringValue = title ?? AppText.aiResultError
+        copyNextStepsButton.title = AppText.aiResultCopySuggestion
         messageLabel.stringValue = message
         configureForLoadingOrError(messageVisible: true)
         copyAllButton.isEnabled = false
@@ -202,6 +200,16 @@ final class AIAnalysisPreviewWindowService {
 
     @objc private func closeRequested() {
         onClose?()
+    }
+
+    private func applyLocalizedStrings() {
+        titleLabel.stringValue = AppText.aiResultTitle
+        copyAllButton.title = AppText.aiResultCopyAll
+        retryButton.title = AppText.aiResultRetry
+        closeButton.title = AppText.aiResultClose
+        if copyNextStepsButton.title.isEmpty {
+            copyNextStepsButton.title = AppText.aiResultCopySuggestion
+        }
     }
 
     private func configureForLoadingOrError(messageVisible: Bool) {

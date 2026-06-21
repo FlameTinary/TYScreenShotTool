@@ -13,9 +13,9 @@ enum AITranslationLanguage: CaseIterable {
     var menuTitle: String {
         switch self {
         case .simplifiedChinese:
-            return "翻译成中文"
+            return AppText.aiModeTranslationChinese
         case .english:
-            return "翻译成英文"
+            return AppText.aiModeTranslationEnglish
         }
     }
 
@@ -23,9 +23,9 @@ enum AITranslationLanguage: CaseIterable {
     var resultStatusTitle: String {
         switch self {
         case .simplifiedChinese:
-            return "翻译成中文"
+            return AppText.aiModeTranslationChinese
         case .english:
-            return "翻译成英文"
+            return AppText.aiModeTranslationEnglish
         }
     }
 
@@ -33,9 +33,9 @@ enum AITranslationLanguage: CaseIterable {
     var loadingMessage: String {
         switch self {
         case .simplifiedChinese:
-            return "AI 正在翻译成中文..."
+            return AppText.aiLoadingTranslationChinese
         case .english:
-            return "AI 正在翻译成英文..."
+            return AppText.aiLoadingTranslationEnglish
         }
     }
 }
