@@ -2,15 +2,13 @@
 
 Version: v1.0.0+
 
-Current Sprint: Sprint 41 In Progress
+Current Sprint: Sprint 41 Completed
 
 ---
 
 ## 当前状态
 
-Sprint 41 已进入设计阶段。
-设计文档已完成并 commit。
-实现计划已完成并 commit。
+Sprint 41 已完成实现、构建验证与人工验证。
 
 ## 当前目标
 

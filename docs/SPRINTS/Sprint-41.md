@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Done
 
 ## Goal
 
@@ -100,4 +100,29 @@ In Progress
 
 ## Result
 
-待实现。
+### 实现
+
+- 新增 `RGBColor` Equatable 颜色结构体 + 预设 8 色
+- 新增 `RectangleProperties` 矩形样式属性结构体（线宽/透明度/圆角/填充/颜色）
+- 新增 `RectanglePropertyPanelView` 两排布局属性面板（粗细下拉选/透明度滑块/圆角滑块/实心空心分段按钮/预设8色圆点）
+- 修改 `CaptureAnnotation.rectangle` 从 `(CGRect)` 改为 `(CGRect, RectangleProperties)`
+- 画布选中交互：点击已画矩形进入选中态（青色虚线高亮）
+- 基于 RectangleProperties 的矩形渲染（圆角/实心空心/透明度/颜色/线宽）
+- 面板生命周期：点击矩形→显示；点击其他工具/取消→隐藏
+- 导出渲染适配 RectangleProperties
+- `isUpdatingDisplay` 标志防止 `updateDisplay` 触发冗余回调循环
+- 面板 Y 坐标增加 `max(24,)` 防止屏幕底部溢出
+- 修复 `selectedAnnotationIndex` 访问权限（private → internal）
+
+### 验证
+
+- `./scripts/build.sh` 构建通过
+- 面板显示/隐藏/布局人工验证通过
+- 选中交互与实时更新人工验证通过
+- 其他工具不受影响人工验证通过
+
+### 结果
+
+Sprint 41 完成后，TShot 的矩形工具首次具备了独立的属性控制能力。
+用户现在可以在截图编辑态中自由调整矩形的视觉样式，
+同时保持椭圆、箭头、画笔、马赛克、文字等其他工具不受影响。
