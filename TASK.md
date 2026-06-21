@@ -2,14 +2,13 @@
 
 Version: v1.0.0+
 
-Current Sprint: Sprint 38 Planned
+Current Sprint: Sprint 38 Done
 
 ---
 
 ## 当前状态
 
-Sprint 37 已完成实现、构建验证与人工验证。
-Sprint 38 已完成本地化设计对齐，准备进入 implementation plan 阶段。
+Sprint 38 已完成实现、构建验证与人工验证。
 
 ## 当前目标
 
@@ -69,7 +68,7 @@ Sprint 38 已完成本地化设计对齐，准备进入 implementation plan 阶�
 
 9. 不因为本地化引入新的截图主链路回归
 
-10. 项目构建通过，且每种语言至少完成核心人工验证
+10. 项目构建通过，且已完成核心人工验证
 
 ---
 

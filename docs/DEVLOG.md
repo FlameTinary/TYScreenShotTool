@@ -6,6 +6,43 @@
 
 # 2026-06-20
 
+## Sprint 38 完成
+
+### 主题
+
+App 本地化
+
+### 实现
+
+- 建立 `String Catalog + AppLanguage + AppLocalization + AppText` 本地化基础设施
+- App 新增语言设置，支持“跟随系统 + 手动覆盖语言”
+- 首批支持：
+  - 简体中文
+  - English
+  - 日本語
+  - 한국어
+  - Deutsch
+  - Français
+- 菜单栏与 Settings 页面完成本地化
+- 截图编辑态、OCR 结果窗、AI 结果窗完成本地化
+- `AIAnalysisMode`、`AITranslationLanguage` 与相关动态提示完成本地化
+- AI prompt、AI 固定输出标题与 AI 输出语言会跟随当前有效语言切换
+- 翻译目标语言继续独立于 UI 语言
+- OCR 识别语言改为“当前语言优先 + 中英兜底”
+
+### 验证
+
+- `./scripts/build.sh` 构建通过
+- Settings 语言切换人工验证通过
+- 菜单栏与 Settings 文案本地化人工验证通过
+- 截图编辑态、OCR、AI 结果窗本地化人工验证通过
+- AI 输出语言跟随当前有效语言人工验证通过
+- 翻译目标语言不受 UI 语言影响人工验证通过
+
+### 结果
+
+Sprint 38 完成后，TShot 已具备统一的 App 本地化能力；用户现在可以在系统语言或手动覆盖语言之间切换，并让菜单栏、设置页、截图编辑态、OCR、AI 结果窗以及 AI 输出语言保持一致，同时保留翻译目标语言独立设置与 OCR 语言优先级兜底策略。
+
 ## Sprint 37 完成
 
 ### 主题

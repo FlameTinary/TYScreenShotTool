@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Done
 
 ## Goal
 
@@ -151,4 +151,14 @@ OCR 识别语言采用“当前语言优先 + 中英兜底”。
 
 ## Result
 
-Pending
+Sprint 38 完成后，TShot 已建立一套原生、轻量的 App 本地化能力：
+
+- 基于 `String Catalog + AppLanguage + AppLocalization + AppText` 收口用户可见文案与运行时动态文案
+- 支持简体中文、English、日本語、한국어、Deutsch、Français 六种语言
+- Settings 已支持“跟随系统 + 手动覆盖语言”
+- 菜单栏、Settings、截图编辑态、OCR 窗口、AI 窗口的用户可见文案已完成本地化
+- AI prompt、AI 固定输出标题与 AI 输出语言已跟随当前有效语言切换
+- 翻译功能的目标语言继续独立于 UI 语言
+- OCR 识别语言已调整为“当前语言优先 + 中英兜底”
+- 新打开窗口与新触发流程会使用新语言，已打开窗口不强制即时刷新
+- `./scripts/build.sh` 构建通过，人工验证通过

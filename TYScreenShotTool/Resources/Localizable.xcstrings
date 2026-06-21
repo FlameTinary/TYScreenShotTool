@@ -2,6 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "app.name" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -42,6 +43,7 @@
       }
     },
     "menu.quit" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -82,6 +84,7 @@
       }
     },
     "menu.settings" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -122,6 +125,7 @@
       }
     },
     "settings.ai.help" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -162,6 +166,7 @@
       }
     },
     "settings.ai.section" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -202,6 +207,7 @@
       }
     },
     "settings.ai.use_vision" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -242,6 +248,7 @@
       }
     },
     "settings.description" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -282,6 +289,7 @@
       }
     },
     "settings.hotkey.error.no_primary_key" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -322,6 +330,7 @@
       }
     },
     "settings.hotkey.error.registration_failed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -362,6 +371,7 @@
       }
     },
     "settings.hotkey.help" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -402,6 +412,7 @@
       }
     },
     "settings.hotkey.label" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -442,6 +453,7 @@
       }
     },
     "settings.hotkey.placeholder" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -482,6 +494,7 @@
       }
     },
     "settings.hotkey.section" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -522,6 +535,7 @@
       }
     },
     "settings.language.label" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -562,6 +576,7 @@
       }
     },
     "settings.language.option.de" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -602,6 +617,7 @@
       }
     },
     "settings.language.option.en" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -642,6 +658,7 @@
       }
     },
     "settings.language.option.fr" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -682,6 +699,7 @@
       }
     },
     "settings.language.option.ja" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -722,6 +740,7 @@
       }
     },
     "settings.language.option.ko" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -762,6 +781,7 @@
       }
     },
     "settings.language.option.system" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -802,6 +822,7 @@
       }
     },
     "settings.language.option.zh_hans" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -842,6 +863,7 @@
       }
     },
     "settings.language.section" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -882,6 +904,7 @@
       }
     },
     "settings.save.choose" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -922,6 +945,7 @@
       }
     },
     "settings.save.clear" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -962,6 +986,7 @@
       }
     },
     "settings.save.help" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1002,6 +1027,7 @@
       }
     },
     "settings.save.not_configured" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1042,6 +1068,7 @@
       }
     },
     "settings.save.panel_message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1082,6 +1109,7 @@
       }
     },
     "settings.save.section" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1122,6 +1150,7 @@
       }
     },
     "settings.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1162,6 +1191,7 @@
       }
     },
     "window.settings.title" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
