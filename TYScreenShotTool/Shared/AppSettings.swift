@@ -23,6 +23,10 @@ enum AppSettings {
     static let aiUseVisionTextExtractionKey = "settings.aiUseVisionTextExtraction"
     /// AI 使用 Vision 文字提取默认值
     static let aiUseVisionTextExtractionDefaultValue = false
+    /// App 语言设置键
+    static let appLanguageKey = "settings.appLanguage"
+    /// App 语言默认值
+    static let appLanguageDefaultValue = AppLanguage.system.storageValue
     /// AI 分析 API 密钥
     static let aiAnalysisAPIKeyKey = "local.aiAnalysis.openAIAPIKey"
     /// AI 分析 API 基础 URL
