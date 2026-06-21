@@ -13,8 +13,8 @@ import Foundation
 /// 定义截图上可添加的各种标注类型，包括矩形、圆形、箭头、画笔、马赛克和文字。
 /// 每种标注类型都包含其几何数据和渲染参数。
 enum CaptureAnnotation: Equatable {
-    /// 矩形标注
-    case rectangle(CGRect)
+    /// 矩形标注（位置 + 样式属性）
+    case rectangle(CGRect, RectangleProperties)
     /// 圆形标注
     case ellipse(CGRect)
     /// 箭头标注，包含起点和终点
@@ -44,7 +44,11 @@ enum CaptureAnnotation: Equatable {
     /// 计算标注在画布上占据的区域，用于渲染和碰撞检测。
     var bounds: CGRect {
         switch self {
-        case let .rectangle(rect), let .ellipse(rect), let .mosaic(rect):
+        case let .rectangle(rect, _):
+            return rect.standardized
+        case let .ellipse(rect):
+            return rect.standardized
+        case let .mosaic(rect):
             return rect.standardized
         case let .arrow(start, end):
             return CGRect(
