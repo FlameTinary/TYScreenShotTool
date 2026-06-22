@@ -42,17 +42,8 @@ final class ScrollingCapturePanelService {
 
         installContentView()
 
-        let panelSize = measuredPanelSize()
+        let panelSize = measuredPanelFrameSize(for: panel)
         panel.setFrame(originRect(for: panelSize, selectionRect: selectionRect, on: screen), display: true)
-
-        // Pin the hosting view into the container after measurement
-        if let hostingView, hostingView.superview !== containerView {
-            hostingView.translatesAutoresizingMaskIntoConstraints = false
-            containerView.addSubview(hostingView)
-            hostingView.snp.makeConstraints { make in
-                make.edges.equalToSuperview()
-            }
-        }
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             guard let self, let panel = self.panel else {
@@ -98,7 +89,32 @@ final class ScrollingCapturePanelService {
     private func installContentView() {
         hostingView?.removeFromSuperview()
 
-        let rootView = ScrollingCaptureControlPanelView(
+        let hostingView = NSHostingView(rootView: makeRootView())
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingView)
+        hostingView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        self.hostingView = hostingView
+    }
+
+    private func measuredPanelFrameSize(for panel: NSPanel) -> CGSize {
+        let minWidth: CGFloat = 360
+        let maxWidth: CGFloat = 560
+        let minHeight: CGFloat = 42
+        let maxHeight: CGFloat = 120
+
+        let unconstrainedSize = measuredContentSize()
+        let clampedWidth = min(max(ceil(unconstrainedSize.width), minWidth), maxWidth)
+        let fittedSize = measuredContentSize(constrainedToWidth: clampedWidth)
+        let clampedHeight = min(max(ceil(fittedSize.height), minHeight), maxHeight)
+
+        let contentSize = CGSize(width: clampedWidth, height: clampedHeight)
+        return panel.frameRect(forContentRect: CGRect(origin: .zero, size: contentSize)).size
+    }
+
+    private func makeRootView() -> ScrollingCaptureControlPanelView {
+        ScrollingCaptureControlPanelView(
             isOCREnabled: onOCRRequested != nil,
             isAIEnabled: onAIRequested != nil,
             onCancel: { [weak self] in self?.onCancelRequested?() },
@@ -107,31 +123,21 @@ final class ScrollingCapturePanelService {
             onSave: { [weak self] in self?.onSaveRequested?() },
             onCopy: { [weak self] in self?.onCopyRequested?() }
         )
-
-        let hostingView = NSHostingView(rootView: rootView)
-        self.hostingView = hostingView
     }
 
-    private func measuredPanelSize() -> CGSize {
-        let minWidth: CGFloat = 360
-        let maxWidth: CGFloat = 560
-        let minHeight: CGFloat = 42
-        let maxHeight: CGFloat = 120
-        let fallbackSize = CGSize(width: 440, height: 42)
-
-        guard let hostingView else {
-            return fallbackSize
+    private func measuredContentSize(constrainedToWidth width: CGFloat? = nil) -> CGSize {
+        if let width {
+            let hostingView = NSHostingView(
+                rootView: makeRootView().frame(width: width, alignment: .center)
+            )
+            hostingView.frame = CGRect(x: 0, y: 0, width: width, height: 1)
+            hostingView.layoutSubtreeIfNeeded()
+            return hostingView.fittingSize
         }
 
-        // Give the hosting view a generous width to let SwiftUI compute its ideal height.
-        hostingView.frame.size = CGSize(width: maxWidth, height: 200)
+        let hostingView = NSHostingView(rootView: makeRootView())
         hostingView.layoutSubtreeIfNeeded()
-        let naturalSize = hostingView.fittingSize
-
-        let clampedWidth = min(max(ceil(naturalSize.width), minWidth), maxWidth)
-        let clampedHeight = min(max(ceil(naturalSize.height), minHeight), maxHeight)
-
-        return CGSize(width: clampedWidth, height: clampedHeight)
+        return hostingView.fittingSize
     }
 
     private func applyAppearanceStyling() {
@@ -153,13 +159,11 @@ private final class ScrollingCapturePanel: NSPanel {
     init(contentRect: CGRect) {
         super.init(
             contentRect: contentRect,
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
 
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
         isFloatingPanel = true
         backgroundColor = .clear
         isOpaque = false
@@ -169,8 +173,5 @@ private final class ScrollingCapturePanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         hidesOnDeactivate = false
         hasShadow = true
-        standardWindowButton(.closeButton)?.isHidden = true
-        standardWindowButton(.miniaturizeButton)?.isHidden = true
-        standardWindowButton(.zoomButton)?.isHidden = true
     }
 }

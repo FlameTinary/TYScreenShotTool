@@ -376,7 +376,7 @@ defaults delete com.sheldon.TShot local.aiAnalysis.model
 说明：
 
 * 当前精确迭代阶段以 `docs/ROADMAP.md` 为准
-* 当前唯一任务范围以 `TASK.md` 为准
+* 当前执行范围以 `docs/ROADMAP.md` 与当前 Sprint 文档（`docs/SPRINTS/Sprint-XX.md`）为准
 
 ---
 
