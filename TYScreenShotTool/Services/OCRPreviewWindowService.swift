@@ -6,6 +6,8 @@
 //
 
 import AppKit
+import SnapKit
+import SwiftUI
 
 /// OCR 预览窗口服务
 ///
@@ -19,11 +21,7 @@ final class OCRPreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let scrollView = NSScrollView()
-    private let textView = NSTextView()
-    private let copyButton = NSButton(title: "", target: nil, action: nil)
-    private let cancelButton = NSButton(title: "", target: nil, action: nil)
+    private var hostingView: NSHostingView<OCRPreviewView>?
     private var onCopy: (() -> Void)?
     private var onCancel: (() -> Void)?
 
@@ -43,36 +41,7 @@ final class OCRPreviewWindowService {
         containerView.layer?.cornerRadius = 14
         containerView.layer?.borderWidth = 1
 
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.borderType = .noBorder
-        scrollView.drawsBackground = false
-
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 13)
-        textView.textContainerInset = CGSize(width: 8, height: 8)
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.autoresizingMask = [.width]
-
-        copyButton.target = self
-        copyButton.action = #selector(copyRequested)
-        copyButton.bezelStyle = .rounded
-
-        cancelButton.target = self
-        cancelButton.action = #selector(cancelRequested)
-        cancelButton.bezelStyle = .rounded
-        applyLocalizedStrings()
-
-        scrollView.documentView = textView
         panel.contentView = containerView
-        containerView.addSubview(titleLabel)
-        containerView.addSubview(scrollView)
-        containerView.addSubview(copyButton)
-        containerView.addSubview(cancelButton)
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
@@ -111,9 +80,12 @@ final class OCRPreviewWindowService {
         let displayText = normalizedText.isEmpty ? AppText.ocrEmpty : text
         self.onCopy = onCopy
         self.onCancel = onCancel
-        textView.string = displayText
-        copyButton.isEnabled = normalizedText.isEmpty == false
-        applyLocalizedStrings()
+        installContentView(
+            text: displayText,
+            isCopyEnabled: normalizedText.isEmpty == false,
+            onCopy: onCopy,
+            onCancel: onCancel
+        )
 
         let panelFrame = frame(
             for: selectionRect,
@@ -123,83 +95,47 @@ final class OCRPreviewWindowService {
         AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
         panel.setFrame(panelFrame, display: true)
         applyAppearanceStyling()
-        layoutContent(in: panelFrame.size)
         panel.orderFrontRegardless()
     }
 
     func dismiss() {
         panel.orderOut(nil)
-        textView.string = ""
-        copyButton.isEnabled = true
+        hostingView?.removeFromSuperview()
+        hostingView = nil
         onCopy = nil
         onCancel = nil
     }
 
-    @objc private func copyRequested() {
-        onCopy?()
-    }
+    private func installContentView(
+        text: String,
+        isCopyEnabled: Bool,
+        onCopy: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        hostingView?.removeFromSuperview()
 
-    @objc private func cancelRequested() {
-        onCancel?()
-    }
+        let view = OCRPreviewView(
+            title: AppText.ocrWindowTitle,
+            text: text,
+            isCopyEnabled: isCopyEnabled,
+            copyTitle: AppText.captureCopy,
+            cancelTitle: AppText.captureCancel,
+            onCopy: onCopy,
+            onCancel: onCancel
+        )
 
-    private func applyLocalizedStrings() {
-        titleLabel.stringValue = AppText.ocrWindowTitle
-        copyButton.title = AppText.captureCopy
-        cancelButton.title = AppText.captureCancel
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingView)
+        hostingView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        self.hostingView = hostingView
     }
 
     private func applyAppearanceStyling() {
         containerView.material = .popover
         containerView.layer?.borderColor = NSColor.separatorColor.cgColor
-        titleLabel.textColor = .labelColor
-        textView.textColor = .labelColor
-    }
-
-    private func layoutContent(in size: CGSize) {
-        containerView.frame = CGRect(origin: .zero, size: size)
-
-        let padding: CGFloat = 14
-        let buttonHeight: CGFloat = 28
-        let buttonWidth: CGFloat = 72
-        let spacing: CGFloat = 10
-
-        titleLabel.sizeToFit()
-        titleLabel.frame.origin = CGPoint(
-            x: padding,
-            y: size.height - padding - titleLabel.frame.height
-        )
-
-        cancelButton.frame = CGRect(
-            x: size.width - padding - buttonWidth,
-            y: padding,
-            width: buttonWidth,
-            height: buttonHeight
-        )
-        copyButton.frame = CGRect(
-            x: cancelButton.frame.minX - spacing - buttonWidth,
-            y: padding,
-            width: buttonWidth,
-            height: buttonHeight
-        )
-
-        let scrollTop = titleLabel.frame.minY - spacing
-        let scrollBottom = copyButton.frame.maxY + spacing
-        scrollView.frame = CGRect(
-            x: padding,
-            y: scrollBottom,
-            width: size.width - padding * 2,
-            height: max(scrollTop - scrollBottom, 80)
-        )
-
-        textView.minSize = CGSize(width: 0, height: scrollView.contentSize.height)
-        textView.maxSize = CGSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        textView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
-        textView.textContainer?.containerSize = CGSize(
-            width: scrollView.contentSize.width,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        textView.textContainer?.widthTracksTextView = true
     }
 
     private func frame(

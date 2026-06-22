@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		086F7EC32FE8EC800004C83A /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = 086F7EC22FE8EC800004C83A /* SnapKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		08E7B3A42FD276F200BC7687 /* TShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				086F7EC32FE8EC800004C83A /* SnapKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = TYScreenShotTool;
 			packageProductDependencies = (
+				086F7EC22FE8EC800004C83A /* SnapKit */,
 			);
 			productName = TYScreenShotTool;
 			productReference = 08E7B3A42FD276F200BC7687 /* TShot.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 08E7B39B2FD276F200BC7687;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				086F7EC12FE8EC800004C83A /* XCRemoteSwiftPackageReference "SnapKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 08E7B3A52FD276F200BC7687 /* Products */;
 			projectDirPath = "";
@@ -335,6 +344,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		086F7EC12FE8EC800004C83A /* XCRemoteSwiftPackageReference "SnapKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SnapKit/SnapKit";
+			requirement = {
+				kind = exactVersion;
+				version = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		086F7EC22FE8EC800004C83A /* SnapKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 086F7EC12FE8EC800004C83A /* XCRemoteSwiftPackageReference "SnapKit" */;
+			productName = SnapKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 08E7B39C2FD276F200BC7687 /* Project object */;
 }

@@ -6,6 +6,8 @@
 //
 
 import AppKit
+import SnapKit
+import SwiftUI
 
 /// AI 分析预览窗口服务
 ///
@@ -19,18 +21,7 @@ final class AIAnalysisPreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let statusLabel = NSTextField(labelWithString: "")
-    private let scrollView = NSScrollView()
-    private let documentContentView = FlippedContentView()
-    private let summarySectionView = SectionView(title: "")
-    private let causesSectionView = SectionView(title: "")
-    private let nextStepsSectionView = SectionView(title: "")
-    private let messageLabel = NSTextField(wrappingLabelWithString: "")
-    private let copyAllButton = NSButton(title: "", target: nil, action: nil)
-    private let copyNextStepsButton = NSButton(title: "", target: nil, action: nil)
-    private let retryButton = NSButton(title: "", target: nil, action: nil)
-    private let closeButton = NSButton(title: "", target: nil, action: nil)
+    private var hostingView: NSHostingView<AIAnalysisPreviewView>?
 
     private var onCopyAll: (() -> Void)?
     private var onCopySecondary: (() -> Void)?
@@ -53,46 +44,8 @@ final class AIAnalysisPreviewWindowService {
         containerView.layer?.cornerRadius = 14
         containerView.layer?.borderWidth = 1
 
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-
-        statusLabel.font = .systemFont(ofSize: 12, weight: .medium)
-
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.borderType = .noBorder
-        scrollView.drawsBackground = false
-        documentContentView.wantsLayer = false
-
-        messageLabel.font = .systemFont(ofSize: 13)
-        messageLabel.maximumNumberOfLines = 0
-        messageLabel.lineBreakMode = .byWordWrapping
-        messageLabel.isHidden = true
-
-        [copyAllButton, copyNextStepsButton, retryButton, closeButton].forEach {
-            $0.target = self
-            $0.bezelStyle = .rounded
-        }
-
-        copyAllButton.action = #selector(copyAllRequested)
-        copyNextStepsButton.action = #selector(copyNextStepsRequested)
-        retryButton.action = #selector(retryRequested)
-        closeButton.action = #selector(closeRequested)
-
-        scrollView.documentView = documentContentView
         panel.contentView = containerView
-        containerView.addSubview(titleLabel)
-        containerView.addSubview(statusLabel)
-        containerView.addSubview(scrollView)
-        containerView.addSubview(copyAllButton)
-        containerView.addSubview(copyNextStepsButton)
-        containerView.addSubview(retryButton)
-        containerView.addSubview(closeButton)
 
-        documentContentView.addSubview(summarySectionView)
-        documentContentView.addSubview(causesSectionView)
-        documentContentView.addSubview(nextStepsSectionView)
-        documentContentView.addSubview(messageLabel)
-        applyLocalizedStrings()
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
         }
@@ -112,18 +65,17 @@ final class AIAnalysisPreviewWindowService {
         message: String? = nil,
         onClose: @escaping () -> Void
     ) {
-        applyLocalizedStrings()
-        statusLabel.stringValue = message ?? AppText.aiLoadingDeveloperError
-        copyNextStepsButton.title = AppText.aiResultCopySuggestion
-        messageLabel.stringValue = ""
-        configureForLoadingOrError(messageVisible: false)
-        copyAllButton.isEnabled = false
-        copyNextStepsButton.isEnabled = false
-        retryButton.isEnabled = false
         onCopyAll = nil
         onCopySecondary = nil
         onRetry = nil
         self.onClose = onClose
+        installContentView(
+            content: .loading(message: message ?? AppText.aiLoadingDeveloperError),
+            onCopyAll: nil,
+            onCopySecondary: nil,
+            onRetry: nil,
+            onClose: onClose
+        )
         presentPanel(
             selectionRect: selectionRect,
             preferredSide: preferredSide
@@ -139,17 +91,17 @@ final class AIAnalysisPreviewWindowService {
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
-        applyLocalizedStrings()
-        statusLabel.stringValue = result.statusTitle
-        copyNextStepsButton.title = result.mode.secondaryCopyButtonTitle
-        configureForResult(result)
-        copyAllButton.isEnabled = true
-        copyNextStepsButton.isEnabled = true
-        retryButton.isEnabled = true
         self.onCopyAll = onCopyAll
         self.onCopySecondary = onCopySecondary
         self.onRetry = onRetry
         self.onClose = onClose
+        installContentView(
+            content: .result(result),
+            onCopyAll: onCopyAll,
+            onCopySecondary: onCopySecondary,
+            onRetry: onRetry,
+            onClose: onClose
+        )
         presentPanel(
             selectionRect: selectionRect,
             preferredSide: preferredSide
@@ -164,18 +116,17 @@ final class AIAnalysisPreviewWindowService {
         onRetry: @escaping () -> Void,
         onClose: @escaping () -> Void
     ) {
-        applyLocalizedStrings()
-        statusLabel.stringValue = title ?? AppText.aiResultError
-        copyNextStepsButton.title = AppText.aiResultCopySuggestion
-        messageLabel.stringValue = message
-        configureForLoadingOrError(messageVisible: true)
-        copyAllButton.isEnabled = false
-        copyNextStepsButton.isEnabled = false
-        retryButton.isEnabled = true
         onCopyAll = nil
         onCopySecondary = nil
         self.onRetry = onRetry
         self.onClose = onClose
+        installContentView(
+            content: .error(title: title ?? AppText.aiResultError, message: message),
+            onCopyAll: nil,
+            onCopySecondary: nil,
+            onRetry: onRetry,
+            onClose: onClose
+        )
         presentPanel(
             selectionRect: selectionRect,
             preferredSide: preferredSide
@@ -184,88 +135,42 @@ final class AIAnalysisPreviewWindowService {
 
     func dismiss() {
         panel.orderOut(nil)
+        hostingView?.removeFromSuperview()
+        hostingView = nil
         onCopyAll = nil
         onCopySecondary = nil
         onRetry = nil
         onClose = nil
-        copyAllButton.isEnabled = true
-        copyNextStepsButton.isEnabled = true
-        retryButton.isEnabled = true
     }
 
-    @objc private func copyAllRequested() {
-        onCopyAll?()
-    }
+    private func installContentView(
+        content: AIAnalysisPreviewContent,
+        onCopyAll: (() -> Void)?,
+        onCopySecondary: (() -> Void)?,
+        onRetry: (() -> Void)?,
+        onClose: @escaping () -> Void
+    ) {
+        hostingView?.removeFromSuperview()
 
-    @objc private func copyNextStepsRequested() {
-        onCopySecondary?()
-    }
-
-    @objc private func retryRequested() {
-        onRetry?()
-    }
-
-    @objc private func closeRequested() {
-        onClose?()
-    }
-
-    private func applyLocalizedStrings() {
-        titleLabel.stringValue = AppText.aiResultTitle
-        copyAllButton.title = AppText.aiResultCopyAll
-        retryButton.title = AppText.aiResultRetry
-        closeButton.title = AppText.aiResultClose
-        if copyNextStepsButton.title.isEmpty {
-            copyNextStepsButton.title = AppText.aiResultCopySuggestion
-        }
-    }
-
-    private func applyAppearanceStyling() {
-        containerView.material = .popover
-        containerView.layer?.borderColor = NSColor.separatorColor.cgColor
-        titleLabel.textColor = .labelColor
-        statusLabel.textColor = .secondaryLabelColor
-        messageLabel.textColor = .labelColor
-        summarySectionView.applyAppearanceStyling()
-        causesSectionView.applyAppearanceStyling()
-        nextStepsSectionView.applyAppearanceStyling()
-    }
-
-    private func configureForLoadingOrError(messageVisible: Bool) {
-        summarySectionView.isHidden = true
-        causesSectionView.isHidden = true
-        nextStepsSectionView.isHidden = true
-        messageLabel.isHidden = messageVisible == false
-    }
-
-    private func configureForResult(_ result: AIAnalysisResult) {
-        assert(
-            result.sections.count <= 3,
-            "AIAnalysisPreviewWindowService supports up to 3 sections, got \(result.sections.count)"
+        let view = AIAnalysisPreviewView(
+            title: AppText.aiResultTitle,
+            content: content,
+            copyAllTitle: AppText.aiResultCopyAll,
+            retryTitle: AppText.aiResultRetry,
+            closeTitle: AppText.aiResultClose,
+            onCopyAll: onCopyAll,
+            onCopySecondary: onCopySecondary,
+            onRetry: onRetry,
+            onClose: onClose
         )
-        if result.sections.count > 3 {
-            NSLog(
-                "AIAnalysisPreviewWindowService only renders the first 3 sections, received %ld",
-                result.sections.count
-            )
+
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingView)
+        hostingView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
         }
-
-        let sectionViews = [summarySectionView, causesSectionView, nextStepsSectionView]
-
-        for (index, sectionView) in sectionViews.enumerated() {
-            if index < result.sections.count {
-                let section = result.sections[index]
-                sectionView.setTitle(section.title)
-                sectionView.setContent(section.content)
-                sectionView.isHidden = false
-            } else {
-                sectionView.setTitle("")
-                sectionView.setContent("")
-                sectionView.isHidden = true
-                sectionView.frame = .zero
-            }
-        }
-
-        messageLabel.isHidden = true
+        self.hostingView = hostingView
     }
 
     private func presentPanel(
@@ -285,164 +190,12 @@ final class AIAnalysisPreviewWindowService {
         AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
         panel.setFrame(panelFrame, display: true)
         applyAppearanceStyling()
-        layoutContent(in: panelFrame.size)
         panel.orderFrontRegardless()
     }
 
-    private func layoutContent(in size: CGSize) {
-        containerView.frame = CGRect(origin: .zero, size: size)
-
-        let padding: CGFloat = 14
-        let buttonHeight: CGFloat = 28
-        let spacing: CGFloat = 10
-
-        titleLabel.sizeToFit()
-        titleLabel.frame.origin = CGPoint(
-            x: padding,
-            y: size.height - padding - titleLabel.frame.height
-        )
-
-        statusLabel.sizeToFit()
-        statusLabel.frame.origin = CGPoint(
-            x: padding,
-            y: titleLabel.frame.minY - spacing - statusLabel.frame.height
-        )
-
-        let buttonsTop = layoutActionButtons(
-            in: size,
-            padding: padding,
-            spacing: spacing,
-            buttonHeight: buttonHeight
-        )
-        let scrollTop = statusLabel.frame.minY - spacing
-        let scrollBottom = buttonsTop + spacing
-        scrollView.frame = CGRect(
-            x: padding,
-            y: scrollBottom,
-            width: size.width - padding * 2,
-            height: max(scrollTop - scrollBottom, 100)
-        )
-
-        layoutDocumentContent(in: scrollView.contentSize)
-    }
-
-    private func layoutActionButtons(
-        in size: CGSize,
-        padding: CGFloat,
-        spacing: CGFloat,
-        buttonHeight: CGFloat
-    ) -> CGFloat {
-        let buttonItems: [(button: NSButton, width: CGFloat)] = [
-            (closeButton, 72),
-            (retryButton, 72),
-            (copyNextStepsButton, 96),
-            (copyAllButton, 88)
-        ]
-        let availableWidth = max(size.width - padding * 2, 72)
-        var rows: [[(button: NSButton, width: CGFloat)]] = [[]]
-        var currentRowWidth: CGFloat = 0
-
-        for item in buttonItems {
-            let neededWidth = rows[rows.count - 1].isEmpty
-                ? item.width
-                : currentRowWidth + spacing + item.width
-
-            if neededWidth > availableWidth, rows[rows.count - 1].isEmpty == false {
-                rows.append([item])
-                currentRowWidth = item.width
-                continue
-            }
-
-            rows[rows.count - 1].append(item)
-            currentRowWidth = neededWidth
-        }
-
-        var currentY = padding
-        for row in rows {
-            var trailingX = size.width - padding
-            for item in row {
-                trailingX -= item.width
-                item.button.frame = CGRect(
-                    x: trailingX,
-                    y: currentY,
-                    width: item.width,
-                    height: buttonHeight
-                )
-                trailingX -= spacing
-            }
-            currentY += buttonHeight + spacing
-        }
-
-        return currentY - spacing
-    }
-
-    private func layoutDocumentContent(in size: CGSize) {
-        let contentPadding: CGFloat = 8
-        let sectionSpacing: CGFloat = 12
-        let contentWidth = max(size.width - contentPadding * 2, 120)
-        var currentY: CGFloat = contentPadding
-
-        if summarySectionView.isHidden == false {
-            let height = summarySectionView.preferredHeight(forWidth: contentWidth)
-            summarySectionView.frame = CGRect(
-                x: contentPadding,
-                y: currentY,
-                width: contentWidth,
-                height: height
-            )
-            currentY += height + sectionSpacing
-        } else {
-            summarySectionView.frame = .zero
-        }
-
-        if causesSectionView.isHidden == false {
-            let height = causesSectionView.preferredHeight(forWidth: contentWidth)
-            causesSectionView.frame = CGRect(
-                x: contentPadding,
-                y: currentY,
-                width: contentWidth,
-                height: height
-            )
-            currentY += height + sectionSpacing
-        } else {
-            causesSectionView.frame = .zero
-        }
-
-        if nextStepsSectionView.isHidden == false {
-            let height = nextStepsSectionView.preferredHeight(forWidth: contentWidth)
-            nextStepsSectionView.frame = CGRect(
-                x: contentPadding,
-                y: currentY,
-                width: contentWidth,
-                height: height
-            )
-            currentY += height + sectionSpacing
-        } else {
-            nextStepsSectionView.frame = .zero
-        }
-
-        if messageLabel.isHidden == false {
-            let messageSize = messageLabel.sizeThatFits(
-                CGSize(width: contentWidth, height: .greatestFiniteMagnitude)
-            )
-            messageLabel.frame = CGRect(
-                x: contentPadding,
-                y: currentY,
-                width: contentWidth,
-                height: messageSize.height
-            )
-            currentY += messageSize.height + contentPadding
-        } else {
-            messageLabel.frame = .zero
-            currentY += contentPadding
-        }
-
-        documentContentView.frame = CGRect(
-            x: 0,
-            y: 0,
-            width: size.width,
-            height: max(currentY, size.height)
-        )
+    private func applyAppearanceStyling() {
+        containerView.material = .popover
+        containerView.layer?.borderColor = NSColor.separatorColor.cgColor
     }
 
     private func frame(
@@ -523,89 +276,5 @@ final class AIAnalysisPreviewWindowService {
         NSScreen.screens.first { screen in
             screen.frame.contains(CGPoint(x: rect.midX, y: rect.midY))
         }
-    }
-}
-
-private final class FlippedContentView: NSView {
-    override var isFlipped: Bool {
-        true
-    }
-}
-
-private final class SectionView: NSView {
-    private let titleLabel: NSTextField
-    private let contentLabel = NSTextField(wrappingLabelWithString: "")
-
-    init(title: String) {
-        titleLabel = NSTextField(labelWithString: title)
-        super.init(frame: .zero)
-
-        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-
-        contentLabel.font = .systemFont(ofSize: 13)
-        contentLabel.maximumNumberOfLines = 0
-        contentLabel.lineBreakMode = .byWordWrapping
-
-        addSubview(titleLabel)
-        addSubview(contentLabel)
-        applyAppearanceStyling()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        nil
-    }
-
-    func setContent(_ content: String) {
-        contentLabel.stringValue = content
-        needsLayout = true
-    }
-
-    func setTitle(_ title: String) {
-        titleLabel.stringValue = title
-        needsLayout = true
-    }
-
-    func preferredHeight(forWidth width: CGFloat) -> CGFloat {
-        let titleHeight = titleLabel.fittingSize.height
-        let contentHeight = contentLabel.sizeThatFits(
-            CGSize(width: width, height: .greatestFiniteMagnitude)
-        ).height
-        return titleHeight + 6 + contentHeight
-    }
-
-    func applyAppearanceStyling() {
-        titleLabel.textColor = .secondaryLabelColor
-        contentLabel.textColor = .labelColor
-    }
-
-    override func layout() {
-        super.layout()
-
-        let width = bounds.width
-        let spacing: CGFloat = 6
-
-        titleLabel.sizeToFit()
-        titleLabel.frame = CGRect(
-            x: 0,
-            y: bounds.height - titleLabel.frame.height,
-            width: width,
-            height: titleLabel.frame.height
-        )
-
-        let contentSize = contentLabel.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        contentLabel.frame = CGRect(
-            x: 0,
-            y: 0,
-            width: width,
-            height: contentSize.height
-        )
-
-        titleLabel.frame.origin.y = contentLabel.frame.maxY + spacing
-    }
-
-    override var intrinsicContentSize: NSSize {
-        let width = bounds.width > 0 ? bounds.width : 300
-        return NSSize(width: width, height: preferredHeight(forWidth: width))
     }
 }

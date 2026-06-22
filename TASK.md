@@ -2,40 +2,41 @@
 
 Version: v1.0.0+
 
-Current Sprint: Sprint 41 Completed
+Current Sprint: Sprint 42 Completed
 
 ---
 
 ## 当前状态
 
-Sprint 41 已完成实现、构建验证与人工验证。
+Sprint 42 已完成实现与构建验证。
 
 ## 当前目标
 
-为矩形工具新增属性面板，让用户可以在截图编辑态自由调整矩形的粗细、透明度、圆角、实心/空心和颜色。点击已画矩形可选中并调整属性，面板值作为新矩形默认值。
+将 OCR / AI 结果窗口内容层迁移为 SwiftUI，并明确 AppKit 布局优先使用 SnapKit 的后续规则。
 
 ---
 
 ## 本次范围
 
-1. 新增 RGBColor 与 RectangleProperties 数据模型
-2. 新增 RectanglePropertyPanelView 属性面板（两排布局，粗细下拉选/透明度滑块/圆角滑块/实心空心分段按钮/颜色预设8色）
-3. 修改 CaptureAnnotation.rectangle 携带 RectangleProperties 参数
-4. 画布选中交互：点击已画矩形进入选中态（青色虚线高亮）
-5. 基于 RectangleProperties 的矩形渲染（圆角/实心空心/透明度）
-6. 导出渲染适配 RectangleProperties
-7. 面板生命周期：点击矩形→显示；点击其他工具/取消→隐藏
+1. 确认 SnapKit 已接入 App target
+2. 新增 SwiftUI OCR 结果视图
+3. 新增 SwiftUI AI 结果视图
+4. 保留 AppKit `NSPanel` 外壳与窗口摆放逻辑
+5. 使用 `NSHostingView` 承载 SwiftUI 内容
+6. AppKit 外壳布局使用 SnapKit
+7. 保持普通截图与长截图中的 OCR / AI 结果窗口行为一致
 
 ---
 
 ## 验收标准
 
-1. 点击矩形按钮，面板在工具栏下方显示
-2. 面板两排布局规整，5 个控件均可正常操作
-3. 新矩形使用面板当前值渲染
-4. 点击已画矩形→青色高亮+面板同步
-5. 面板调整→选中矩形实时更新
-6. 点击其他工具/取消→面板隐藏
-7. 其他工具（椭圆/箭头/画笔/马赛克/文字）不受影响
-8. 导出图片中矩形正确渲染属性
-9. `./scripts/build.sh` 构建通过
+1. `./scripts/build.sh` 构建通过
+2. 普通截图 OCR 结果窗口可正常显示，文本仍可选中，并且复制和取消行为保持不变
+3. 长截图 OCR 结果窗口可正常显示，文本仍可选中，并且复制和取消行为保持不变
+4. 普通截图 AI 在开发报错分析、摘要总结、界面结构识别、翻译模式下都可正常显示
+5. 长截图 AI 在至少一个多 section 模式和一个单 section 模式下都可正常显示
+6. AI loading / result / error 三态行为保持不变
+7. AI 复制全部、模式对应的二级复制、重试、关闭行为保持不变
+8. OCR / AI 结果窗口继续根据选区左右空间摆放
+9. 结果窗口迁移后不引入额外材质背景，视觉风格保持与现有 AppKit 外壳一致
+10. 截图 Overlay、标注画布、工具栏、长截图捕获主链路不受影响

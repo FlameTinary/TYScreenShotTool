@@ -33,7 +33,7 @@ final class ScrollingCapturePanelService {
     ///   - selectionRect: 当前选择的区域
     ///   - screen: 所在屏幕
     func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
-        let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 440, height: 56))
+        let panelView = ScrollingCapturePanelView(frame: CGRect(x: 0, y: 0, width: 440, height: 42))
         panelView.onCopyRequested = { [weak self] in
             self?.onCopyRequested?()
         }
@@ -131,6 +131,8 @@ private final class ScrollingCapturePanel: NSPanel {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isFloatingPanel = true
+        backgroundColor = .clear
+        isOpaque = false
         // Keep the control panel above the long-capture guide overlay,
         // otherwise only the white selection frame remains visible.
         level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
@@ -150,13 +152,17 @@ private final class ScrollingCapturePanelView: NSView {
     var onOCRRequested: (() -> Void)? {
         didSet {
             ocrButton.isEnabled = onOCRRequested != nil
+            applyButtonAppearance(ocrButton)
         }
     }
     var onAIRequested: ((AIAnalysisMode) -> Void)? {
         didSet {
             aiButton.isEnabled = onAIRequested != nil
+            applyButtonAppearance(aiButton)
         }
     }
+
+    private let materialView = NSVisualEffectView()
     private let copyButton = NSButton(title: "", target: nil, action: nil)
     private let saveButton = NSButton(title: "", target: nil, action: nil)
     private let cancelButton = NSButton(title: "", target: nil, action: nil)
@@ -165,11 +171,22 @@ private final class ScrollingCapturePanelView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = 12
-        [cancelButton, ocrButton, aiButton, saveButton, copyButton].forEach {
-            $0.bezelStyle = .rounded
-            addSubview($0)
+
+        materialView.material = .popover
+        materialView.blendingMode = .withinWindow
+        materialView.state = .active
+        materialView.wantsLayer = true
+        materialView.layer?.cornerRadius = 12
+        materialView.layer?.masksToBounds = true
+        materialView.autoresizingMask = [.width, .height]
+        addSubview(materialView)
+
+        [cancelButton, ocrButton, aiButton, saveButton, copyButton].forEach { button in
+            button.isBordered = false
+            button.bezelStyle = .regularSquare
+            button.focusRingType = .none
+            button.font = .systemFont(ofSize: 13, weight: .medium)
+            materialView.addSubview(button)
         }
         applyLocalizedStrings()
         applyAppearanceStyling()
@@ -196,6 +213,8 @@ private final class ScrollingCapturePanelView: NSView {
     override func layout() {
         super.layout()
 
+        materialView.frame = bounds
+
         let paddingX: CGFloat = 12
         let buttonHeight: CGFloat = 30
         let buttonSpacing: CGFloat = 10
@@ -212,13 +231,26 @@ private final class ScrollingCapturePanelView: NSView {
     func configureForLiveCapture() {
         applyLocalizedStrings()
         applyAppearanceStyling()
+        [cancelButton, ocrButton, aiButton, saveButton, copyButton].forEach(applyButtonAppearance)
         needsLayout = true
     }
 
     func applyAppearanceStyling() {
-        layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.96).cgColor
-        layer?.borderWidth = 1
-        layer?.borderColor = NSColor.separatorColor.cgColor
+        materialView.material = .popover
+        materialView.layer?.borderColor = NSColor.separatorColor.cgColor
+        materialView.layer?.borderWidth = 1
+        [cancelButton, ocrButton, aiButton, saveButton, copyButton].forEach(applyButtonAppearance)
+    }
+
+    private func applyButtonAppearance(_ button: NSButton) {
+        button.wantsLayer = false
+        button.layer?.backgroundColor = nil
+        if button.isEnabled == false {
+            button.alphaValue = 0.35
+        } else {
+            button.alphaValue = 1.0
+        }
+        button.needsDisplay = true
     }
 
     @objc
