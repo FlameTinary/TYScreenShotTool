@@ -55,6 +55,29 @@ enum AppText {
     static var captureShadow: String { choose(zhHans: "阴影", en: "Shadow", ja: "影", ko: "그림자", de: "Schatten", fr: "Ombre") }
     static var captureUndo: String { choose(zhHans: "撤销", en: "Undo", ja: "取り消し", ko: "실행 취소", de: "Rückgängig", fr: "Annuler") }
     static var captureLongCapture: String { choose(zhHans: "长截图", en: "Long Capture", ja: "長いキャプチャ", ko: "긴 캡처", de: "Lange Aufnahme", fr: "Capture longue") }
+
+    static var scrollingCapturePreviewPreparingTitle: String {
+        choose(
+            zhHans: "等待生成预览",
+            en: "Preparing Preview",
+            ja: "プレビューを準備中",
+            ko: "미리보기를 준비 중",
+            de: "Vorschau wird vorbereitet",
+            fr: "Préparation de l’aperçu"
+        )
+    }
+
+    static var scrollingCapturePreviewPreparingMessage: String {
+        choose(
+            zhHans: "开始滚动后，这里会持续更新长截图预览。",
+            en: "The long-capture preview will update here after scrolling starts.",
+            ja: "スクロールを開始すると、ここに長いキャプチャのプレビューが更新されます。",
+            ko: "스크롤을 시작하면 여기에서 긴 캡처 미리보기가 계속 업데이트됩니다.",
+            de: "Sobald du scrollst, wird hier die Vorschau der langen Aufnahme laufend aktualisiert.",
+            fr: "Dès que le défilement commence, l’aperçu de la capture longue se met à jour ici."
+        )
+    }
+
     static var capturePin: String { choose(zhHans: "图钉", en: "Pin", ja: "ピン留め", ko: "고정", de: "Anheften", fr: "Épingler") }
     static var captureCopy: String { choose(zhHans: "复制", en: "Copy", ja: "コピー", ko: "복사", de: "Kopieren", fr: "Copier") }
     static var captureSave: String { choose(zhHans: "保存", en: "Save", ja: "保存", ko: "저장", de: "Speichern", fr: "Enregistrer") }
