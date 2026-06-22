@@ -142,6 +142,39 @@ FileManager
 
 ---
 
+# UI 实现优先级
+
+新增或重构界面时，优先级如下：
+
+1. 能使用 SwiftUI 表达的界面，优先使用 SwiftUI
+2. 不能使用 SwiftUI、必须保留 AppKit 的地方，AppKit 布局优先使用 SnapKit
+3. SwiftUI 和 SnapKit 都不适合的低层场景，才使用手动 `frame` 布局
+
+适合优先使用 SwiftUI 的界面包括：
+
+* 设置页面
+* 普通结果展示窗口
+* 控制面板
+* 属性面板
+* 工具栏内容
+
+应继续保留 AppKit 的场景包括：
+
+* 全屏截图 Overlay 窗口
+* 多屏窗口层级控制
+* 鼠标事件与鼠标穿透
+* 截图标注画布绘制
+* 全局快捷键与系统能力桥接
+* ScreenCaptureKit 相关坐标和窗口处理
+
+当 AppKit 仅作为窗口外壳或系统能力承载层时，
+内部可见内容应尽量通过 `NSHostingView` / `NSHostingController` 承载 SwiftUI。
+
+SnapKit 已作为项目允许使用的第三方依赖，
+仅用于必须保留 AppKit 的布局代码。
+
+---
+
 # 项目结构
 
 ScreenshotTool/
