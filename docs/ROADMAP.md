@@ -231,6 +231,25 @@ HotKey 配置
 
 ---
 
+### Sprint 42
+
+结果窗口 SwiftUI 化与 AppKit 布局规范
+
+状态：
+✅ Done
+
+成果：
+
+- OCR 结果窗口内容层迁移为 SwiftUI
+- AI 结果窗口内容层迁移为 SwiftUI
+- 保留 AppKit `NSPanel` 外壳与窗口摆放逻辑
+- AppKit 外壳布局使用 SnapKit
+- AI 结果窗口在窄宽度下补齐按钮自适应换行布局
+- 长截图控制面板按钮颜色改为跟随系统外观
+- 明确后续 UI 实现优先级：SwiftUI 优先，AppKit 布局优先 SnapKit，最后才使用手动 `frame`
+
+---
+
 ## 后续规划
 
 ### Sprint 16
@@ -732,18 +751,3 @@ App 外观切换
 - 面板值作为新矩形默认值
 
 ---
-
-### Sprint 42
-
-结果窗口 SwiftUI 化与 AppKit 布局规范
-
-状态：
-✅ Done
-
-成果：
-
-- OCR 结果窗口内容层迁移为 SwiftUI
-- AI 结果窗口内容层迁移为 SwiftUI
-- 保留 AppKit `NSPanel` 外壳与窗口摆放逻辑
-- AppKit 外壳布局使用 SnapKit
-- 明确后续 UI 实现优先级：SwiftUI 优先，AppKit 布局优先 SnapKit，最后才使用手动 `frame`

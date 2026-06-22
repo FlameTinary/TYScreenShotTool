@@ -19,21 +19,27 @@
 - `OCRPreviewWindowService` 保留 AppKit 窗口外壳，并通过 `NSHostingView` 承载 SwiftUI 内容
 - `AIAnalysisPreviewWindowService` 保留 AppKit 窗口外壳，并通过 `NSHostingView` 承载 SwiftUI 内容
 - AppKit 外壳布局使用 SnapKit
+- AI 结果窗口在窄宽度下补齐按钮自适应换行布局
+- 长截图控制面板按钮颜色改回跟随系统外观
 - 在 `AGENTS.md` 中明确后续 UI 实现优先级
 
 ### 验证
 
 - `./scripts/build.sh` 构建通过
+- 针对本轮修复重新完成 code review，未发现新的阻塞问题
+- 普通截图 OCR / AI 结果窗口人工验证通过
+- 长截图 OCR / AI 结果窗口人工验证通过
+- AI loading / result / error 三态与关键按钮行为人工验证通过
 
 ### 结果
 
-Sprint 42 建立了 TShot 后续 UI 演进的第一条迁移模式：
+Sprint 42 已完成 SwiftUI 迁移、规则收口、构建验证与人工验证，并建立了 TShot 后续 UI 演进的第一条迁移模式：
 用户可见内容优先 SwiftUI，必须保留的 AppKit 继续负责窗口和系统行为，
 AppKit 布局优先使用 SnapKit，只有低层坐标和窗口定位场景继续使用 `frame`。
 
 ---
 
-## Sprint 42 规划对齐
+## Sprint 42 规划对齐（前置记录）
 
 ### 主题
 
@@ -54,10 +60,10 @@ AppKit 布局优先使用 SnapKit，只有低层坐标和窗口定位场景继�
 - 新增 `docs/SPRINTS/Sprint-42.md` 作为当前 Sprint 文档
 - 将 `docs/ROADMAP.md` 的当前状态切换为 Sprint 42
 
-### 结果
+### 说明
 
-Sprint 42 当前处于“规划已完成、实现待开始”状态。
-本条记录用于固化本轮设计约束与文档边界，不代表实现已经完成。
+本条为 Sprint 42 开始前的前置规划记录。
+后续实现进展以上方“Sprint 42 实现与构建完成”条目为准。
 
 ---
 
