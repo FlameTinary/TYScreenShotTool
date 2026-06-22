@@ -7,6 +7,8 @@
 
 import AppKit
 import CoreGraphics
+import SnapKit
+import SwiftUI
 
 /// 长截图预览窗口服务
 ///
@@ -20,7 +22,7 @@ final class ScrollingCapturePreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private let imageView = NSImageView()
+    private var hostingView: NSHostingView<ScrollingCapturePreviewContentView>?
     private(set) var attachmentSide: PreviewPlacementSide?
 
     init() {
@@ -40,11 +42,7 @@ final class ScrollingCapturePreviewWindowService {
         containerView.layer?.cornerRadius = 14
         containerView.layer?.borderWidth = 1
 
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.imageAlignment = .alignCenter
-
         panel.contentView = containerView
-        containerView.addSubview(imageView)
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
@@ -59,66 +57,51 @@ final class ScrollingCapturePreviewWindowService {
         }
     }
 
+    func presentPreparingPreview(selectionRect: CGRect) {
+        guard let screen = screenContaining(selectionRect) else {
+            dismissPreview()
+            return
+        }
+
+        let placeholderSize = CGSize(width: 240, height: 160)
+        guard let panelFrame = frame(for: selectionRect, on: screen, contentSize: placeholderSize) else {
+            dismissPreview()
+            return
+        }
+        attachmentSide = panelFrame.maxX <= selectionRect.minX ? .left : .right
+
+        installContentView(
+            .preparing(
+                title: AppText.scrollingCapturePreviewPreparingTitle,
+                message: AppText.scrollingCapturePreviewPreparingMessage
+            )
+        )
+
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        panel.setFrame(panelFrame, display: true)
+        applyAppearanceStyling()
+        panel.orderFrontRegardless()
+    }
+
     func presentOrUpdatePreview(image: CGImage, selectionRect: CGRect) {
         guard let screen = screenContaining(selectionRect) else {
             dismissPreview()
             return
         }
 
-        let visibleFrame = screen.visibleFrame
-        let outerMargin: CGFloat = 24
-        let gap: CGFloat = 20
-        let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
-        let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
-        let placeOnLeft = leftAvailableWidth >= rightAvailableWidth
-        attachmentSide = placeOnLeft ? .left : .right
-        let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
-        let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
-        let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
-
-        guard availableWidth >= 140, availableHeight >= 140 else {
+        let imageSize = CGSize(width: image.width, height: image.height)
+        guard let panelFrame = frame(for: selectionRect, on: screen, contentSize: imageSize) else {
             dismissPreview()
             return
         }
+        attachmentSide = panelFrame.maxX <= selectionRect.minX ? .left : .right
 
-        let imageSize = CGSize(width: image.width, height: image.height)
-        let scale = min(
-            availableWidth / max(imageSize.width, 1),
-            availableHeight / max(imageSize.height, 1),
-            1
-        )
-        let previewSize = CGSize(
-            width: max(140, floor(imageSize.width * scale)),
-            height: max(140, floor(imageSize.height * scale))
+        installContentView(
+            .image(NSImage(cgImage: image, size: imageSize))
         )
 
-        let panelX: CGFloat
-        if placeOnLeft {
-            panelX = max(
-                visibleFrame.minX + outerMargin,
-                selectionRect.minX - gap - previewSize.width
-            )
-        } else {
-            panelX = min(
-                visibleFrame.maxX - outerMargin - previewSize.width,
-                selectionRect.maxX + gap
-            )
-        }
-
-        let panelY = min(
-            max(selectionRect.midY - previewSize.height / 2, visibleFrame.minY + outerMargin),
-            visibleFrame.maxY - outerMargin - previewSize.height
-        )
-
-        panel.setFrame(
-            CGRect(origin: CGPoint(x: panelX, y: panelY), size: previewSize),
-            display: true
-        )
-
-        containerView.frame = CGRect(origin: .zero, size: previewSize)
-        imageView.frame = containerView.bounds.insetBy(dx: 12, dy: 12)
-        imageView.image = NSImage(cgImage: image, size: imageSize)
         AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        panel.setFrame(panelFrame, display: true)
         applyAppearanceStyling()
         panel.orderFrontRegardless()
     }
@@ -126,8 +109,71 @@ final class ScrollingCapturePreviewWindowService {
     /// 关闭预览窗口
     func dismissPreview() {
         panel.orderOut(nil)
-        imageView.image = nil
+        hostingView?.removeFromSuperview()
+        hostingView = nil
         attachmentSide = nil
+    }
+
+    // MARK: - Private
+
+    private func installContentView(_ content: ScrollingCapturePreviewContent) {
+        hostingView?.removeFromSuperview()
+
+        let hostingView = NSHostingView(
+            rootView: ScrollingCapturePreviewContentView(content: content)
+        )
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingView)
+        hostingView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        self.hostingView = hostingView
+    }
+
+    private func frame(for selectionRect: CGRect, on screen: NSScreen, contentSize: CGSize) -> CGRect? {
+        let visibleFrame = screen.visibleFrame
+        let outerMargin: CGFloat = 24
+        let gap: CGFloat = 20
+        let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
+        let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
+        let placeOnLeft = leftAvailableWidth >= rightAvailableWidth
+        let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
+        let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
+        let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
+
+        guard availableWidth >= 140, availableHeight >= 140 else {
+            return nil
+        }
+
+        let scale = min(
+            availableWidth / max(contentSize.width, 1),
+            availableHeight / max(contentSize.height, 1),
+            1
+        )
+        let panelSize = CGSize(
+            width: max(140, floor(contentSize.width * scale)),
+            height: max(140, floor(contentSize.height * scale))
+        )
+
+        let panelX: CGFloat
+        if placeOnLeft {
+            panelX = max(
+                visibleFrame.minX + outerMargin,
+                selectionRect.minX - gap - panelSize.width
+            )
+        } else {
+            panelX = min(
+                visibleFrame.maxX - outerMargin - panelSize.width,
+                selectionRect.maxX + gap
+            )
+        }
+
+        let panelY = min(
+            max(selectionRect.midY - panelSize.height / 2, visibleFrame.minY + outerMargin),
+            visibleFrame.maxY - outerMargin - panelSize.height
+        )
+
+        return CGRect(origin: CGPoint(x: panelX, y: panelY), size: panelSize)
     }
 
     private func screenContaining(_ rect: CGRect) -> NSScreen? {

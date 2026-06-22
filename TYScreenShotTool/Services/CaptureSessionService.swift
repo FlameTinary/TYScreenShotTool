@@ -462,6 +462,7 @@ final class CaptureSessionService {
         } else if let screen = NSScreen.main ?? NSScreen.screens.first {
             scrollingCapturePanelService.presentCapturePanel(selectionRect: pendingSelectionRect, on: screen)
         }
+        scrollingCapturePreviewWindowService.presentPreparingPreview(selectionRect: pendingSelectionRect)
         pendingScreenImages.removeAll()
         reactivateSourceApplicationForScrolling()
 
