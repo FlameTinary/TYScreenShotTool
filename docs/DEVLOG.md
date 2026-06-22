@@ -6,6 +6,36 @@
 
 # 2026-06-22
 
+## Sprint 43 完成
+
+### 主题
+
+长截图控制面板与预览窗口 SwiftUI 化
+
+### 实现
+
+- 将长截图控制面板改为 `NSPanel + NSHostingView + SwiftUI View`
+- 将长截图 AI 入口从 AppKit `NSMenu` 改为 SwiftUI `Popover`
+- 将长截图预览窗口改为 `NSPanel + NSHostingView + SwiftUI View`
+- 新增长截图预览启动占位态
+- 继续保留长截图预览左右摆放与结果窗口反向摆放规则
+
+### 验证
+
+- `./scripts/build.sh` 构建通过
+- 长截图控制面板人工验证通过
+- 长截图 AI Popover 人工验证通过
+- 长截图预览窗口人工验证通过
+- 长截图 OCR / AI 结果窗口摆放链路人工验证通过
+
+### 结果
+
+长截图相关 UI 完成了从 AppKit 内容层向 SwiftUI 内容层的进一步收口，同时保留了 macOS 浮动面板、窗口摆放和长截图主流程这部分最适合继续由 AppKit 管理的能力边界。
+
+---
+
+# 2026-06-22
+
 ## Sprint 42 完成
 
 ### 主题
