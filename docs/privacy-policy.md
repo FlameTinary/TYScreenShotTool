@@ -1,6 +1,6 @@
 Privacy Policy
 
-TYScreenShotTool does not collect, store, transmit, or share any personal data.
+TShot does not collect, store, transmit, or share any personal data.
 
 All screenshots are processed locally on the user's device.
 

@@ -35,8 +35,8 @@ class PreviewSpec:
 
 SPECS = [
     PreviewSpec(
-        filename="smartshot-preview-01-capture-edit.png",
-        eyebrow="SmartShot for Mac",
+        filename="tshot-preview-01-capture-edit.png",
+        eyebrow="TShot for Mac",
         title="截图后立刻进入编辑",
         subtitle="框选、微调、复制、保存，所有常用动作都在同一条工作流里完成。",
         bullets=["顶部样式栏直接调整圆角与阴影", "底部工具栏集中提供标注与导出动作", "真实截图结果所见即所得"],
@@ -49,10 +49,10 @@ SPECS = [
         focus_position="bottom_right",
     ),
     PreviewSpec(
-        filename="smartshot-preview-02-annotation.png",
+        filename="tshot-preview-02-annotation.png",
         eyebrow="Scroll Capture",
         title="滚动内容自动拼成长图",
-        subtitle="进入长截图模式后继续滚动页面，SmartShot 会在同一选区里持续追加内容。",
+        subtitle="进入长截图模式后继续滚动页面，TShot 会在同一选区里持续追加内容。",
         bullets=["长截图过程中保持边界清晰可见", "底部只保留取消、保存、复制三个核心动作", "适合网页、文档和技术资料的连续截取"],
         accent=(255, 149, 0),
         accent_two=(255, 59, 48),
@@ -63,7 +63,7 @@ SPECS = [
         focus_position="bottom_left",
     ),
     PreviewSpec(
-        filename="smartshot-preview-03-scroll-ocr-pin.png",
+        filename="tshot-preview-03-scroll-ocr-pin.png",
         eyebrow="Pinned Capture",
         title="把截图固定在桌面一角",
         subtitle="截图可以直接 Pin 成悬浮窗口，查看参考内容时不必在多个应用之间来回切换。",
