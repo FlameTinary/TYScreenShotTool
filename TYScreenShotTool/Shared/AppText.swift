@@ -46,6 +46,12 @@ enum AppText {
     static var annotationText: String { choose(zhHans: "文字", en: "Text", ja: "テキスト", ko: "텍스트", de: "Text", fr: "Texte") }
 
     static var captureCornerRadius: String { choose(zhHans: "圆角", en: "Corner", ja: "角丸", ko: "둥근 모서리", de: "Ecken", fr: "Coins") }
+    static var rectanglePanelLineWidth: String { choose(zhHans: "粗细", en: "Width", ja: "太さ", ko: "두께", de: "Breite", fr: "Épaisseur") }
+    static var rectanglePanelOpacity: String { choose(zhHans: "不透明度", en: "Opacity", ja: "不透明度", ko: "불투명도", de: "Deckkraft", fr: "Opacité") }
+    static var rectanglePanelCornerRadius: String { choose(zhHans: "圆角", en: "Corner Radius", ja: "角丸", ko: "모서리 반경", de: "Eckenradius", fr: "Rayon") }
+    static var rectanglePanelFill: String { choose(zhHans: "填充", en: "Fill", ja: "塗り", ko: "채우기", de: "Füllung", fr: "Remplissage") }
+    static var rectanglePanelFilled: String { choose(zhHans: "实心", en: "Filled", ja: "塗りつぶし", ko: "채우기", de: "Gefüllt", fr: "Plein") }
+    static var rectanglePanelColor: String { choose(zhHans: "颜色", en: "Color", ja: "色", ko: "색상", de: "Farbe", fr: "Couleur") }
     static var captureShadow: String { choose(zhHans: "阴影", en: "Shadow", ja: "影", ko: "그림자", de: "Schatten", fr: "Ombre") }
     static var captureUndo: String { choose(zhHans: "撤销", en: "Undo", ja: "取り消し", ko: "실행 취소", de: "Rückgängig", fr: "Annuler") }
     static var captureLongCapture: String { choose(zhHans: "长截图", en: "Long Capture", ja: "長いキャプチャ", ko: "긴 캡처", de: "Lange Aufnahme", fr: "Capture longue") }

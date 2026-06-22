@@ -13,6 +13,7 @@ import AppKit
 final class CaptureOverlayView: NSView {
     private static let maximumCornerRadius: Double = 100
     private static let toolbarTooltipOffset: CGFloat = 10
+    private static let rectanglePanelSpacing: CGFloat = 8
 
     var onCancel: (() -> Void)?
     var onDragStarted: (() -> Void)?
@@ -1122,13 +1123,9 @@ final class CaptureOverlayView: NSView {
             repositionToolbarTooltip()
         }
 
-        // 矩形属性面板布局（在工具栏下方）
-        let panelY = max(24, toolbarY - 90 - 8)  // 防止溢出屏幕底部
-        rectanglePanelView.frame = CGRect(
-            x: toolbarX + (toolbarWidth - 320) / 2,
-            y: panelY,
-            width: 320,
-            height: 90
+        layoutRectanglePropertyPanel(
+            toolbarFrame: toolbarContainerView.frame,
+            topBarFrame: topBarContainerView.frame
         )
     }
 
@@ -1508,6 +1505,46 @@ final class CaptureOverlayView: NSView {
 
     private func hideToolbarTooltip() {
         toolbarTooltipView.isHidden = true
+    }
+
+    private func layoutRectanglePropertyPanel(toolbarFrame: CGRect, topBarFrame: CGRect) {
+        let panelSize = RectanglePropertyPanelView.preferredSize
+        let preferredX: CGFloat
+        if let rectangleButton = annotationToolButtons[.rectangle] {
+            preferredX = max(rectangleButton.frame.minX, toolbarFrame.minX)
+        } else {
+            preferredX = toolbarFrame.minX
+        }
+        let clampedX = min(
+            max(preferredX, toolbarFrame.minX),
+            bounds.maxX - panelSize.width - 24
+        )
+
+        let preferredBelowY = toolbarFrame.minY - panelSize.height - Self.rectanglePanelSpacing
+        let belowFits = preferredBelowY >= 24
+
+        let fallbackAboveY = min(
+            toolbarFrame.maxY + Self.rectanglePanelSpacing,
+            bounds.maxY - panelSize.height - 24
+        )
+        let aboveOverlapsTopBar = fallbackAboveY < topBarFrame.maxY + Self.rectanglePanelSpacing
+        let canPlaceAbove = aboveOverlapsTopBar == false
+
+        let panelY: CGFloat
+        if belowFits {
+            panelY = preferredBelowY
+        } else if canPlaceAbove {
+            panelY = fallbackAboveY
+        } else {
+            panelY = max(24, min(preferredBelowY, bounds.maxY - panelSize.height - 24))
+        }
+
+        rectanglePanelView.frame = CGRect(
+            x: clampedX,
+            y: panelY,
+            width: panelSize.width,
+            height: panelSize.height
+        )
     }
 
     private func currentHoveredToolbarButton() -> ToolbarHoverButton? {

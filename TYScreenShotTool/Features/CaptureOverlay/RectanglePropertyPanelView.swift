@@ -7,35 +7,28 @@
 
 import AppKit
 
-/// 矩形属性面板
+/// 矩形工具属性面板。
 ///
-/// 在截图编辑态工具栏下方显示，提供矩形标注的实时样式调整。
-///
-/// **两列布局（左列 + 右列）：**
-/// - 左列：粗细下拉选 + 颜色预设网格
-/// - 右列：透明度滑块 + 圆角滑块 + 实心/空心复选框
-///
-/// **数据流：**
-/// 用户调整面板控件 → `currentProperties.didSet` → `onPropertyChanged` 回调 → 外部更新画布
-///
-/// **反向同步：**
-/// 外部调用 `updateDisplay(with:)` → 面板控件同步到指定属性值（如点击选中已画矩形时）
-/// 通过 `isUpdatingDisplay` 标志避免触发冗余的回调循环
+/// 在工具栏下方显示，提供粗细、透明度、圆角、填充和颜色五项属性的调整。
+/// 面板采用左右两列 Auto Layout 布局，用户操作通过 `onPropertyChanged` 回调向上传递。
+/// 选中已画矩形时，由 `updateDisplay(with:)` 反向同步面板控件，`isUpdatingDisplay` 标志位阻止期间触发冗余回调。
 final class RectanglePropertyPanelView: NSVisualEffectView {
-    /// 面板首选尺寸：宽 382pt，高 118pt
-    static let preferredSize = CGSize(width: 382, height: 118)
+
+    /// 面板首选逻辑尺寸。
+    static let preferredSize = CGSize(width: 320, height: 100)
 
     // MARK: - 回调
 
-    /// 属性变更回调，由外部（CaptureOverlayView）设置，用于响应面板控件的用户操作
+    /// 面板属性变更时调用，由 CaptureOverlayView 设置。
     var onPropertyChanged: ((RectangleProperties) -> Void)?
 
     // MARK: - 内部状态
 
-    /// 防止 `updateDisplay` 触发 `didSet` → `onPropertyChanged` 产生冗余回调
+    /// 为 `true` 时暂停 `currentProperties.didSet` 中的回调触发，
+    /// 避免 `updateDisplay(with:)` 同步面板显示时误判为用户操作。
     private var isUpdatingDisplay = false
 
-    /// 当前面板属性值，`didSet` 中触发 `onPropertyChanged` 回调
+    /// 面板当前的属性值，`didSet` 在用户操作时驱动 `onPropertyChanged`。
     private var currentProperties = RectangleProperties.default {
         didSet {
             guard !isUpdatingDisplay else { return }
@@ -45,49 +38,43 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
 
     // MARK: - 布局容器
 
-    /// 内容容器，提供统一的 14pt 内边距
     private let contentContainer = NSView()
 
-    /// 左列 StackView：约束宽度 156pt，垂直排布，间距 10pt
+    /// 左列，固定宽度 156pt，垂直排布，间距 10pt。
     private let leftColumnStack = NSStackView()
 
-    /// 右列 StackView：弹性宽度，等分填充，垂直排布，间距 8pt
+    /// 右列，弹性宽度，等分填充，垂直排布，间距 8pt。
     private let rightColumnStack = NSStackView()
 
     // MARK: - 标题标签
 
-    /// 粗细标题：“粗细”
     private let lineWidthTitleLabel = RectanglePanelLabel(text: AppText.rectanglePanelLineWidth)
-    /// 透明度标题：“透明度”
     private let opacityTitleLabel = RectanglePanelLabel(text: AppText.rectanglePanelOpacity)
-    /// 圆角标题：“圆角”
     private let cornerRadiusTitleLabel = RectanglePanelLabel(text: AppText.rectanglePanelCornerRadius)
-    /// 填充标题：“填充”
     private let fillTitleLabel = RectanglePanelLabel(text: AppText.rectanglePanelFill)
-    /// 颜色标题：“颜色”
     private let colorTitleLabel = RectanglePanelLabel(text: AppText.rectanglePanelColor)
 
     // MARK: - 交互控件
 
-    /// 粗细下拉选，选项 1px ~ 12px，默认选中 3px（索引 2）
+    /// 粗细下拉选，选项为 1px–12px。
     private let lineWidthPopUp = NSPopUpButton()
 
-    /// 透明度滑块，范围 0-100，默认 100%，连续触发
+    /// 透明度滑块，范围 0–100，连续触发。
     private let opacitySlider = NSSlider()
 
-    /// 透明度数值标签，显示当前百分比，等宽数字字体
+    /// 透明度数值标签，等宽数字显示当前百分比。
     private let opacityValueLabel = RectanglePanelValueLabel(text: "100%")
 
-    /// 圆角滑块，范围 0-100，默认 0px，连续触发
+    /// 圆角滑块，范围 0–100，连续触发。
     private let cornerRadiusSlider = NSSlider()
 
-    /// 圆角数值标签，显示当前 px 值，等宽数字字体
+    /// 圆角数值标签，等宽数字显示当前 px 值。
     private let cornerRadiusValueLabel = RectanglePanelValueLabel(text: "0px")
 
-    /// 实心/空心复选框，`.switch` 样式，默认关闭（空心）
+    /// 实心/空心复选框，`.switch` 样式，默认关闭。
     private let fillCheckbox = NSButton(checkboxWithTitle: AppText.rectanglePanelFilled, target: nil, action: nil)
 
-    /// 颜色圆点按钮数组，R/G/B/Y/C/M/W/K 预设 8 色
+    /// 颜色圆点按钮，按 `RGBColor.presetColors` 顺序构建。
     private var colorButtons: [NSButton] = []
 
     // MARK: - 初始化
@@ -104,9 +91,11 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - 视图与控件配置
+    // MARK: - 配置
 
-    /// 配置毛玻璃基础样式：`.popover` 材质，圆角 12pt，连续曲线
+    /// 配置毛玻璃基础样式。
+    ///
+    /// 材质 `.popover`、连续圆角 12pt，与工具栏外观保持一致。
     private func setupView() {
         material = .popover
         blendingMode = .withinWindow
@@ -116,38 +105,33 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         layer?.cornerCurve = .continuous
     }
 
-    /// 创建并配置所有子控件，设置 target/action，加入视图层级
+    /// 创建所有子控件并设置 target/action。
     private func setupControls() {
-        // 内容容器使用 Auto Layout
         contentContainer.translatesAutoresizingMaskIntoConstraints = false
         addSubview(contentContainer)
 
-        // 左列：垂直排布，左对齐，自然高度，间距 10pt
         leftColumnStack.orientation = .vertical
         leftColumnStack.alignment = .leading
         leftColumnStack.distribution = .fill
         leftColumnStack.spacing = 10
         leftColumnStack.translatesAutoresizingMaskIntoConstraints = false
 
-        // 右列：垂直排布，左对齐，等分填充，间距 8pt
         rightColumnStack.orientation = .vertical
         rightColumnStack.alignment = .leading
         rightColumnStack.distribution = .fillEqually
-        rightColumnStack.spacing = 8
+        rightColumnStack.spacing = 2
         rightColumnStack.translatesAutoresizingMaskIntoConstraints = false
 
-        // --- 粗细下拉选 ---
         for i in 1...12 {
             lineWidthPopUp.addItem(withTitle: "\(i)px")
         }
-        lineWidthPopUp.selectItem(at: 2) // 默认 3px
+        lineWidthPopUp.selectItem(at: 2)
         lineWidthPopUp.target = self
         lineWidthPopUp.action = #selector(lineWidthChanged)
         lineWidthPopUp.font = .systemFont(ofSize: 12)
         lineWidthPopUp.bezelStyle = .rounded
         lineWidthPopUp.translatesAutoresizingMaskIntoConstraints = false
 
-        // --- 透明度滑块 ---
         opacitySlider.minValue = 0
         opacitySlider.maxValue = 100
         opacitySlider.doubleValue = 100
@@ -157,7 +141,6 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         opacitySlider.controlSize = .small
         opacitySlider.translatesAutoresizingMaskIntoConstraints = false
 
-        // --- 圆角滑块 ---
         cornerRadiusSlider.minValue = 0
         cornerRadiusSlider.maxValue = 100
         cornerRadiusSlider.doubleValue = 0
@@ -167,15 +150,13 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         cornerRadiusSlider.controlSize = .small
         cornerRadiusSlider.translatesAutoresizingMaskIntoConstraints = false
 
-        // --- 实心/空心复选框 ---
         fillCheckbox.setButtonType(.switch)
-        fillCheckbox.font = .systemFont(ofSize: 13, weight: .medium)
+        fillCheckbox.font = .systemFont(ofSize: 8, weight: .medium)
         fillCheckbox.target = self
         fillCheckbox.action = #selector(fillChanged)
         fillCheckbox.state = .off
         fillCheckbox.translatesAutoresizingMaskIntoConstraints = false
 
-        // 标题和数值标签启用 Auto Layout
         lineWidthTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         opacityTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         cornerRadiusTitleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -184,14 +165,14 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         opacityValueLabel.translatesAutoresizingMaskIntoConstraints = false
         cornerRadiusValueLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // --- 颜色圆点按钮 ---
         for (index, preset) in RGBColor.presetColors.enumerated() {
             let button = NSButton(frame: .zero)
+            button.title = ""
             button.translatesAutoresizingMaskIntoConstraints = false
             button.wantsLayer = true
             button.isBordered = false
             button.layer?.backgroundColor = preset.toNSColor().cgColor
-            button.layer?.cornerRadius = 9 // 18pt 直径 → 圆角半径 9
+            button.layer?.cornerRadius = 9
             button.layer?.borderWidth = 0
             button.tag = index
             button.target = self
@@ -200,13 +181,13 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
             colorButtons.append(button)
         }
 
-        // 默认选中红色（索引 0），显示青色选中边框
         updateColorSelection(selectedIndex: 0)
     }
 
-    /// 使用 Auto Layout 构建左右两列布局，组装行元素和颜色区域
+    /// 使用 Auto Layout 构建左右两列并组装行。
+    ///
+    /// 左列为粗细行与颜色区域，右列为透明度行、圆角行与填充行。
     private func setupLayout() {
-        // 内容容器：14pt 四边内边距
         NSLayoutConstraint.activate([
             contentContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
             contentContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
@@ -217,32 +198,29 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         contentContainer.addSubview(leftColumnStack)
         contentContainer.addSubview(rightColumnStack)
 
-        // 左右列约束：左列固定 156pt，右列填充剩余空间，列间距 18pt
         NSLayoutConstraint.activate([
             leftColumnStack.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             leftColumnStack.topAnchor.constraint(equalTo: contentContainer.topAnchor),
             leftColumnStack.bottomAnchor.constraint(lessThanOrEqualTo: contentContainer.bottomAnchor),
 
-            rightColumnStack.leadingAnchor.constraint(equalTo: leftColumnStack.trailingAnchor, constant: 18),
+            rightColumnStack.leadingAnchor.constraint(equalTo: leftColumnStack.trailingAnchor, constant: 4),
             rightColumnStack.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             rightColumnStack.topAnchor.constraint(equalTo: contentContainer.topAnchor),
             rightColumnStack.bottomAnchor.constraint(lessThanOrEqualTo: contentContainer.bottomAnchor),
 
-            leftColumnStack.widthAnchor.constraint(equalToConstant: 156)
+            leftColumnStack.widthAnchor.constraint(equalToConstant: 130)
         ])
 
-        // 左列：粗细行 + 颜色区域
         let lineWidthRow = makeLabeledRow(
             label: lineWidthTitleLabel,
             content: lineWidthPopUp,
-            labelWidth: 52
+            labelWidth: 22
         )
         let colorRow = makeColorSection()
 
         leftColumnStack.addArrangedSubview(lineWidthRow)
         leftColumnStack.addArrangedSubview(colorRow)
 
-        // 右列：透明度滑块行 + 圆角滑块行 + 填充复选框行
         let opacityRow = makeSliderRow(
             label: opacityTitleLabel,
             slider: opacitySlider,
@@ -256,7 +234,7 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         let fillRow = makeLabeledRow(
             label: fillTitleLabel,
             content: fillCheckbox,
-            labelWidth: 44
+            labelWidth: 22
         )
 
         rightColumnStack.addArrangedSubview(opacityRow)
@@ -266,18 +244,19 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
 
     // MARK: - 行构建器
 
-    /// 创建“标签 + 控件”水平行
+    /// 创建“标签 + 控件”水平行，标签宽度固定，基线对齐。
+    ///
     /// - Parameters:
-    ///   - label: 行标题标签（固定宽度）
-    ///   - content: 行内控件（下拉选、复选框等）
-    ///   - labelWidth: 标题标签宽度约束
-    /// - Returns: 组装好的水平 NSStackView
+    ///   - label: 行标题标签，约束至指定宽度。
+    ///   - content: 行内控件。
+    ///   - labelWidth: 标题标签的宽度约束值。
+    /// - Returns: 组装好的 NSStackView。
     private func makeLabeledRow(label: NSTextField, content: NSView, labelWidth: CGFloat) -> NSStackView {
         let row = NSStackView()
         row.orientation = .horizontal
-        row.alignment = .firstBaseline    // 文字基线对齐
+        row.alignment = .firstBaseline
         row.distribution = .fill
-        row.spacing = 8
+        row.spacing = 4
         row.translatesAutoresizingMaskIntoConstraints = false
 
         row.addArrangedSubview(label)
@@ -285,25 +264,26 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
 
         NSLayoutConstraint.activate([
             label.widthAnchor.constraint(equalToConstant: labelWidth),
-            content.heightAnchor.constraint(greaterThanOrEqualToConstant: 20),
-            row.heightAnchor.constraint(greaterThanOrEqualToConstant: 22)
+            content.heightAnchor.constraint(greaterThanOrEqualToConstant: 8),
+            row.heightAnchor.constraint(greaterThanOrEqualToConstant: 10)
         ])
 
         return row
     }
 
-    /// 创建“标签 + 滑块 + 数值标签”水平行
+    /// 创建“标签 + 滑块 + 数值标签”水平行，垂直居中。
+    ///
     /// - Parameters:
-    ///   - label: 行标题标签（44pt 固定宽度）
-    ///   - slider: NSSlider
-    ///   - valueLabel: 右侧数值标签（36pt 固定宽度，等宽字体右对齐）
-    /// - Returns: 组装好的水平 NSStackView
+    ///   - label: 行标题标签，约束至 44pt 宽。
+    ///   - slider: NSSlider。
+    ///   - valueLabel: 右侧数值标签，约束至 36pt 宽，右对齐。
+    /// - Returns: 组装好的 NSStackView。
     private func makeSliderRow(label: NSTextField, slider: NSSlider, valueLabel: NSTextField) -> NSStackView {
         let row = NSStackView()
         row.orientation = .horizontal
-        row.alignment = .centerY    // 垂直居中
+        row.alignment = .centerY
         row.distribution = .fill
-        row.spacing = 6
+        row.spacing = 4
         row.translatesAutoresizingMaskIntoConstraints = false
 
         row.addArrangedSubview(label)
@@ -320,51 +300,47 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         return row
     }
 
-    /// 创建颜色选择区域：标题 + 2×4 网格圆点
-    /// - Returns: 包含标题行和 NSGridView 的容器视图
+    /// 创建颜色选择区域：标题行 + 2×4 网格圆点。
+    ///
+    /// 网格上方为红/橙/黄/绿，下方为蓝/紫/白/黑，每个圆点 18×18pt。
+    ///
+    /// - Returns: 包含标题和 NSGridView 的容器。
     private func makeColorSection() -> NSView {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(colorTitleLabel)
+//        let titleRow = NSStackView()
+//        titleRow.orientation = .horizontal
+//        titleRow.alignment = .firstBaseline
+//        titleRow.spacing = 2
+//        titleRow.translatesAutoresizingMaskIntoConstraints = false
+//        titleRow.addArrangedSubview(colorTitleLabel)
 
-        // 颜色标题行
-        let titleRow = NSStackView()
-        titleRow.orientation = .horizontal
-        titleRow.alignment = .firstBaseline
-        titleRow.spacing = 8
-        titleRow.translatesAutoresizingMaskIntoConstraints = false
-        titleRow.addArrangedSubview(colorTitleLabel)
-        titleRow.addArrangedSubview(NSView()) // 弹簧，占满剩余空间
-
-        // 2 行 × 4 列颜色网格
         let colorGrid = NSGridView(views: [
-            Array(colorButtons.prefix(4)),   // 第一行：红/橙/黄/绿
-            Array(colorButtons.suffix(4))    // 第二行：蓝/紫/白/黑
+            Array(colorButtons.prefix(4)),
+            Array(colorButtons.suffix(4))
         ])
         colorGrid.translatesAutoresizingMaskIntoConstraints = false
-        colorGrid.rowSpacing = 8
-        colorGrid.columnSpacing = 8
+        colorGrid.rowSpacing = 4
+        colorGrid.columnSpacing = 4
         colorGrid.xPlacement = .leading
         colorGrid.yPlacement = .center
-
-        container.addSubview(titleRow)
         container.addSubview(colorGrid)
 
         NSLayoutConstraint.activate([
-            colorTitleLabel.widthAnchor.constraint(equalToConstant: 52),
+            colorTitleLabel.widthAnchor.constraint(equalToConstant: 22),
 
-            titleRow.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            titleRow.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            titleRow.topAnchor.constraint(equalTo: container.topAnchor),
+            colorTitleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+//            colorTitleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            colorTitleLabel.topAnchor.constraint(equalTo: container.topAnchor),
 
-            // 颜色网格左侧缩进 60pt，在标题下方 6pt
-            colorGrid.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 60),
-            colorGrid.topAnchor.constraint(equalTo: titleRow.bottomAnchor, constant: 6),
+            colorGrid.leadingAnchor.constraint(equalTo: colorTitleLabel.trailingAnchor, constant: 10),
+            colorGrid.topAnchor.constraint(equalTo: colorTitleLabel.topAnchor, constant: -3),
             colorGrid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 
-            container.heightAnchor.constraint(equalToConstant: 54)
+//            container.heightAnchor.constraint(equalToConstant: 44)
         ])
 
-        // 每个颜色圆点：18 × 18pt
         for button in colorButtons {
             NSLayoutConstraint.activate([
                 button.widthAnchor.constraint(equalToConstant: 18),
@@ -377,32 +353,32 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
 
     // MARK: - 控件事件
 
-    /// 粗细下拉选变更：`indexOfSelectedItem + 1` 即 px 值
+    /// 粗细变更，下拉选索引 +1 即 px 值。
     @objc private func lineWidthChanged() {
         let selectedIndex = lineWidthPopUp.indexOfSelectedItem
         currentProperties.lineWidth = CGFloat(selectedIndex + 1)
     }
 
-    /// 透明度滑块变更：0-100 映射到 0.0-1.0，同步更新百分比标签
+    /// 透明度变更，0–100 映射到 0.0–1.0，同步百分比标签。
     @objc private func opacityChanged() {
         let value = opacitySlider.doubleValue
         opacityValueLabel.stringValue = "\(Int(value))%"
         currentProperties.opacity = CGFloat(value) / 100.0
     }
 
-    /// 圆角滑块变更：0-100 直接映射到 CGFloat，同步更新 px 标签
+    /// 圆角变更，同步 px 标签。
     @objc private func cornerRadiusChanged() {
         let value = cornerRadiusSlider.doubleValue
         cornerRadiusValueLabel.stringValue = "\(Int(value))px"
         currentProperties.cornerRadius = CGFloat(value)
     }
 
-    /// 填充复选框变更：`.on` = 实心，`.off` = 空心
+    /// 填充变更，`.on` 为实心，`.off` 为空心。
     @objc private func fillChanged() {
         currentProperties.isFilled = (fillCheckbox.state == .on)
     }
 
-    /// 颜色圆点点击：更新 `currentProperties.color` 并刷新选中边框
+    /// 颜色变更，更新 preset 并刷新选中边框。
     @objc private func colorChanged(_ sender: NSButton) {
         let index = sender.tag
         guard index >= 0, index < RGBColor.presetColors.count else { return }
@@ -410,39 +386,33 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         updateColorSelection(selectedIndex: index)
     }
 
-    // MARK: - 外部同步接口
+    // MARK: - 对外接口
 
-    /// 外部调用，将面板值同步到指定属性（如点击选中已画矩形时）
+    /// 将面板控件同步到指定的矩形属性值。
     ///
-    /// 通过 `isUpdatingDisplay` 标志暂停 `didSet` 回调，
-    /// 避免将“同步面板显示”误判为“用户修改属性”而触发重复更新。
+    /// 用于选中已画矩形后回填面板显示。期间 `isUpdatingDisplay` 为 `true`，
+    /// 避免 `currentProperties.didSet` 误将“同步展示”当作“用户操作”触发回调。
     ///
-    /// - Parameter properties: 要同步显示的矩形属性
+    /// - Parameter properties: 要同步显示的 `RectangleProperties`。
     func updateDisplay(with properties: RectangleProperties) {
         isUpdatingDisplay = true
         currentProperties = properties
 
-        // 粗细：CGFloat → 下拉选索引（0-based，clamp 到 0-11）
         let lineWidthIndex = max(0, min(Int(properties.lineWidth) - 1, 11))
         lineWidthPopUp.selectItem(at: lineWidthIndex)
 
-        // 透明度：0.0-1.0 → 0-100
         opacitySlider.doubleValue = Double(properties.opacity * 100)
         opacityValueLabel.stringValue = "\(Int(properties.opacity * 100))%"
 
-        // 圆角：CGFloat → slider + "Npx"
         cornerRadiusSlider.doubleValue = Double(properties.cornerRadius)
         cornerRadiusValueLabel.stringValue = "\(Int(properties.cornerRadius))px"
 
-        // 填充：Bool → checkbox state
         fillCheckbox.state = properties.isFilled ? .on : .off
 
-        // 颜色：在预设列表中匹配
         if let colorIndex = RGBColor.presetColors.firstIndex(of: properties.color) {
             updateColorSelection(selectedIndex: colorIndex)
         }
 
-        // 刷新控件标题（支持本地化切换时更新文案）
         lineWidthTitleLabel.stringValue = AppText.rectanglePanelLineWidth
         opacityTitleLabel.stringValue = AppText.rectanglePanelOpacity
         cornerRadiusTitleLabel.stringValue = AppText.rectanglePanelCornerRadius
@@ -453,8 +423,11 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         isUpdatingDisplay = false
     }
 
-    /// 更新颜色圆点的选中态：选中项显示 2pt 青色边框，其他项无边框
-    /// - Parameter selectedIndex: 当前选中颜色的索引
+    /// 刷新颜色圆点选中态边框。
+    ///
+    /// 选中的圆点显示 2pt 青色边框，其余无边框。
+    ///
+    /// - Parameter selectedIndex: 选中的颜色索引。
     private func updateColorSelection(selectedIndex: Int) {
         for (index, button) in colorButtons.enumerated() {
             button.layer?.borderWidth = (index == selectedIndex) ? 2 : 0
@@ -462,9 +435,10 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         }
     }
 
-    /// 颜色圆点的 Tooltip 中文名
-    /// - Parameter index: 颜色索引 0-7
-    /// - Returns: "红"/"橙"/"黄"/"绿"/"蓝"/"紫"/"白"/"黑"
+    /// 颜色索引对应的 Tooltip 本地化名称。
+    ///
+    /// - Parameter index: 预设色索引（0–7）。
+    /// - Returns: 颜色本地化名称。
     private func colorName(at index: Int) -> String {
         ["红", "橙", "黄", "绿", "蓝", "紫", "白", "黑"][safe: index] ?? ""
     }
@@ -472,7 +446,9 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
 
 // MARK: - 辅助类型
 
-/// 面板标题标签：10pt 中等字重，次级文字颜色，不可编辑不可选中
+/// 面板标题标签。
+///
+/// 10pt 中等字重、次级文字颜色、不可编辑不可选中，用于属性行标题。
 private final class RectanglePanelLabel: NSTextField {
     init(text: String) {
         super.init(frame: .zero)
@@ -492,7 +468,9 @@ private final class RectanglePanelLabel: NSTextField {
     }
 }
 
-/// 面板数值标签：10pt 等宽数字，次级文字颜色，右对齐，用于百分比/px 值显示
+/// 面板数值标签。
+///
+/// 10pt 等宽数字、次级文字颜色、右对齐，用于百分数和 px 值显示。
 private final class RectanglePanelValueLabel: NSTextField {
     init(text: String) {
         super.init(frame: .zero)
@@ -513,7 +491,7 @@ private final class RectanglePanelValueLabel: NSTextField {
 }
 
 private extension Array {
-    /// 安全下标访问，越界返回 nil
+    /// 安全下标访问，越界返回 `nil`。
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
