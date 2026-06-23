@@ -18,7 +18,7 @@ final class ScrollingCapturePreviewContentView: NSView {
     private let imageView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let messageLabel = NSTextField(labelWithString: "")
-    private let badgeLabel = NSTextField(labelWithString: AppText.captureLongCapture)
+    // private let badgeLabel = NSTextField(labelWithString: AppText.captureLongCapture)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -35,13 +35,13 @@ final class ScrollingCapturePreviewContentView: NSView {
         case let .preparing(title, message):
             imageView.image = nil
             imageView.isHidden = true
-            badgeLabel.isHidden = true
+//            badgeLabel.isHidden = true
             titleLabel.stringValue = title
             messageLabel.stringValue = message
         case let .image(image):
             imageView.image = image
             imageView.isHidden = false
-            badgeLabel.isHidden = false
+//            badgeLabel.isHidden = false
             titleLabel.stringValue = ""
             messageLabel.stringValue = ""
         }
@@ -52,7 +52,12 @@ final class ScrollingCapturePreviewContentView: NSView {
 
 private extension ScrollingCapturePreviewContentView {
     func buildLayout() {
+        imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        imageView.setContentHuggingPriority(.defaultLow, for: .vertical)
+        imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        imageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
 
@@ -61,18 +66,18 @@ private extension ScrollingCapturePreviewContentView {
         messageLabel.maximumNumberOfLines = 0
         messageLabel.alignment = .center
 
-        badgeLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        badgeLabel.textColor = .secondaryLabelColor
-        badgeLabel.isBordered = false
-        badgeLabel.drawsBackground = false
+        // badgeLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        // badgeLabel.textColor = .secondaryLabelColor
+        // badgeLabel.isBordered = false
+        // badgeLabel.drawsBackground = false
 
         addSubview(imageView)
         addSubview(titleLabel)
         addSubview(messageLabel)
-        addSubview(badgeLabel)
+        // addSubview(badgeLabel)
 
         imageView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalToSuperview().inset(12)
         }
         titleLabel.snp.makeConstraints { make in
             make.top.leading.equalToSuperview().inset(12)
@@ -82,8 +87,8 @@ private extension ScrollingCapturePreviewContentView {
             make.top.equalTo(titleLabel.snp.bottom).offset(8)
             make.leading.trailing.equalToSuperview().inset(12)
         }
-        badgeLabel.snp.makeConstraints { make in
-            make.top.leading.equalToSuperview().inset(8)
-        }
+        // badgeLabel.snp.makeConstraints { make in
+        //     make.top.leading.equalToSuperview().inset(8)
+        // }
     }
 }
