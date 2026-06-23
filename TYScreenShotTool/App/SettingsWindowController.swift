@@ -19,10 +19,26 @@ final class SettingsWindowController: NSWindowController {
         window.center()
         AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
         super.init(window: window)
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(languageDidChange),
+            name: .appLanguageDidChange,
+            object: nil
+        )
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func languageDidChange() {
+        window?.title = AppLocalization.text("window.settings.title")
+        (contentViewController as? SettingsViewController)?.reloadLocalizedTexts()
     }
 }

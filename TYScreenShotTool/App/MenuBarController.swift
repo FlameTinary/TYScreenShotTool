@@ -16,6 +16,21 @@ final class MenuBarController: NSObject {
         self.settingsOpenCoordinator = settingsOpenCoordinator
         super.init()
         configureStatusItem()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(languageDidChange),
+            name: .appLanguageDidChange,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func languageDidChange() {
+        rebuildMenu()
+        statusItem.button?.accessibilityLabel = AppLocalization.text("app.name")
     }
 
     func rebuildMenu() {

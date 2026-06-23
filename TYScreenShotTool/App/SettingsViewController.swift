@@ -385,6 +385,7 @@ private extension SettingsViewController {
     @objc func languageChanged() {
         let selected = AppLanguage.allCases[languagePopUp.indexOfSelectedItem]
         UserDefaults.standard.set(selected.storageValue, forKey: AppSettings.appLanguageKey)
+        NotificationCenter.default.post(name: .appLanguageDidChange, object: nil)
     }
 
     @objc func appearanceChanged() {
@@ -474,4 +475,10 @@ private extension SettingsViewController {
         UserDefaults.standard.set(Data(), forKey: AppSettings.saveDirectoryBookmarkDataKey)
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
+}
+
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let appLanguageDidChange = Notification.Name("appLanguageDidChange")
 }
