@@ -1,29 +1,12 @@
-//
-//  AppDelegate.swift
-//  TYScreenShotTool
-//
-//  Created by Codex on 2026/6/22.
-//
+import Cocoa
 
-import AppKit
-
-@main
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureSessionService: CaptureSessionService?
     private var globalHotKeyService: GlobalHotKeyService?
     private var settingsOpenCoordinator: SettingsOpenCoordinator?
     private var menuBarController: MenuBarController?
 
-    func applicationWillFinishLaunching(_ notification: Notification) {
-        // Required for menu-bar-only apps after removing SwiftUI MenuBarExtra.
-        // Without this, the system treats the app as a regular Dock app, and
-        // combined with LSUIElement=true, neither NSStatusItem nor Carbon
-        // hotkey events work reliably.
-        NSApp.setActivationPolicy(.accessory)
-    }
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
         AppThemeCoordinator.shared.applyCurrentAppearance()
 
         let overlayService = CaptureOverlayService()
@@ -136,6 +119,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         globalHotKeyService = hotKeyService
         settingsOpenCoordinator = settingsCoordinator
         menuBarController = MenuBarController(settingsOpenCoordinator: settingsCoordinator)
+    }
+
+    func applicationWillTerminate(_ aNotification: Notification) {
+    }
+
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
+        true
     }
 
     private static func loadConfiguredHotKey() -> ScreenshotHotKey {
