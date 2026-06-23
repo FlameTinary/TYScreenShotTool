@@ -118,6 +118,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // 通用命中检测：选择已有标注
+        if let hitResult = hitTestEditableAnnotation(at: point) {
+            selectedAnnotationIndex = hitResult.index
+            onAnnotationSelected?(hitResult.index, hitResult.tool, hitResult.properties)
+            needsDisplay = true
+            return
+        }
+
+        selectedAnnotationIndex = nil
+        onAnnotationSelected?(nil, currentTool, nil)
+
+        // 按当前工具创建新标注
         switch currentTool {
         case .mosaic:
             if beginMosaicInteraction(at: point) {
@@ -130,20 +142,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             currentPoint = point
             temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point), MosaicProperties.default)
             needsDisplay = true
-        case .rectangle:
-            // 先检测是否点击了已画矩形（从后往前）
-            if let hitIndex = hitTestRectangle(at: point) {
-                selectedAnnotationIndex = hitIndex
-                if case .rectangle(_, let props) = annotations[hitIndex] {
-                    onAnnotationSelected?(hitIndex, .rectangle, .rectangle(props))
-                }
-                needsDisplay = true
-                return
-            }
-            selectedAnnotationIndex = nil
-            onAnnotationSelected?(nil, currentTool, nil)
-            fallthrough
-        case .ellipse, .line, .arrow:
+        case .rectangle, .ellipse, .line, .arrow:
             dragStartPoint = point
             currentPoint = point
             temporaryAnnotation = makeDragAnnotation(from: point, to: point)
@@ -151,7 +150,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .pen:
             dragStartPoint = point
             currentPoint = point
-            temporaryAnnotation = .pen(points: [point], PenProperties.default)
+            temporaryAnnotation = .pen(points: [point], currentPenProperties)
             needsDisplay = true
         case .text:
             commitActiveTextIfNeeded()
@@ -806,18 +805,72 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         return nil
     }
 
-    /// 检测点击点是否落在某个已画矩形上
-    /// 从后往前遍历，返回最顶层矩形的索引
-    private func hitTestRectangle(at point: CGPoint) -> Int? {
+    // MARK: - Multi-Tool Hit Testing
+
+    private struct EditableAnnotationHit {
+        let index: Int
+        let tool: AnnotationTool
+        let properties: AnnotationEditableProperties
+    }
+
+    private func hitTestEditableAnnotation(at point: CGPoint) -> EditableAnnotationHit? {
         for index in annotations.indices.reversed() {
-            guard case .rectangle(let rect, _) = annotations[index] else {
+            switch annotations[index] {
+            case let .rectangle(rect, properties):
+                if rect.standardized.contains(point) {
+                    return EditableAnnotationHit(index: index, tool: .rectangle, properties: .rectangle(properties))
+                }
+            case let .ellipse(rect, properties):
+                if rect.standardized.insetBy(dx: -6, dy: -6).contains(point) {
+                    return EditableAnnotationHit(index: index, tool: .ellipse, properties: .ellipse(properties))
+                }
+            case let .line(start, end, properties):
+                if isPoint(point, nearLineFrom: start, to: end, tolerance: max(8, properties.lineWidth + 4)) {
+                    return EditableAnnotationHit(index: index, tool: .line, properties: .line(properties))
+                }
+            case let .arrow(start, end, properties):
+                if isPoint(point, nearLineFrom: start, to: end, tolerance: max(10, properties.lineWidth + 6)) {
+                    return EditableAnnotationHit(index: index, tool: .arrow, properties: .arrow(properties))
+                }
+            case let .pen(points, properties):
+                if isPoint(point, nearPolyline: points, tolerance: max(10, properties.lineWidth / 2 + 4)) {
+                    return EditableAnnotationHit(index: index, tool: .pen, properties: .pen(properties))
+                }
+            case let .mosaic(rect, properties):
+                if rect.standardized.insetBy(dx: -6, dy: -6).contains(point) {
+                    return EditableAnnotationHit(index: index, tool: .mosaic, properties: .mosaic(properties))
+                }
+            case .text:
                 continue
             }
-            if rect.standardized.contains(point) {
-                return index
+        }
+
+        return nil
+    }
+
+    private func isPoint(_ point: CGPoint, nearLineFrom start: CGPoint, to end: CGPoint, tolerance: CGFloat) -> Bool {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else {
+            return hypot(point.x - start.x, point.y - start.y) <= tolerance
+        }
+
+        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        let projection = CGPoint(x: start.x + dx * t, y: start.y + dy * t)
+        return hypot(point.x - projection.x, point.y - projection.y) <= tolerance
+    }
+
+    private func isPoint(_ point: CGPoint, nearPolyline points: [CGPoint], tolerance: CGFloat) -> Bool {
+        guard points.count > 1 else { return false }
+
+        for index in 0..<(points.count - 1) {
+            if isPoint(point, nearLineFrom: points[index], to: points[index + 1], tolerance: tolerance) {
+                return true
             }
         }
-        return nil
+
+        return false
     }
 
     private func mosaicInteractionTarget(for point: CGPoint, in rect: CGRect) -> MosaicInteractionTarget {
