@@ -57,11 +57,14 @@ final class ScrollingCaptureControlPanelContentView: NSView {
         copyButton.title = AppText.captureCopy
         ocrButton.isEnabled = isOCREnabled
         aiButton.isEnabled = isAIEnabled
+        arrangeButtons()
     }
 
-    override func layout() {
-        super.layout()
-
+    /// Called once during buildLayout and again when data changes.
+    /// Arranges buttons for wide mode. Narrow-mode fallback (second row) is
+    /// only triggered by explicit configure() calls — never during layout,
+    /// because NSPanel is non-resizable so the width does not change at runtime.
+    private func arrangeButtons() {
         let compact = bounds.width < 430
         secondRowStackView.isHidden = compact == false
 
@@ -104,6 +107,8 @@ private extension ScrollingCaptureControlPanelContentView {
         rootStackView.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(NSEdgeInsets(top: 6, left: 12, bottom: 6, right: 12))
         }
+
+        arrangeButtons()
     }
 
     func presentAIMenu() {

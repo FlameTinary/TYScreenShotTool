@@ -84,11 +84,6 @@ final class AIAnalysisPreviewContentView: NSView {
         arrangeButtons()
     }
 
-    override func layout() {
-        super.layout()
-        arrangeButtons()
-    }
-
     @objc private func handleCopyAll() { onCopyAll?() }
     @objc private func handleCopySecondary() { onCopySecondary?() }
     @objc private func handleRetry() { onRetry?() }
