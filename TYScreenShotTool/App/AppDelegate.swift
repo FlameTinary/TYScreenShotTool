@@ -1,30 +1,21 @@
 //
-//  TYScreenShotToolApp.swift
+//  AppDelegate.swift
 //  TYScreenShotTool
 //
-//  Created by Ethan on 2026/6/5.
+//  Created by Codex on 2026/6/22.
 //
 
-import SwiftUI
 import AppKit
 
-/// 截图工具应用入口
-///
-/// 菜单栏应用，提供全局快捷键截图功能。
-/// 初始化所有服务组件并配置回调链。
 @main
-struct TYScreenShotToolApp: App {
-    private let captureOverlayService: CaptureOverlayService
-    private let captureSessionService: CaptureSessionService
-    private let clipboardService: ClipboardService
-    private let imageSaveService: ImageSaveService
-    private let screenCaptureService: ScreenCaptureService
-    private let globalHotKeyService: GlobalHotKeyService
-    private let settingsOpenCoordinator: SettingsOpenCoordinator
-    private let pinWindowService: PinWindowService
-    private let toastService: ToastService
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var captureSessionService: CaptureSessionService?
+    private var globalHotKeyService: GlobalHotKeyService?
+    private var settingsOpenCoordinator: SettingsOpenCoordinator?
+    private var menuBarController: MenuBarController?
 
-    init() {
+    func applicationDidFinishLaunching(_ notification: Notification) {
         AppThemeCoordinator.shared.applyCurrentAppearance()
 
         let overlayService = CaptureOverlayService()
@@ -45,10 +36,11 @@ struct TYScreenShotToolApp: App {
             hotKey: Self.loadConfiguredHotKey(),
             onHotKeyPressed: {}
         )
-        let settingsOpenCoordinator = SettingsOpenCoordinator()
-        settingsOpenCoordinator.configure {
-            SettingsView(globalHotKeyService: hotKeyService)
+        let settingsCoordinator = SettingsOpenCoordinator()
+        settingsCoordinator.configure {
+            SettingsViewController(globalHotKeyService: hotKeyService)
         }
+
         let sessionService = CaptureSessionService(
             overlayService: overlayService,
             screenCaptureService: screenCaptureService,
@@ -59,7 +51,7 @@ struct TYScreenShotToolApp: App {
             aiAnalysisService: aiAnalysisService,
             pinWindowService: pinWindowService,
             toastService: toastService,
-            settingsOpenCoordinator: settingsOpenCoordinator,
+            settingsOpenCoordinator: settingsCoordinator,
             scrollingCaptureService: scrollingCaptureService,
             scrollingCapturePanelService: scrollingCapturePanelService,
             scrollingCapturePreviewWindowService: scrollingCapturePreviewWindowService,
@@ -132,40 +124,15 @@ struct TYScreenShotToolApp: App {
 
         _ = hotKeyService.register()
 
-        self.captureOverlayService = overlayService
-        self.captureSessionService = sessionService
-        self.clipboardService = clipboardService
-        self.imageSaveService = imageSaveService
-        self.screenCaptureService = screenCaptureService
-        self.globalHotKeyService = hotKeyService
-        self.settingsOpenCoordinator = settingsOpenCoordinator
-        self.pinWindowService = pinWindowService
-        self.toastService = toastService
+        captureSessionService = sessionService
+        globalHotKeyService = hotKeyService
+        settingsOpenCoordinator = settingsCoordinator
+        menuBarController = MenuBarController(settingsOpenCoordinator: settingsCoordinator)
     }
 
-    /// 应用主体
-    ///
-    /// 显示菜单栏图标和菜单内容。
-    var body: some Scene {
-        MenuBarExtra {
-            MenuBarContentView(settingsOpenCoordinator: settingsOpenCoordinator)
-        } label: {
-            Image("MenuBarIcon")
-                .renderingMode(.template)
-                .accessibilityLabel(AppLocalization.text("app.name"))
-        }
-        .menuBarExtraStyle(.menu)
-    }
-
-    /// 加载用户配置的快捷键
-    ///
-    /// 从 UserDefaults 读取快捷键配置，如果未配置则使用默认值。
-    ///
-    /// - Returns: 用户配置或默认的快捷键
     private static func loadConfiguredHotKey() -> ScreenshotHotKey {
         let storageValue = UserDefaults.standard.string(forKey: AppSettings.screenshotHotKeyKey)
             ?? AppSettings.screenshotHotKeyDefaultValue
-
         return ScreenshotHotKey(storageValue: storageValue) ?? .screenshot
     }
 }
