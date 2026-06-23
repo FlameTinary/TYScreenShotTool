@@ -30,7 +30,7 @@ final class MenuBarController: NSObject {
 
     @objc private func languageDidChange() {
         rebuildMenu()
-        statusItem.button?.accessibilityLabel = AppLocalization.text("app.name")
+        statusItem.button?.setAccessibilityLabel(AppLocalization.text("app.name"))
     }
 
     func rebuildMenu() {
@@ -45,7 +45,7 @@ final class MenuBarController: NSObject {
     private func configureStatusItem() {
         statusItem.button?.image = NSImage(named: "MenuBarIcon")
         statusItem.button?.image?.isTemplate = true
-        statusItem.button?.accessibilityLabel = AppLocalization.text("app.name")
+        statusItem.button?.setAccessibilityLabel(AppLocalization.text("app.name"))
         rebuildMenu()
     }
 

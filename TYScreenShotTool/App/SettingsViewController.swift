@@ -44,7 +44,7 @@ final class SettingsViewController: NSViewController {
 
 // MARK: - Layout
 
-private extension SettingsViewController {
+extension SettingsViewController {
     func buildLayout() {
         contentStack.orientation = .vertical
         contentStack.alignment = .leading
