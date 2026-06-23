@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import SnapKit
 
 /// 矩形工具属性面板。
 ///
@@ -14,8 +15,10 @@ import AppKit
 /// 选中已画矩形时，由 `updateDisplay(with:)` 反向同步面板控件，`isUpdatingDisplay` 标志位阻止期间触发冗余回调。
 final class RectanglePropertyPanelView: NSVisualEffectView {
 
-    /// 面板首选逻辑尺寸。
+    /// 面板首选逻辑尺寸。兼容旧接口，将在 Task 4 移除。
     static let preferredSize = CGSize(width: 320, height: 100)
+    static let minimumPanelSize = CGSize(width: 320, height: 100)
+    static let maximumPanelWidth: CGFloat = 380
 
     // MARK: - 回调
 
@@ -188,28 +191,27 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
     ///
     /// 左列为粗细行与颜色区域，右列为透明度行、圆角行与填充行。
     private func setupLayout() {
-        NSLayoutConstraint.activate([
-            contentContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            contentContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            contentContainer.topAnchor.constraint(equalTo: topAnchor, constant: 14),
-            contentContainer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
-        ])
+        contentContainer.snp.makeConstraints { make in
+            make.leading.equalToSuperview().offset(14)
+            make.trailing.equalToSuperview().inset(14)
+            make.top.equalToSuperview().offset(14)
+            make.bottom.equalToSuperview().inset(12)
+        }
 
         contentContainer.addSubview(leftColumnStack)
         contentContainer.addSubview(rightColumnStack)
 
-        NSLayoutConstraint.activate([
-            leftColumnStack.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
-            leftColumnStack.topAnchor.constraint(equalTo: contentContainer.topAnchor),
-            leftColumnStack.bottomAnchor.constraint(lessThanOrEqualTo: contentContainer.bottomAnchor),
+        leftColumnStack.snp.makeConstraints { make in
+            make.leading.top.equalToSuperview()
+            make.bottom.lessThanOrEqualToSuperview()
+            make.width.equalTo(130)
+        }
 
-            rightColumnStack.leadingAnchor.constraint(equalTo: leftColumnStack.trailingAnchor, constant: 4),
-            rightColumnStack.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
-            rightColumnStack.topAnchor.constraint(equalTo: contentContainer.topAnchor),
-            rightColumnStack.bottomAnchor.constraint(lessThanOrEqualTo: contentContainer.bottomAnchor),
-
-            leftColumnStack.widthAnchor.constraint(equalToConstant: 130)
-        ])
+        rightColumnStack.snp.makeConstraints { make in
+            make.leading.equalTo(leftColumnStack.snp.trailing).offset(4)
+            make.trailing.top.equalToSuperview()
+            make.bottom.lessThanOrEqualToSuperview()
+        }
 
         let lineWidthRow = makeLabeledRow(
             label: lineWidthTitleLabel,
@@ -262,11 +264,15 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         row.addArrangedSubview(label)
         row.addArrangedSubview(content)
 
-        NSLayoutConstraint.activate([
-            label.widthAnchor.constraint(equalToConstant: labelWidth),
-            content.heightAnchor.constraint(greaterThanOrEqualToConstant: 8),
-            row.heightAnchor.constraint(greaterThanOrEqualToConstant: 10)
-        ])
+        label.snp.makeConstraints { make in
+            make.width.equalTo(labelWidth)
+        }
+        content.snp.makeConstraints { make in
+            make.height.greaterThanOrEqualTo(8)
+        }
+        row.snp.makeConstraints { make in
+            make.height.greaterThanOrEqualTo(10)
+        }
 
         return row
     }
@@ -290,12 +296,18 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         row.addArrangedSubview(slider)
         row.addArrangedSubview(valueLabel)
 
-        NSLayoutConstraint.activate([
-            label.widthAnchor.constraint(equalToConstant: 44),
-            valueLabel.widthAnchor.constraint(equalToConstant: 36),
-            slider.heightAnchor.constraint(equalToConstant: 20),
-            row.heightAnchor.constraint(equalToConstant: 24)
-        ])
+        label.snp.makeConstraints { make in
+            make.width.equalTo(44)
+        }
+        valueLabel.snp.makeConstraints { make in
+            make.width.equalTo(36)
+        }
+        slider.snp.makeConstraints { make in
+            make.height.equalTo(20)
+        }
+        row.snp.makeConstraints { make in
+            make.height.equalTo(24)
+        }
 
         return row
     }
@@ -327,25 +339,21 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         colorGrid.yPlacement = .center
         container.addSubview(colorGrid)
 
-        NSLayoutConstraint.activate([
-            colorTitleLabel.widthAnchor.constraint(equalToConstant: 22),
+        colorTitleLabel.snp.makeConstraints { make in
+            make.width.equalTo(22)
+            make.leading.top.equalToSuperview()
+        }
 
-            colorTitleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-//            colorTitleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            colorTitleLabel.topAnchor.constraint(equalTo: container.topAnchor),
-
-            colorGrid.leadingAnchor.constraint(equalTo: colorTitleLabel.trailingAnchor, constant: 10),
-            colorGrid.topAnchor.constraint(equalTo: colorTitleLabel.topAnchor, constant: -3),
-            colorGrid.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-
-//            container.heightAnchor.constraint(equalToConstant: 44)
-        ])
+        colorGrid.snp.makeConstraints { make in
+            make.leading.equalTo(colorTitleLabel.snp.trailing).offset(10)
+            make.top.equalTo(colorTitleLabel.snp.top).offset(-3)
+            make.bottom.equalToSuperview()
+        }
 
         for button in colorButtons {
-            NSLayoutConstraint.activate([
-                button.widthAnchor.constraint(equalToConstant: 18),
-                button.heightAnchor.constraint(equalToConstant: 18)
-            ])
+            button.snp.makeConstraints { make in
+                make.width.height.equalTo(18)
+            }
         }
 
         return container
