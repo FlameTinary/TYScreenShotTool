@@ -12,6 +12,7 @@
 
 /* Begin PBXFileReference section */
 		08E7B3A42FD276F200BC7687 /* TShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		08E7B3C02FD276F200BC7687 /* TYScreenShotToolTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TYScreenShotToolTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -20,9 +21,21 @@
 			path = TYScreenShotTool;
 			sourceTree = "<group>";
 		};
+		08E7B3C12FD276F200BC7687 /* TYScreenShotToolTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TYScreenShotToolTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		08E7B3C42FD276F200BC7687 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		08E7B3A12FD276F200BC7687 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -46,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				08E7B3A42FD276F200BC7687 /* TShot.app */,
+				08E7B3C02FD276F200BC7687 /* TYScreenShotToolTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +90,27 @@
 			productReference = 08E7B3A42FD276F200BC7687 /* TShot.app */;
 			productType = "com.apple.product-type.application";
 		};
+		08E7B3C22FD276F200BC7687 /* TYScreenShotToolTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 08E7B3C62FD276F200BC7687 /* Build configuration list for PBXNativeTarget "TYScreenShotToolTests" */;
+			buildPhases = (
+				08E7B3C32FD276F200BC7687 /* Sources */,
+				08E7B3C42FD276F200BC7687 /* Frameworks */,
+				08E7B3C52FD276F200BC7687 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				08E7B3C92FD276F200BC7687 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				08E7B3C12FD276F200BC7687 /* TYScreenShotToolTests */,
+			);
+			name = TYScreenShotToolTests;
+			productName = TYScreenShotToolTests;
+			productReference = 08E7B3C02FD276F200BC7687 /* TYScreenShotToolTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -87,6 +122,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					08E7B3A32FD276F200BC7687 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					08E7B3C22FD276F200BC7687 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -109,11 +147,19 @@
 			projectRoot = "";
 			targets = (
 				08E7B3A32FD276F200BC7687 /* TYScreenShotTool */,
+				08E7B3C22FD276F200BC7687 /* TYScreenShotToolTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		08E7B3C52FD276F200BC7687 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		08E7B3A22FD276F200BC7687 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,6 +170,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		08E7B3C32FD276F200BC7687 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		08E7B3A02FD276F200BC7687 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -132,6 +185,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		08E7B3C92FD276F200BC7687 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 08E7B3A32FD276F200BC7687 /* TYScreenShotTool */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		08E7B3AD2FD276F300BC7687 /* Debug */ = {
@@ -322,6 +382,56 @@
 			};
 			name = Release;
 		};
+		08E7B3C72FD276F300BC7687 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = CJ5L2XW65B;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TYScreenShotToolTests;
+				INFOPLIST_KEY_NSPrincipalClass = XCTestCase;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sheldon.TShot.TYScreenShotToolTests;
+				PRODUCT_NAME = TYScreenShotToolTests;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TShot.app/Contents/MacOS/TShot";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+			};
+			name = Debug;
+		};
+		08E7B3C82FD276F300BC7687 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				COMBINE_HIDPI_IMAGES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = CJ5L2XW65B;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TYScreenShotToolTests;
+				INFOPLIST_KEY_NSPrincipalClass = XCTestCase;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sheldon.TShot.TYScreenShotToolTests;
+				PRODUCT_NAME = TYScreenShotToolTests;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TShot.app/Contents/MacOS/TShot";
+				BUNDLE_LOADER = "$(TEST_HOST)";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -330,6 +440,15 @@
 			buildConfigurations = (
 				08E7B3AD2FD276F300BC7687 /* Debug */,
 				08E7B3AE2FD276F300BC7687 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		08E7B3C62FD276F200BC7687 /* Build configuration list for PBXNativeTarget "TYScreenShotToolTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				08E7B3C72FD276F300BC7687 /* Debug */,
+				08E7B3C82FD276F300BC7687 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
