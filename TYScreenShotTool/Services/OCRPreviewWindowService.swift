@@ -7,7 +7,6 @@
 
 import AppKit
 import SnapKit
-import SwiftUI
 
 /// OCR 预览窗口服务
 ///
@@ -21,7 +20,7 @@ final class OCRPreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private var hostingView: NSHostingView<OCRPreviewView>?
+    private let contentView = OCRPreviewContentView()
     private var onCopy: (() -> Void)?
     private var onCancel: (() -> Void)?
 
@@ -42,6 +41,10 @@ final class OCRPreviewWindowService {
         containerView.layer?.borderWidth = 1
 
         panel.contentView = containerView
+        containerView.addSubview(contentView)
+        contentView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
@@ -80,11 +83,15 @@ final class OCRPreviewWindowService {
         let displayText = normalizedText.isEmpty ? AppText.ocrEmpty : text
         self.onCopy = onCopy
         self.onCancel = onCancel
-        installContentView(
+
+        contentView.onCopy = onCopy
+        contentView.onCancel = onCancel
+        contentView.configure(
+            title: AppText.ocrWindowTitle,
             text: displayText,
             isCopyEnabled: normalizedText.isEmpty == false,
-            onCopy: onCopy,
-            onCancel: onCancel
+            copyTitle: AppText.captureCopy,
+            cancelTitle: AppText.captureCancel
         )
 
         let panelFrame = frame(
@@ -100,37 +107,8 @@ final class OCRPreviewWindowService {
 
     func dismiss() {
         panel.orderOut(nil)
-        hostingView?.removeFromSuperview()
-        hostingView = nil
         onCopy = nil
         onCancel = nil
-    }
-
-    private func installContentView(
-        text: String,
-        isCopyEnabled: Bool,
-        onCopy: @escaping () -> Void,
-        onCancel: @escaping () -> Void
-    ) {
-        hostingView?.removeFromSuperview()
-
-        let view = OCRPreviewView(
-            title: AppText.ocrWindowTitle,
-            text: text,
-            isCopyEnabled: isCopyEnabled,
-            copyTitle: AppText.captureCopy,
-            cancelTitle: AppText.captureCancel,
-            onCopy: onCopy,
-            onCancel: onCancel
-        )
-
-        let hostingView = NSHostingView(rootView: view)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(hostingView)
-        hostingView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        self.hostingView = hostingView
     }
 
     private func applyAppearanceStyling() {

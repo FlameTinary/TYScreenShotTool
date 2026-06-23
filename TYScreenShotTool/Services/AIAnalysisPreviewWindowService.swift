@@ -7,7 +7,6 @@
 
 import AppKit
 import SnapKit
-import SwiftUI
 
 /// AI 分析预览窗口服务
 ///
@@ -21,7 +20,7 @@ final class AIAnalysisPreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private var hostingView: NSHostingView<AIAnalysisPreviewView>?
+    private let contentView = AIAnalysisPreviewContentView()
 
     private var onCopyAll: (() -> Void)?
     private var onCopySecondary: (() -> Void)?
@@ -45,6 +44,10 @@ final class AIAnalysisPreviewWindowService {
         containerView.layer?.borderWidth = 1
 
         panel.contentView = containerView
+        containerView.addSubview(contentView)
+        contentView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
@@ -69,13 +72,20 @@ final class AIAnalysisPreviewWindowService {
         onCopySecondary = nil
         onRetry = nil
         self.onClose = onClose
-        installContentView(
+
+        contentView.onCopyAll = nil
+        contentView.onCopySecondary = nil
+        contentView.onRetry = nil
+        contentView.onClose = onClose
+        contentView.configure(
+            title: AppText.aiResultTitle,
             content: .loading(message: message ?? AppText.aiLoadingDeveloperError),
-            onCopyAll: nil,
-            onCopySecondary: nil,
-            onRetry: nil,
-            onClose: onClose
+            copyAllTitle: AppText.aiResultCopyAll,
+            secondaryTitle: nil,
+            retryTitle: AppText.aiResultRetry,
+            closeTitle: AppText.aiResultClose
         )
+
         presentPanel(
             selectionRect: selectionRect,
             preferredSide: preferredSide
@@ -95,13 +105,20 @@ final class AIAnalysisPreviewWindowService {
         self.onCopySecondary = onCopySecondary
         self.onRetry = onRetry
         self.onClose = onClose
-        installContentView(
+
+        contentView.onCopyAll = onCopyAll
+        contentView.onCopySecondary = onCopySecondary
+        contentView.onRetry = onRetry
+        contentView.onClose = onClose
+        contentView.configure(
+            title: AppText.aiResultTitle,
             content: .result(result),
-            onCopyAll: onCopyAll,
-            onCopySecondary: onCopySecondary,
-            onRetry: onRetry,
-            onClose: onClose
+            copyAllTitle: AppText.aiResultCopyAll,
+            secondaryTitle: result.mode.secondaryCopyButtonTitle,
+            retryTitle: AppText.aiResultRetry,
+            closeTitle: AppText.aiResultClose
         )
+
         presentPanel(
             selectionRect: selectionRect,
             preferredSide: preferredSide
@@ -120,13 +137,20 @@ final class AIAnalysisPreviewWindowService {
         onCopySecondary = nil
         self.onRetry = onRetry
         self.onClose = onClose
-        installContentView(
+
+        contentView.onCopyAll = nil
+        contentView.onCopySecondary = nil
+        contentView.onRetry = onRetry
+        contentView.onClose = onClose
+        contentView.configure(
+            title: AppText.aiResultTitle,
             content: .error(title: title ?? AppText.aiResultError, message: message),
-            onCopyAll: nil,
-            onCopySecondary: nil,
-            onRetry: onRetry,
-            onClose: onClose
+            copyAllTitle: AppText.aiResultCopyAll,
+            secondaryTitle: nil,
+            retryTitle: AppText.aiResultRetry,
+            closeTitle: AppText.aiResultClose
         )
+
         presentPanel(
             selectionRect: selectionRect,
             preferredSide: preferredSide
@@ -135,42 +159,10 @@ final class AIAnalysisPreviewWindowService {
 
     func dismiss() {
         panel.orderOut(nil)
-        hostingView?.removeFromSuperview()
-        hostingView = nil
         onCopyAll = nil
         onCopySecondary = nil
         onRetry = nil
         onClose = nil
-    }
-
-    private func installContentView(
-        content: AIAnalysisPreviewContent,
-        onCopyAll: (() -> Void)?,
-        onCopySecondary: (() -> Void)?,
-        onRetry: (() -> Void)?,
-        onClose: @escaping () -> Void
-    ) {
-        hostingView?.removeFromSuperview()
-
-        let view = AIAnalysisPreviewView(
-            title: AppText.aiResultTitle,
-            content: content,
-            copyAllTitle: AppText.aiResultCopyAll,
-            retryTitle: AppText.aiResultRetry,
-            closeTitle: AppText.aiResultClose,
-            onCopyAll: onCopyAll,
-            onCopySecondary: onCopySecondary,
-            onRetry: onRetry,
-            onClose: onClose
-        )
-
-        let hostingView = NSHostingView(rootView: view)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(hostingView)
-        hostingView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        self.hostingView = hostingView
     }
 
     private func presentPanel(
