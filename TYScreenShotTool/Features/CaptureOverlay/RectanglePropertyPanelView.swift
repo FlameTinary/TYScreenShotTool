@@ -15,10 +15,10 @@ import SnapKit
 /// 选中已画矩形时，由 `updateDisplay(with:)` 反向同步面板控件，`isUpdatingDisplay` 标志位阻止期间触发冗余回调。
 final class RectanglePropertyPanelView: NSVisualEffectView {
 
-    /// 面板首选逻辑尺寸。兼容旧接口，将在 Task 4 移除。
-    static let preferredSize = CGSize(width: 320, height: 100)
-    static let minimumPanelSize = CGSize(width: 320, height: 100)
-    static let maximumPanelWidth: CGFloat = 380
+    /// 面板首选逻辑尺寸。
+    static let preferredSize = CGSize(width: 360, height: 100)
+    static let minimumPanelSize = CGSize(width: 360, height: 100)
+    static let maximumPanelWidth: CGFloat = 400
 
     // MARK: - 回调
 
@@ -106,6 +106,9 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.cornerCurve = .continuous
+
+
+
     }
 
     /// 创建所有子控件并设置 target/action。
