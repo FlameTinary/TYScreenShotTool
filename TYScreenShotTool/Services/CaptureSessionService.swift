@@ -1581,6 +1581,7 @@ final class CaptureSessionService {
         drawAnnotations(
             annotations,
             in: context,
+            sourceImage: image,
             imageRect: imageRect,
             previewSize: previewSize
         )
@@ -1595,6 +1596,7 @@ final class CaptureSessionService {
     private func drawAnnotations(
         _ annotations: [CaptureAnnotation],
         in context: CGContext,
+        sourceImage: CGImage,
         imageRect: CGRect,
         previewSize: CGSize
     ) {
@@ -1635,31 +1637,51 @@ final class CaptureSessionService {
                     context.setLineWidth(props.lineWidth)
                     context.strokePath()
                 }
-            case let .ellipse(rect, _):
-                context.setStrokeColor(CaptureAnnotation.strokeColor)
-                context.setLineWidth(CaptureAnnotation.lineWidth)
+            case let .ellipse(rect, props):
+                context.setStrokeColor(props.color.toNSColor().withAlphaComponent(props.opacity).cgColor)
+                context.setLineWidth(props.lineWidth)
                 context.strokeEllipse(in: rect.standardized)
-            case let .line(start, end, _):
-                drawArrow(from: start, to: end, in: context)
-            case let .arrow(start, end, _):
-                drawArrow(from: start, to: end, in: context)
-            case let .pen(points, _):
+            case let .line(start, end, props):
+                drawLine(from: start, to: end, properties: props, in: context)
+            case let .arrow(start, end, props):
+                drawArrow(from: start, to: end, properties: props, in: context)
+            case let .pen(points, props):
                 guard let first = points.first else {
                     continue
                 }
 
-                context.setStrokeColor(CaptureAnnotation.strokeColor)
-                context.setLineWidth(CaptureAnnotation.lineWidth)
-                context.setLineCap(.round)
-                context.setLineJoin(.round)
-                context.beginPath()
-                context.move(to: first)
+                let path = NSBezierPath()
+                path.lineWidth = props.lineWidth
+                path.lineCapStyle = .round
+                path.lineJoinStyle = .round
+                path.move(to: first)
                 for point in points.dropFirst() {
-                    context.addLine(to: point)
+                    path.line(to: point)
                 }
-                context.strokePath()
-            case let .mosaic(rect, _):
-                drawMosaic(in: rect.standardized, in: context)
+
+                if props.mode == .singleColor {
+                    context.saveGState()
+                    context.setStrokeColor(props.color.toNSColor().withAlphaComponent(props.opacity).cgColor)
+                    context.addPath(path.cgPath)
+                    context.strokePath()
+                    context.restoreGState()
+                } else {
+                    drawEffectStroke(
+                        path: path,
+                        mode: props.mode,
+                        sourceImage: sourceImage,
+                        previewSize: previewSize,
+                        in: context
+                    )
+                }
+            case let .mosaic(rect, props):
+                drawMosaic(
+                    in: rect.standardized,
+                    properties: props,
+                    sourceImage: sourceImage,
+                    previewSize: previewSize,
+                    in: context
+                )
             case let .text(value, origin):
                 drawText(value, at: origin, in: context)
             }
@@ -1668,33 +1690,64 @@ final class CaptureSessionService {
         context.restoreGState()
     }
 
-    private func drawArrow(from start: CGPoint, to end: CGPoint, in context: CGContext) {
-        context.setStrokeColor(CaptureAnnotation.strokeColor)
-        context.setLineWidth(CaptureAnnotation.lineWidth)
+    private func drawLine(from start: CGPoint, to end: CGPoint, properties: ShapeStrokeProperties, in context: CGContext) {
+        context.saveGState()
+        context.setStrokeColor(properties.color.toNSColor().withAlphaComponent(properties.opacity).cgColor)
+        context.setLineWidth(properties.lineWidth)
         context.setLineCap(.round)
         context.setLineJoin(.round)
         context.beginPath()
         context.move(to: start)
         context.addLine(to: end)
+        context.strokePath()
+        context.restoreGState()
+    }
 
-        let angle = atan2(end.y - start.y, end.x - start.x)
+    private func drawArrow(from start: CGPoint, to end: CGPoint, properties: ArrowProperties, in context: CGContext) {
+        context.saveGState()
+        context.setStrokeColor(properties.color.toNSColor().withAlphaComponent(properties.opacity).cgColor)
+        context.setLineWidth(properties.lineWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.beginPath()
+
+        let arrowEnd: CGPoint
+        let arrowAngle: CGFloat
+
+        if properties.isCurved {
+            let control = CGPoint(
+                x: (start.x + end.x) / 2,
+                y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
+            )
+            context.move(to: start)
+            context.addCurve(to: end, control1: control, control2: control)
+            arrowEnd = end
+            arrowAngle = atan2(end.y - control.y, end.x - control.x)
+        } else {
+            context.move(to: start)
+            context.addLine(to: end)
+            arrowEnd = end
+            arrowAngle = atan2(end.y - start.y, end.x - start.x)
+        }
+
         let arrowLength: CGFloat = 14
-        let arrowAngle: CGFloat = .pi / 7
+        let arrowSpread: CGFloat = .pi / 7
 
         let leftPoint = CGPoint(
-            x: end.x - cos(angle - arrowAngle) * arrowLength,
-            y: end.y - sin(angle - arrowAngle) * arrowLength
+            x: arrowEnd.x - cos(arrowAngle - arrowSpread) * arrowLength,
+            y: arrowEnd.y - sin(arrowAngle - arrowSpread) * arrowLength
         )
         let rightPoint = CGPoint(
-            x: end.x - cos(angle + arrowAngle) * arrowLength,
-            y: end.y - sin(angle + arrowAngle) * arrowLength
+            x: arrowEnd.x - cos(arrowAngle + arrowSpread) * arrowLength,
+            y: arrowEnd.y - sin(arrowAngle + arrowSpread) * arrowLength
         )
 
-        context.move(to: end)
+        context.move(to: arrowEnd)
         context.addLine(to: leftPoint)
-        context.move(to: end)
+        context.move(to: arrowEnd)
         context.addLine(to: rightPoint)
         context.strokePath()
+        context.restoreGState()
     }
 
     private func drawText(_ text: String, at origin: CGPoint, in context: CGContext) {
@@ -1713,57 +1766,127 @@ final class CaptureSessionService {
         context.restoreGState()
     }
 
-    private func drawMosaic(in rect: CGRect, in context: CGContext) {
+    private func drawMosaic(
+        in rect: CGRect,
+        properties: MosaicProperties,
+        sourceImage: CGImage,
+        previewSize: CGSize,
+        in context: CGContext
+    ) {
         guard rect.width > 0, rect.height > 0 else {
             return
         }
 
-        let sourceRect = rect.integral
-        guard sourceRect.width > 0, sourceRect.height > 0 else {
+        guard let sourceRect = imageRect(for: rect, sourceImage: sourceImage, previewSize: previewSize) else {
             return
         }
 
-        guard let sourceImage = context.makeImage() else {
-            return
-        }
+        let fullImage = CIImage(cgImage: sourceImage)
+        let outputImage: CIImage?
 
-        let ciImage = CIImage(cgImage: sourceImage)
+        switch properties.style {
+        case .mosaic:
+            let filter = CIFilter(name: "CIPixellate")
+            filter?.setValue(fullImage, forKey: kCIInputImageKey)
+            filter?.setValue(max(10, properties.size * 8), forKey: kCIInputScaleKey)
+            outputImage = filter?.outputImage?.cropped(to: fullImage.extent)
+        case .glass:
+            let filter = CIFilter(name: "CIGaussianBlur")
+            filter?.setValue(fullImage, forKey: kCIInputImageKey)
+            filter?.setValue(max(8, properties.size * 6), forKey: kCIInputRadiusKey)
+            outputImage = filter?.outputImage?.cropped(to: fullImage.extent)
+        }
 
         guard
-            let filter = CIFilter(name: "CIGaussianBlur"),
-            let maskFilter = CIFilter(name: "CIBlendWithMask")
-        else {
-            return
-        }
-
-        filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(CaptureAnnotation.mosaicBlurRadius, forKey: kCIInputRadiusKey)
-
-        guard let blurredImage = filter.outputImage?.cropped(to: ciImage.extent) else {
-            return
-        }
-
-        let backgroundMask = CIImage(color: CIColor.black).cropped(to: ciImage.extent)
-        let regionMask = CIImage(color: CIColor.white).cropped(to: sourceRect)
-        let maskImage = regionMask.applyingFilter(
-            "CISourceOverCompositing",
-            parameters: [kCIInputBackgroundImageKey: backgroundMask]
-        )
-
-        maskFilter.setValue(blurredImage, forKey: kCIInputImageKey)
-        maskFilter.setValue(ciImage, forKey: kCIInputBackgroundImageKey)
-        maskFilter.setValue(maskImage, forKey: kCIInputMaskImageKey)
-
-        guard
-            let outputImage = maskFilter.outputImage,
+            let outputImage,
             let outputCGImage = ciContext.createCGImage(outputImage, from: sourceRect)
         else {
             return
         }
 
+        let clipPath = CGPath(
+            roundedRect: rect,
+            cornerWidth: CaptureAnnotation.mosaicCornerRadius,
+            cornerHeight: CaptureAnnotation.mosaicCornerRadius,
+            transform: nil
+        )
+
         context.saveGState()
-        context.draw(outputCGImage, in: sourceRect)
+        context.addPath(clipPath)
+        context.clip()
+        context.draw(outputCGImage, in: rect)
+        context.setFillColor(NSColor.white.withAlphaComponent(CaptureAnnotation.mosaicOverlayAlpha).cgColor)
+        context.fill(rect)
         context.restoreGState()
+    }
+
+    private func drawEffectStroke(
+        path: NSBezierPath,
+        mode: PenMode,
+        sourceImage: CGImage,
+        previewSize: CGSize,
+        in context: CGContext
+    ) {
+        let clipBounds = path.bounds.insetBy(dx: -20, dy: -20)
+        guard clipBounds.width > 0, clipBounds.height > 0 else {
+            return
+        }
+
+        guard let cropRect = imageRect(for: clipBounds, sourceImage: sourceImage, previewSize: previewSize) else {
+            return
+        }
+
+        let inputImage = CIImage(cgImage: sourceImage).cropped(to: cropRect)
+        let outputImage: CIImage?
+
+        switch mode {
+        case .gaussianBlur:
+            let filter = CIFilter(name: "CIGaussianBlur")
+            filter?.setValue(inputImage, forKey: kCIInputImageKey)
+            filter?.setValue(12, forKey: kCIInputRadiusKey)
+            outputImage = filter?.outputImage?.cropped(to: cropRect)
+        case .mosaic:
+            let filter = CIFilter(name: "CIPixellate")
+            filter?.setValue(inputImage, forKey: kCIInputImageKey)
+            filter?.setValue(18, forKey: kCIInputScaleKey)
+            outputImage = filter?.outputImage?.cropped(to: cropRect)
+        case .singleColor:
+            outputImage = nil
+        }
+
+        guard
+            let outputImage,
+            let outputCGImage = ciContext.createCGImage(outputImage, from: cropRect)
+        else {
+            return
+        }
+
+        context.saveGState()
+        context.addPath(path.cgPath)
+        context.clip()
+        context.draw(outputCGImage, in: clipBounds)
+        context.restoreGState()
+    }
+
+    private func imageRect(for previewRect: CGRect, sourceImage: CGImage, previewSize: CGSize) -> CGRect? {
+        guard previewSize.width > 0, previewSize.height > 0 else {
+            return nil
+        }
+
+        let imageScaleX = CGFloat(sourceImage.width) / previewSize.width
+        let imageScaleY = CGFloat(sourceImage.height) / previewSize.height
+        let sourceRect = CGRect(
+            x: previewRect.minX * imageScaleX,
+            y: previewRect.minY * imageScaleY,
+            width: previewRect.width * imageScaleX,
+            height: previewRect.height * imageScaleY
+        ).integral
+
+        guard sourceRect.width > 0, sourceRect.height > 0 else {
+            return nil
+        }
+
+        return sourceRect
     }
 }
 
@@ -1792,5 +1915,33 @@ enum FrozenCaptureExportError: LocalizedError {
         case .cachedScreenImageMissing:
             return "Failed to locate the frozen screen image for the current selection."
         }
+    }
+}
+
+private extension NSBezierPath {
+    var cgPath: CGPath {
+        let path = CGMutablePath()
+        var points = [NSPoint](repeating: .zero, count: 3)
+
+        for index in 0..<elementCount {
+            switch element(at: index, associatedPoints: &points) {
+            case .moveTo:
+                path.move(to: points[0])
+            case .lineTo:
+                path.addLine(to: points[0])
+            case .curveTo:
+                path.addCurve(to: points[2], control1: points[0], control2: points[1])
+            case .cubicCurveTo:
+                path.addCurve(to: points[2], control1: points[0], control2: points[1])
+            case .quadraticCurveTo:
+                path.addQuadCurve(to: points[1], control: points[0])
+            case .closePath:
+                path.closeSubpath()
+            @unknown default:
+                break
+            }
+        }
+
+        return path
     }
 }
