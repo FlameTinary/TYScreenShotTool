@@ -6,64 +6,44 @@
 //
 
 import AppKit
-import SwiftUI
 
 /// 设置窗口协调器
 ///
 /// 管理设置窗口的创建、显示和内容更新，确保窗口唯一性。
 @MainActor
 final class SettingsOpenCoordinator {
-    private var settingsWindow: NSWindow?
-    private var contentProvider: (() -> AnyView)?
+    private var settingsWindowController: SettingsWindowController?
+    private var settingsViewController: SettingsViewController?
 
-    /// 配置设置窗口内容
-    ///
-    /// 设置窗口内容提供者，如果窗口已存在则刷新内容。
-    ///
-    /// - Parameter content: 设置界面内容构建器
-    func configure<Content: View>(@ViewBuilder content: @escaping () -> Content) {
-        contentProvider = {
-            AnyView(content())
+    func configure(contentProvider: @escaping () -> SettingsViewController) {
+        let viewController = settingsViewController ?? contentProvider()
+        settingsViewController = viewController
+
+        if let settingsWindowController {
+            settingsWindowController.contentViewController = viewController
+            settingsWindowController.window?.title = AppLocalization.text("window.settings.title")
         }
-
-        if let settingsWindow {
-            refreshContentViewController(for: settingsWindow)
-            return
-        }
-
-        let window = NSWindow()
-        window.title = AppLocalization.text("window.settings.title")
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 460, height: 360)
-        window.setContentSize(NSSize(width: 520, height: 580))
-        window.center()
-        AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
-        refreshContentViewController(for: window)
-        self.settingsWindow = window
     }
 
-    /// 打开设置窗口
-    ///
-    /// 激活应用并显示设置窗口，刷新窗口内容。
     func openSettings() {
-        guard let settingsWindow else {
+        guard let settingsViewController else {
             return
         }
 
-        refreshContentViewController(for: settingsWindow)
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(
+                contentViewController: settingsViewController
+            )
+        } else {
+            settingsWindowController?.contentViewController = settingsViewController
+            settingsWindowController?.window?.title = AppLocalization.text("window.settings.title")
+        }
+
+        if let window = settingsWindowController?.window {
+            AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
+        }
         NSApplication.shared.activate(ignoringOtherApps: true)
-        settingsWindow.makeKeyAndOrderFront(nil)
-    }
-
-    private func refreshContentViewController(for window: NSWindow) {
-        guard let contentProvider else {
-            return
-        }
-
-        window.title = AppLocalization.text("window.settings.title")
-        let hostingController = NSHostingController(rootView: contentProvider())
-        window.contentViewController = hostingController
-        AppThemeCoordinator.shared.applyCurrentAppearance(to: window)
+        settingsWindowController?.showWindow(nil)
+        settingsWindowController?.window?.makeKeyAndOrderFront(nil)
     }
 }
