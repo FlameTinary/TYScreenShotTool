@@ -54,10 +54,15 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
     /// 当前选中的标注索引（仅 rectangle 工具使用）
     var selectedAnnotationIndex: Int?
-    /// 选中状态变更回调：索引, 属性值
-    var onAnnotationSelected: ((Int?, RectangleProperties?) -> Void)?
+    /// 选中状态变更回调：索引, 工具, 属性值
+    var onAnnotationSelected: ((Int?, AnnotationTool?, AnnotationEditableProperties?) -> Void)?
     /// 新矩形使用的默认属性（由 CaptureOverlayView 同步）
     var currentRectangleProperties = RectangleProperties.default
+    var currentEllipseProperties = ShapeStrokeProperties.default
+    var currentLineProperties = ShapeStrokeProperties.default
+    var currentArrowProperties = ArrowProperties.default
+    var currentPenProperties = PenProperties.default
+    var currentMosaicProperties = MosaicProperties.default
 
     override var acceptsFirstResponder: Bool {
         true
@@ -130,13 +135,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             if let hitIndex = hitTestRectangle(at: point) {
                 selectedAnnotationIndex = hitIndex
                 if case .rectangle(_, let props) = annotations[hitIndex] {
-                    onAnnotationSelected?(hitIndex, props)
+                    onAnnotationSelected?(hitIndex, .rectangle, .rectangle(props))
                 }
                 needsDisplay = true
                 return
             }
             selectedAnnotationIndex = nil
-            onAnnotationSelected?(nil, nil)
+            onAnnotationSelected?(nil, currentTool, nil)
             fallthrough
         case .ellipse, .line, .arrow:
             dragStartPoint = point
@@ -243,6 +248,30 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         applyCursorForCurrentState()
     }
 
+    func updateSelectedAnnotationProperties(_ properties: AnnotationEditableProperties) {
+        guard let idx = selectedAnnotationIndex, annotations.indices.contains(idx) else { return }
+
+        switch (annotations[idx], properties) {
+        case let (.rectangle(rect, _), .rectangle(value)):
+            annotations[idx] = .rectangle(rect, value)
+        case let (.ellipse(rect, _), .ellipse(value)):
+            annotations[idx] = .ellipse(rect, value)
+        case let (.line(start, end, _), .line(value)):
+            annotations[idx] = .line(start: start, end: end, value)
+        case let (.arrow(start, end, _), .arrow(value)):
+            annotations[idx] = .arrow(start: start, end: end, value)
+        case let (.pen(points, _), .pen(value)):
+            annotations[idx] = .pen(points: points, value)
+        case let (.mosaic(rect, _), .mosaic(value)):
+            annotations[idx] = .mosaic(rect, value)
+        default:
+            return
+        }
+
+        annotationsDidChange?(annotations)
+        needsDisplay = true
+    }
+
     /// 更新选中矩形的样式属性（由面板回调触发）
     func updateSelectedAnnotation(with properties: RectangleProperties) {
         guard let idx = selectedAnnotationIndex,
@@ -264,7 +293,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         // 如果删除的标注恰好是被选中的，清空选中
         if let selectedIdx = selectedAnnotationIndex, !annotations.indices.contains(selectedIdx) {
             selectedAnnotationIndex = nil
-            onAnnotationSelected?(nil, nil)
+            onAnnotationSelected?(nil, currentTool, nil)
         }
 
         annotationsDidChange?(annotations)
@@ -382,13 +411,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .rectangle:
             return .rectangle(normalizedRect(from: start, to: end), currentRectangleProperties)
         case .ellipse:
-            return .ellipse(normalizedRect(from: start, to: end), ShapeStrokeProperties.default)
+            return .ellipse(normalizedRect(from: start, to: end), currentEllipseProperties)
         case .line:
-            return .line(start: start, end: end, ShapeStrokeProperties.default)
+            return .line(start: start, end: end, currentLineProperties)
         case .arrow:
-            return .arrow(start: start, end: end, ArrowProperties.default)
+            return .arrow(start: start, end: end, currentArrowProperties)
         case .mosaic:
-            return .mosaic(normalizedRect(from: start, to: end), MosaicProperties.default)
+            return .mosaic(normalizedRect(from: start, to: end), currentMosaicProperties)
         case .pen, .text, .none:
             return nil
         }

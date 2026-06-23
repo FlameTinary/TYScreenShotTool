@@ -90,10 +90,19 @@ final class CaptureOverlayView: NSView {
     private let toolbarButtonDisabledTintColor = NSColor.white.withAlphaComponent(0.35)
     private var currentAnnotationTool: AnnotationTool?
 
-    /// 矩形属性面板
+    /// 属性面板
     private let rectanglePanelView = RectanglePropertyPanelView()
-    /// 当前矩形属性（新矩形默认值 + 面板状态）
+    private let strokePanelView = StrokePropertyPanelView()
+    private let arrowPanelView = ArrowPropertyPanelView()
+    private let penPanelView = PenPropertyPanelView()
+    private let mosaicPanelView = MosaicPropertyPanelView()
+    /// 当前属性（新标注默认值 + 面板状态）
     private var currentRectangleProperties = RectangleProperties.default
+    private var currentEllipseProperties = ShapeStrokeProperties.default
+    private var currentLineProperties = ShapeStrokeProperties.default
+    private var currentArrowProperties = ArrowProperties.default
+    private var currentPenProperties = PenProperties.default
+    private var currentMosaicProperties = MosaicProperties.default
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -335,6 +344,10 @@ final class CaptureOverlayView: NSView {
         shadowToggle.state = .off
         currentAnnotationTool = nil
         rectanglePanelView.isHidden = true
+        strokePanelView.isHidden = true
+        arrowPanelView.isHidden = true
+        penPanelView.isHidden = true
+        mosaicPanelView.isHidden = true
         annotationCanvasView.resetAnnotations()
         updateAnnotationToolSelection()
 
@@ -364,6 +377,10 @@ final class CaptureOverlayView: NSView {
         topBarContainerView.isHidden = true
         toolbarContainerView.isHidden = true
         rectanglePanelView.isHidden = true
+        strokePanelView.isHidden = true
+        arrowPanelView.isHidden = true
+        penPanelView.isHidden = true
+        mosaicPanelView.isHidden = true
         needsDisplay = true
     }
 
@@ -410,6 +427,10 @@ final class CaptureOverlayView: NSView {
         toolbarContainerView.isHidden = true
         toolbarTooltipView.isHidden = true
         rectanglePanelView.isHidden = true
+        strokePanelView.isHidden = true
+        arrowPanelView.isHidden = true
+        penPanelView.isHidden = true
+        mosaicPanelView.isHidden = true
         aiButton.isEnabled = true
         needsDisplay = true
         NSCursor.crosshair.set()
@@ -866,18 +887,68 @@ final class CaptureOverlayView: NSView {
             self.annotationCanvasView.updateSelectedAnnotation(with: properties)
         }
 
-        annotationCanvasView.onAnnotationSelected = { [weak self] index, properties in
+        strokePanelView.onPropertyChanged = { [weak self] properties in
             guard let self else { return }
-            if let properties {
-                self.rectanglePanelView.updateDisplay(with: properties)
-                self.rectanglePanelView.isHidden = false
-            } else {
-                self.rectanglePanelView.updateDisplay(with: self.currentRectangleProperties)
+            switch self.currentAnnotationTool {
+            case .ellipse:
+                self.currentEllipseProperties = properties
+                self.annotationCanvasView.currentEllipseProperties = properties
+                self.annotationCanvasView.updateSelectedAnnotationProperties(.ellipse(properties))
+            case .line:
+                self.currentLineProperties = properties
+                self.annotationCanvasView.currentLineProperties = properties
+                self.annotationCanvasView.updateSelectedAnnotationProperties(.line(properties))
+            default:
+                break
             }
         }
 
+        arrowPanelView.onPropertyChanged = { [weak self] properties in
+            guard let self else { return }
+            self.currentArrowProperties = properties
+            self.annotationCanvasView.currentArrowProperties = properties
+            self.annotationCanvasView.updateSelectedAnnotationProperties(.arrow(properties))
+        }
+
+        penPanelView.onPropertyChanged = { [weak self] properties in
+            guard let self else { return }
+            self.currentPenProperties = properties
+            self.annotationCanvasView.currentPenProperties = properties
+            self.annotationCanvasView.updateSelectedAnnotationProperties(.pen(properties))
+        }
+
+        mosaicPanelView.onPropertyChanged = { [weak self] properties in
+            guard let self else { return }
+            self.currentMosaicProperties = properties
+            self.annotationCanvasView.currentMosaicProperties = properties
+            self.annotationCanvasView.updateSelectedAnnotationProperties(.mosaic(properties))
+        }
+
+        annotationCanvasView.onAnnotationSelected = { [weak self] index, tool, properties in
+            guard let self else { return }
+            self.annotationCanvasView.selectedAnnotationIndex = index
+
+            if let tool {
+                self.currentAnnotationTool = tool
+                self.annotationCanvasView.currentTool = tool
+            }
+
+            self.applySelection(properties)
+            self.updateVisiblePropertyPanel()
+            self.updateAnnotationToolSelection()
+        }
+
         rectanglePanelView.isHidden = true
+        strokePanelView.isHidden = true
+        arrowPanelView.isHidden = true
+        penPanelView.isHidden = true
+        mosaicPanelView.isHidden = true
+
         addSubview(rectanglePanelView)
+        addSubview(strokePanelView)
+        addSubview(arrowPanelView)
+        addSubview(penPanelView)
+        addSubview(mosaicPanelView)
     }
 
     private func configureToolbar() {
@@ -1123,10 +1194,22 @@ final class CaptureOverlayView: NSView {
             repositionToolbarTooltip()
         }
 
-        layoutRectanglePropertyPanel(
-            toolbarFrame: toolbarContainerView.frame,
-            topBarFrame: topBarContainerView.frame
-        )
+        switch currentAnnotationTool {
+        case .rectangle:
+            layoutPropertyPanel(rectanglePanelView, tool: .rectangle, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case .ellipse:
+            layoutPropertyPanel(strokePanelView, tool: .ellipse, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case .line:
+            layoutPropertyPanel(strokePanelView, tool: .line, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case .arrow:
+            layoutPropertyPanel(arrowPanelView, tool: .arrow, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case .pen:
+            layoutPropertyPanel(penPanelView, tool: .pen, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case .mosaic:
+            layoutPropertyPanel(mosaicPanelView, tool: .mosaic, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case .text, nil:
+            break
+        }
     }
 
     private func updatePreviewAppearance() {
@@ -1245,21 +1328,11 @@ final class CaptureOverlayView: NSView {
             return
         }
 
-        if currentAnnotationTool != tool {
-            currentAnnotationTool = tool
-        }
-
-        annotationCanvasView.currentTool = currentAnnotationTool
-
-        // 控制矩形属性面板显隐
-        if currentAnnotationTool == .rectangle {
-            rectanglePanelView.isHidden = false
-            rectanglePanelView.updateDisplay(with: currentRectangleProperties)
-        } else {
-            rectanglePanelView.isHidden = true
-            annotationCanvasView.selectedAnnotationIndex = nil
-        }
-
+        currentAnnotationTool = tool
+        annotationCanvasView.currentTool = tool
+        annotationCanvasView.selectedAnnotationIndex = nil
+        refreshCurrentToolPanelFromDefaults()
+        updateVisiblePropertyPanel()
         updateAnnotationToolSelection()
         window?.makeFirstResponder(annotationCanvasView)
         updateCursorFromCurrentEvent()
@@ -1507,11 +1580,49 @@ final class CaptureOverlayView: NSView {
         toolbarTooltipView.isHidden = true
     }
 
-    private func layoutRectanglePropertyPanel(toolbarFrame: CGRect, topBarFrame: CGRect) {
-        let panelSize = RectanglePropertyPanelView.preferredSize
+    private func layoutPropertyPanel(
+        _ panel: NSView,
+        tool: AnnotationTool,
+        toolbarFrame: CGRect,
+        topBarFrame: CGRect
+    ) {
+        panel.layoutSubtreeIfNeeded()
+
+        let fittingSize = panel.fittingSize
+        let measuredWidth = fittingSize.width
+        let measuredHeight = fittingSize.height
+
+        let minSize: CGSize
+        let maxWidth: CGFloat
+
+        switch tool {
+        case .rectangle:
+            minSize = RectanglePropertyPanelView.minimumPanelSize
+            maxWidth = RectanglePropertyPanelView.maximumPanelWidth
+        case .ellipse, .line:
+            minSize = StrokePropertyPanelView.minimumPanelSize
+            maxWidth = StrokePropertyPanelView.maximumPanelWidth
+        case .arrow:
+            minSize = ArrowPropertyPanelView.minimumPanelSize
+            maxWidth = ArrowPropertyPanelView.maximumPanelWidth
+        case .pen:
+            minSize = PenPropertyPanelView.minimumPanelSize
+            maxWidth = PenPropertyPanelView.maximumPanelWidth
+        case .mosaic:
+            minSize = MosaicPropertyPanelView.minimumPanelSize
+            maxWidth = MosaicPropertyPanelView.maximumPanelWidth
+        case .text:
+            return
+        }
+
+        let panelSize = CGSize(
+            width: min(max(measuredWidth, minSize.width), maxWidth),
+            height: max(measuredHeight, minSize.height)
+        )
+
         let preferredX: CGFloat
-        if let rectangleButton = annotationToolButtons[.rectangle] {
-            preferredX = max(rectangleButton.frame.minX, toolbarFrame.minX)
+        if let button = annotationToolButtons[tool] {
+            preferredX = max(button.frame.minX, toolbarFrame.minX)
         } else {
             preferredX = toolbarFrame.minX
         }
@@ -1539,7 +1650,7 @@ final class CaptureOverlayView: NSView {
             panelY = max(24, min(preferredBelowY, bounds.maxY - panelSize.height - 24))
         }
 
-        rectanglePanelView.frame = CGRect(
+        panel.frame = CGRect(
             x: clampedX,
             y: panelY,
             width: panelSize.width,
@@ -1560,6 +1671,72 @@ final class CaptureOverlayView: NSView {
         ]
 
         return allButtons.first(where: \.isHovering)
+    }
+
+    // MARK: - Multi-Panel Helpers
+
+    private func applySelection(_ properties: AnnotationEditableProperties?) {
+        switch properties {
+        case let .rectangle(value):
+            currentRectangleProperties = value
+            annotationCanvasView.currentRectangleProperties = value
+            rectanglePanelView.updateDisplay(with: value)
+        case let .ellipse(value):
+            currentEllipseProperties = value
+            annotationCanvasView.currentEllipseProperties = value
+            strokePanelView.updateDisplay(with: value)
+        case let .line(value):
+            currentLineProperties = value
+            annotationCanvasView.currentLineProperties = value
+            strokePanelView.updateDisplay(with: value)
+        case let .arrow(value):
+            currentArrowProperties = value
+            annotationCanvasView.currentArrowProperties = value
+            arrowPanelView.updateDisplay(with: value)
+        case let .pen(value):
+            currentPenProperties = value
+            annotationCanvasView.currentPenProperties = value
+            penPanelView.updateDisplay(with: value)
+        case let .mosaic(value):
+            currentMosaicProperties = value
+            annotationCanvasView.currentMosaicProperties = value
+            mosaicPanelView.updateDisplay(with: value)
+        case nil:
+            refreshCurrentToolPanelFromDefaults()
+        }
+    }
+
+    private func refreshCurrentToolPanelFromDefaults() {
+        switch currentAnnotationTool {
+        case .rectangle:
+            annotationCanvasView.currentRectangleProperties = currentRectangleProperties
+            rectanglePanelView.updateDisplay(with: currentRectangleProperties)
+        case .ellipse:
+            annotationCanvasView.currentEllipseProperties = currentEllipseProperties
+            strokePanelView.updateDisplay(with: currentEllipseProperties)
+        case .line:
+            annotationCanvasView.currentLineProperties = currentLineProperties
+            strokePanelView.updateDisplay(with: currentLineProperties)
+        case .arrow:
+            annotationCanvasView.currentArrowProperties = currentArrowProperties
+            arrowPanelView.updateDisplay(with: currentArrowProperties)
+        case .pen:
+            annotationCanvasView.currentPenProperties = currentPenProperties
+            penPanelView.updateDisplay(with: currentPenProperties)
+        case .mosaic:
+            annotationCanvasView.currentMosaicProperties = currentMosaicProperties
+            mosaicPanelView.updateDisplay(with: currentMosaicProperties)
+        case .text, nil:
+            break
+        }
+    }
+
+    private func updateVisiblePropertyPanel() {
+        rectanglePanelView.isHidden = currentAnnotationTool != .rectangle
+        strokePanelView.isHidden = currentAnnotationTool != .ellipse && currentAnnotationTool != .line
+        arrowPanelView.isHidden = currentAnnotationTool != .arrow
+        penPanelView.isHidden = currentAnnotationTool != .pen
+        mosaicPanelView.isHidden = currentAnnotationTool != .mosaic
     }
 
     private func updateAnnotationSourceImage() {
