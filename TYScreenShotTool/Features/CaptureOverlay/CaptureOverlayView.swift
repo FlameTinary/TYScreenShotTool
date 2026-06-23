@@ -1624,7 +1624,8 @@ final class CaptureOverlayView: NSView {
 
         let preferredX: CGFloat
         if let button = annotationToolButtons[tool] {
-            preferredX = max(button.frame.minX, toolbarFrame.minX)
+            let buttonFrameInOverlay = convert(button.frame, from: toolbarContainerView)
+            preferredX = buttonFrameInOverlay.midX - panelSize.width / 2
         } else {
             preferredX = toolbarFrame.minX
         }
