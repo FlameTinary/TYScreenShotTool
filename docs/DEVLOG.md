@@ -4,6 +4,34 @@
 
 ---
 
+# 2026-06-23
+
+## Sprint 44 完成
+
+### 主题
+
+标注工具属性面板扩展
+
+### 实现
+
+- 为 `AnnotationTool` 新增 `line` 直线工具
+- 新增 `ShapeStrokeProperties`、`ArrowProperties`、`PenProperties`、`MosaicProperties`、`AnnotationEditableProperties` 属性模型
+- 新增 `StrokePropertyPanelView`、`ArrowPropertyPanelView`、`PenPropertyPanelView`、`MosaicPropertyPanelView` 四个属性面板
+- 将 `RectanglePropertyPanelView` 约束从 `NSLayoutConstraint` 迁到 `SnapKit`，面板尺寸策略改为内容驱动
+- 为 `CaptureAnnotation` 所有 case 附加属性值，不再使用无属性变体
+- 在 `CaptureOverlayView` 中接入全部 5 个面板的显隐、回显与默认属性分发
+- 在 `CaptureAnnotationCanvasView` 中扩展通用命中检测、选中回显与属性回写
+- 箭头支持曲线贝塞尔路径（`isCurved` 开关）
+- 画笔支持 `gaussianBlur` / `mosaic` 两种效果模式
+- 马赛克支持 `glass`（毛玻璃）样式
+- 原有矩形面板与标注能力回归验证通过
+
+### 验证
+
+- `./scripts/build.sh` 构建通过
+- 所有标注工具面板显隐与默认值回归正常
+- 矩形面板交互与属性面板 SnapKit 迁移回归正常
+
 # 2026-06-22
 
 ## Sprint 43 完成
