@@ -6,6 +6,25 @@
 
 # 2026-06-23
 
+## Sprint 45 执行中
+
+### 主题
+
+纯 AppKit + SnapKit UI 迁移
+
+### 实现
+
+- 从混合 UI 收口为纯 AppKit + SnapKit
+- Settings / 结果窗 / 长截图全部移除 SwiftUI 内容层
+- 入口从 `SwiftUI App` 切换为 `AppDelegate + NSStatusItem`
+- 新增全局语言变更通知链路，所有窗口实时刷新
+- 文档更新为 AppKit + SnapKit 技术方向
+- 待验证：完整功能回归测试
+
+---
+
+# 2026-06-23
+
 ## Sprint 44 完成
 
 ### 主题

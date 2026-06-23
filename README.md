@@ -11,7 +11,8 @@ TShot 不是为了替代现有截图软件。
 项目主要用于：
 
 * 学习 macOS 开发
-* 实践 SwiftUI
+* 实践 macOS AppKit 开发（AppKit + SnapKit）
+* 熟悉 ScreenCaptureKit
 * 熟悉 ScreenCaptureKit
 * 探索 AI 编程工作流
 * 构建个人效率工具

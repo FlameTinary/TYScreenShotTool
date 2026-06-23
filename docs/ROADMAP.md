@@ -244,21 +244,27 @@ HotKey 配置
 
 ---
 
-### Sprint 44
+### Sprint 45
 
-标注工具属性面板扩展
+纯 AppKit + SnapKit UI 迁移
 
 状态：
-✅ Done
+🚧 In Progress
+
+目标：
+
+- 移除业务 UI 对 SwiftUI 的依赖
+- 将入口、菜单栏、Settings、结果窗和长截图 UI 统一迁移为纯 AppKit + SnapKit
+- 清理 `NSHostingView`、`NSHostingController`、`NSViewRepresentable`
 
 成果：
 
-- 新增 `直线` 标注工具
-- 圆形、直线、箭头、画笔、马赛克补齐属性面板
-- 支持选中已有标注后回显并继续修改
-- 画笔支持单一颜色 / 高斯模糊 / 马赛克
-- 马赛克支持马赛克 / 毛玻璃
-- 修复预览与复制/保存结果不一致，补齐 `直线`、曲线箭头与马赛克默认值收口
+- App 入口改为 AppDelegate + NSStatusItem
+- Settings 改为纯 AppKit 页面，5 个完整 section
+- OCR / AI 结果窗内容层改为纯 AppKit
+- 长截图控制面板与预览窗改为纯 AppKit
+- 语言切换后菜单栏、Settings 窗口实时刷新
+- 文档同步更新为 AppKit + SnapKit 技术方向
 
 ---
 
