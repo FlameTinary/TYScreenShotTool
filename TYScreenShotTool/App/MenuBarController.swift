@@ -43,7 +43,14 @@ final class MenuBarController: NSObject {
     }
 
     private func configureStatusItem() {
-        statusItem.button?.image = NSImage(named: "MenuBarIcon")
+        if let image = NSImage(named: "MenuBarIcon") {
+            statusItem.button?.image = image
+        } else {
+            statusItem.button?.image = NSImage(
+                systemSymbolName: "camera.viewfinder",
+                accessibilityDescription: nil
+            )
+        }
         statusItem.button?.image?.isTemplate = true
         statusItem.button?.setAccessibilityLabel(AppLocalization.text("app.name"))
         rebuildMenu()

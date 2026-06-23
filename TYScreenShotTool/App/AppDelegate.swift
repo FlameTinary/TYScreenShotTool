@@ -15,6 +15,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsOpenCoordinator: SettingsOpenCoordinator?
     private var menuBarController: MenuBarController?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Required for menu-bar-only apps after removing SwiftUI MenuBarExtra.
+        // Without this, the system treats the app as a regular Dock app, and
+        // combined with LSUIElement=true, neither NSStatusItem nor Carbon
+        // hotkey events work reliably.
+        NSApp.setActivationPolicy(.accessory)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppThemeCoordinator.shared.applyCurrentAppearance()
 
