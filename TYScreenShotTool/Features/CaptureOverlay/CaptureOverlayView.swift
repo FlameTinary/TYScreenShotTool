@@ -936,6 +936,7 @@ final class CaptureOverlayView: NSView {
             self.applySelection(properties)
             self.updateVisiblePropertyPanel()
             self.updateAnnotationToolSelection()
+            self.needsLayout = true
         }
 
         rectanglePanelView.isHidden = true
@@ -1334,6 +1335,7 @@ final class CaptureOverlayView: NSView {
         refreshCurrentToolPanelFromDefaults()
         updateVisiblePropertyPanel()
         updateAnnotationToolSelection()
+        needsLayout = true
         window?.makeFirstResponder(annotationCanvasView)
         updateCursorFromCurrentEvent()
     }
