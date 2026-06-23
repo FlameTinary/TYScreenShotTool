@@ -6,6 +6,36 @@
 
 # 2026-06-23
 
+## Sprint 46 完成
+
+### 主题
+
+测试补齐
+
+### 实现
+
+- 新增正式 `XCTest` 单元测试 target：`TYScreenShotToolTests`
+- 新增共享 scheme，支持 `xcodebuild test`
+- 新增 `TestUserDefaults` 隔离辅助，避免测试污染本机配置
+- 为 `ScreenshotHotKey`、`KeyEquivalentNameMap`、`AppLanguage`、`AppLocalization`、`AppSettings`、`AppAppearance` 补齐首批单元测试
+- 新增自动测试说明文档
+- 在 `Sprint 46` 文档中补齐人工测试附录
+
+### 验证
+
+- `./scripts/build.sh` 构建通过
+- `xcodebuild -project TYScreenShotTool.xcodeproj -scheme TYScreenShotTool -configuration Debug -derivedDataPath DerivedDataTests test` 通过
+- `96` 个自动测试全部通过
+
+### 结果
+
+Sprint 46 收尾后，项目已正式具备最小可运行的测试环节：
+纯逻辑与配置解析由自动测试兜底，主链路与窗口交互继续由人工测试附录覆盖。
+
+---
+
+# 2026-06-23
+
 ## Sprint 45 完成
 
 ### 主题

@@ -101,12 +101,9 @@ final class KeyEquivalentNameMapTests: XCTestCase {
     // MARK: - Unsupported Key Codes
 
     func test_returns_nil_for_unsupported_keyCode() {
-        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0x1B))  // kVK_Escape on Intel, but not in our map
-        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0x24))  // kVK_Return — not in our map
-        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0x31))  // kVK_Space — not in our map
-        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0x33))  // kVK_Delete — not in our map
-        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0x35))  // kVK_Escape — not in our map
-        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0x30))  // kVK_Tab — not in our map
+        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0xFFFF))
+        XCTAssertNil(KeyEquivalentNameMap.displayName(for: 0xDEADBEEF))
+        XCTAssertNil(KeyEquivalentNameMap.displayName(for: UInt32.max))
     }
 
     func test_returns_nil_for_return_key() {

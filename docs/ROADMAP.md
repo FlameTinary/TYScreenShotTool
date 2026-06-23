@@ -244,6 +244,29 @@ HotKey 配置
 
 ---
 
+### Sprint 46
+
+测试补齐
+
+状态：
+✅ Done
+
+目标：
+
+- 建立正式 `XCTest` 单元测试基座
+- 补齐第一批稳定逻辑单元测试
+- 新增自动测试文档与当前 Sprint 人工测试附录
+
+成果：
+
+- 新增 `TYScreenShotToolTests` 测试 target
+- 新增共享 scheme，支持 `xcodebuild test`
+- 首批 `96` 个自动测试用例全部通过
+- 新增自动测试说明文档
+- 新增 Sprint 46 人工测试附录
+
+---
+
 ### Sprint 45
 
 纯 AppKit + SnapKit UI 迁移

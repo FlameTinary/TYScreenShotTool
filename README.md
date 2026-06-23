@@ -239,6 +239,21 @@ ARCHIVE_PATH=/your/path/TShot.xcarchive ./scripts/archive.sh
 * 后续 `archive` 默认使用 `./scripts/archive.sh`
 * 非必要不直接手写 `xcodebuild`
 
+自动测试：
+
+```bash
+xcodebuild \
+  -project TYScreenShotTool.xcodeproj \
+  -scheme TYScreenShotTool \
+  -configuration Debug \
+  -derivedDataPath DerivedDataTests \
+  test
+```
+
+测试说明见：
+
+* `docs/testing/automated-testing.md`
+
 ---
 
 ## 项目结构
@@ -267,7 +282,7 @@ TShot/
 
 当前开发阶段：
 
-v1.0.0 后续迭代中，Sprint 45「纯 AppKit + SnapKit UI 迁移」已完成
+v1.0.0 后续迭代中，Sprint 46「测试补齐」已完成
 
 当前目标：
 
@@ -281,6 +296,7 @@ v1.0.0 后续迭代中，Sprint 45「纯 AppKit + SnapKit UI 迁移」已完成
 - 普通截图编辑态已支持矩形、圆形、直线、箭头、画笔、文字、马赛克
 - 圆形、直线、箭头、画笔、马赛克已支持属性面板、选中回显与继续修改
 - 标注预览与复制 / 保存结果保持一致
+- 项目已具备 `XCTest` 单元测试基座，首批 `96` 个自动测试已接入
 
 流程：
 
