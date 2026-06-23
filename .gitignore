@@ -5,6 +5,7 @@ build/
 .build/
 .trae/
 .reasonix/
+xcode_logs/
 
 # User settings
 *.xcuserstate

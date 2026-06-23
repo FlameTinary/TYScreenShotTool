@@ -1,9 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "AI" : {
-
-    },
     "app.name" : {
       "extractionState" : "stale",
       "localizations" : {
