@@ -13,7 +13,6 @@ TShot 不是为了替代现有截图软件。
 * 学习 macOS 开发
 * 实践 macOS AppKit 开发（AppKit + SnapKit）
 * 熟悉 ScreenCaptureKit
-* 熟悉 ScreenCaptureKit
 * 探索 AI 编程工作流
 * 构建个人效率工具
 
@@ -178,15 +177,15 @@ AI解释错误
 
 ↓
 
-生成 SwiftUI 代码
+生成 macOS 原生界面代码
 
 ---
 
 ## 技术栈
 
 * Swift 6
-* SwiftUI
 * AppKit
+* SnapKit
 * ScreenCaptureKit
 * Vision
 * UserNotifications
@@ -268,7 +267,7 @@ TShot/
 
 当前开发阶段：
 
-v1.0.0 后续迭代中，Sprint 44「标注工具属性面板扩展」已完成
+v1.0.0 后续迭代中，Sprint 45「纯 AppKit + SnapKit UI 迁移」已完成
 
 当前目标：
 
@@ -278,7 +277,7 @@ v1.0.0 后续迭代中，Sprint 44「标注工具属性面板扩展」已完成
 - 或直接拖拽自由框选
 - 进入截图编辑态后执行复制 / 保存 / OCR / AI / Pin / 长截图 / 取消
 - 普通截图与长截图共用 OCR / AI 结果窗口能力
-- OCR / AI 结果窗口内容层已迁移为 SwiftUI，窗口外壳继续由 AppKit 承载
+- App 入口、菜单栏、Settings、OCR / AI 结果窗、长截图控制面板与预览窗已统一收口为纯 AppKit + SnapKit
 - 普通截图编辑态已支持矩形、圆形、直线、箭头、画笔、文字、马赛克
 - 圆形、直线、箭头、画笔、马赛克已支持属性面板、选中回显与继续修改
 - 标注预览与复制 / 保存结果保持一致

@@ -249,7 +249,7 @@ HotKey 配置
 纯 AppKit + SnapKit UI 迁移
 
 状态：
-🚧 In Progress
+✅ Done
 
 目标：
 
@@ -264,6 +264,8 @@ HotKey 配置
 - OCR / AI 结果窗内容层改为纯 AppKit
 - 长截图控制面板与预览窗改为纯 AppKit
 - 语言切换后菜单栏、Settings 窗口实时刷新
+- 窄宽度场景下结果窗与设置项布局保持可用
+- 启动入口已收口为纯 `@main AppDelegate`，菜单栏图标与全局截图热键恢复正常
 - 文档同步更新为 AppKit + SnapKit 技术方向
 
 ---

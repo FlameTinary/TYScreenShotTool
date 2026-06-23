@@ -6,7 +6,7 @@
 
 # 2026-06-23
 
-## Sprint 45 执行中
+## Sprint 45 完成
 
 ### 主题
 
@@ -18,8 +18,23 @@
 - Settings / 结果窗 / 长截图全部移除 SwiftUI 内容层
 - 入口从 `SwiftUI App` 切换为 `AppDelegate + NSStatusItem`
 - 新增全局语言变更通知链路，所有窗口实时刷新
+- 完成窄宽度自适应收口，避免结果窗与设置页在小宽度下失真
+- 清理混合启动链残留，最终收口为纯 `@main AppDelegate`
 - 文档更新为 AppKit + SnapKit 技术方向
-- 待验证：完整功能回归测试
+
+### 验证
+
+- `xcodebuild -project TYScreenShotTool.xcodeproj -scheme TYScreenShotTool -configuration Debug clean build` 构建通过
+- App 人工验证通过：
+  - 菜单栏图标可见
+  - 全局截图热键可触发
+  - Settings 可正常打开
+  - 纯 AppKit 结果窗与长截图相关窗口可正常使用
+
+### 结果
+
+Sprint 45 收尾后，当前产品态已经完全回到纯 AppKit + SnapKit；
+此前 Sprint 42 / 43 引入的 SwiftUI 内容层已全部退出业务 UI 主路径。
 
 ---
 
