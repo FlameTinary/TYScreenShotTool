@@ -239,6 +239,7 @@ final class ArrowPropertyPanelView: NSVisualEffectView {
         }
         slider.snp.makeConstraints { make in
             make.height.equalTo(20)
+            make.width.greaterThanOrEqualTo(80)
         }
         row.snp.makeConstraints { make in
             make.height.equalTo(24)
