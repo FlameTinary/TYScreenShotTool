@@ -1635,13 +1635,15 @@ final class CaptureSessionService {
                     context.setLineWidth(props.lineWidth)
                     context.strokePath()
                 }
-            case let .ellipse(rect):
+            case let .ellipse(rect, _):
                 context.setStrokeColor(CaptureAnnotation.strokeColor)
                 context.setLineWidth(CaptureAnnotation.lineWidth)
                 context.strokeEllipse(in: rect.standardized)
-            case let .arrow(start, end):
+            case let .line(start, end, _):
                 drawArrow(from: start, to: end, in: context)
-            case let .pen(points):
+            case let .arrow(start, end, _):
+                drawArrow(from: start, to: end, in: context)
+            case let .pen(points, _):
                 guard let first = points.first else {
                     continue
                 }
@@ -1656,7 +1658,7 @@ final class CaptureSessionService {
                     context.addLine(to: point)
                 }
                 context.strokePath()
-            case let .mosaic(rect):
+            case let .mosaic(rect, _):
                 drawMosaic(in: rect.standardized, in: context)
             case let .text(value, origin):
                 drawText(value, at: origin, in: context)

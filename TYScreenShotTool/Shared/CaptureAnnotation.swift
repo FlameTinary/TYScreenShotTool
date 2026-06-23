@@ -16,13 +16,15 @@ enum CaptureAnnotation: Equatable {
     /// 矩形标注（位置 + 样式属性）
     case rectangle(CGRect, RectangleProperties)
     /// 圆形标注
-    case ellipse(CGRect)
+    case ellipse(CGRect, ShapeStrokeProperties)
+    /// 直线标注
+    case line(start: CGPoint, end: CGPoint, ShapeStrokeProperties)
     /// 箭头标注，包含起点和终点
-    case arrow(start: CGPoint, end: CGPoint)
+    case arrow(start: CGPoint, end: CGPoint, ArrowProperties)
     /// 画笔标注，包含一系列点
-    case pen(points: [CGPoint])
+    case pen(points: [CGPoint], PenProperties)
     /// 马赛克标注
-    case mosaic(CGRect)
+    case mosaic(CGRect, MosaicProperties)
     /// 文字标注，包含文本内容和位置
     case text(value: String, origin: CGPoint)
 
@@ -46,26 +48,36 @@ enum CaptureAnnotation: Equatable {
         switch self {
         case let .rectangle(rect, _):
             return rect.standardized
-        case let .ellipse(rect):
+        case let .ellipse(rect, _):
             return rect.standardized
-        case let .mosaic(rect):
-            return rect.standardized
-        case let .arrow(start, end):
+        case let .line(start, end, props):
+            let inset = max(8, props.lineWidth + 4)
             return CGRect(
                 x: min(start.x, end.x),
                 y: min(start.y, end.y),
                 width: abs(end.x - start.x),
                 height: abs(end.y - start.y)
-            ).insetBy(dx: -12, dy: -12)
-        case let .pen(points):
+            ).insetBy(dx: -inset, dy: -inset)
+        case let .mosaic(rect, _):
+            return rect.standardized
+        case let .arrow(start, end, props):
+            let inset = max(12, props.lineWidth + 8)
+            return CGRect(
+                x: min(start.x, end.x),
+                y: min(start.y, end.y),
+                width: abs(end.x - start.x),
+                height: abs(end.y - start.y)
+            ).insetBy(dx: -inset, dy: -inset)
+        case let .pen(points, props):
             guard let first = points.first else {
                 return .zero
             }
 
+            let inset = max(6, props.lineWidth / 2 + 4)
             return points.dropFirst().reduce(
-                CGRect(origin: first, size: .zero).insetBy(dx: -6, dy: -6)
+                CGRect(origin: first, size: .zero).insetBy(dx: -inset, dy: -inset)
             ) { partialResult, point in
-                partialResult.union(CGRect(origin: point, size: .zero).insetBy(dx: -6, dy: -6))
+                partialResult.union(CGRect(origin: point, size: .zero).insetBy(dx: -inset, dy: -inset))
             }
         case let .text(value, origin):
             let width = max(CGFloat(value.count) * CaptureAnnotation.fontSize * 0.6, CaptureAnnotation.fontSize)

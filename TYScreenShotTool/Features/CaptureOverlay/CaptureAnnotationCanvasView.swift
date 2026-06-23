@@ -123,7 +123,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
             dragStartPoint = point
             currentPoint = point
-            temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point))
+            temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point), MosaicProperties.default)
             needsDisplay = true
         case .rectangle:
             // 先检测是否点击了已画矩形（从后往前）
@@ -146,7 +146,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .pen:
             dragStartPoint = point
             currentPoint = point
-            temporaryAnnotation = .pen(points: [point])
+            temporaryAnnotation = .pen(points: [point], PenProperties.default)
             needsDisplay = true
         case .text:
             commitActiveTextIfNeeded()
@@ -173,7 +173,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
 
             currentPoint = point
-            temporaryAnnotation = .mosaic(normalizedRect(from: dragStartPoint, to: point))
+            temporaryAnnotation = .mosaic(normalizedRect(from: dragStartPoint, to: point), MosaicProperties.default)
             needsDisplay = true
         case .rectangle, .ellipse, .line, .arrow:
             guard let dragStartPoint else {
@@ -184,12 +184,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             temporaryAnnotation = makeDragAnnotation(from: dragStartPoint, to: point)
             needsDisplay = true
         case .pen:
-            guard case let .pen(points) = temporaryAnnotation else {
+            guard case let .pen(points, properties) = temporaryAnnotation else {
                 return
             }
 
             currentPoint = point
-            temporaryAnnotation = .pen(points: points + [point])
+            temporaryAnnotation = .pen(points: points + [point], properties)
             needsDisplay = true
         case .text, .none:
             break
@@ -339,19 +339,19 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             guard rect.standardized.width > 4, rect.standardized.height > 4 else {
                 return
             }
-        case let .ellipse(rect):
+        case let .ellipse(rect, _):
             guard rect.standardized.width > 4, rect.standardized.height > 4 else {
                 return
             }
-        case let .mosaic(rect):
+        case let .mosaic(rect, _):
             guard rect.standardized.width > 4, rect.standardized.height > 4 else {
                 return
             }
-        case let .arrow(start, end):
+        case let .arrow(start, end, _):
             guard hypot(end.x - start.x, end.y - start.y) > 8 else {
                 return
             }
-        case .pen, .text:
+        case .line, .pen, .text:
             return
         }
 
@@ -368,11 +368,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             needsDisplay = true
         }
 
-        guard case let .pen(points) = temporaryAnnotation, points.count > 1 else {
+        guard case let .pen(points, properties) = temporaryAnnotation, points.count > 1 else {
             return
         }
 
-        annotations.append(.pen(points: points))
+        annotations.append(.pen(points: points, properties))
         annotationsDidChange?(annotations)
         applyCursorForCurrentState()
     }
@@ -382,13 +382,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .rectangle:
             return .rectangle(normalizedRect(from: start, to: end), currentRectangleProperties)
         case .ellipse:
-            return .ellipse(normalizedRect(from: start, to: end))
+            return .ellipse(normalizedRect(from: start, to: end), ShapeStrokeProperties.default)
         case .line:
-            return .arrow(start: start, end: end)
+            return .line(start: start, end: end, ShapeStrokeProperties.default)
         case .arrow:
-            return .arrow(start: start, end: end)
+            return .arrow(start: start, end: end, ArrowProperties.default)
         case .mosaic:
-            return .mosaic(normalizedRect(from: start, to: end))
+            return .mosaic(normalizedRect(from: start, to: end), MosaicProperties.default)
         case .pen, .text, .none:
             return nil
         }
@@ -443,16 +443,25 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 highlightPath.setLineDash(dashes, count: 2, phase: 0)
                 highlightPath.stroke()
             }
-        case let .ellipse(rect):
+        case let .ellipse(rect, _):
             let path = NSBezierPath(ovalIn: rect.standardized)
             configureStroke()
             path.lineWidth = CaptureAnnotation.lineWidth
             path.stroke()
-        case let .arrow(start, end):
+        case let .line(start, end, props):
+            let path = NSBezierPath()
+            path.move(to: start)
+            path.line(to: end)
+            path.lineWidth = props.lineWidth
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
+            path.stroke()
+        case let .arrow(start, end, _):
             let path = arrowPath(from: start, to: end)
             configureStroke()
             path.stroke()
-        case let .pen(points):
+        case let .pen(points, _):
             guard let first = points.first else {
                 return
             }
@@ -469,7 +478,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
             (NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed).setStroke()
             path.stroke()
-        case let .mosaic(rect):
+        case let .mosaic(rect, _):
             drawMosaic(in: rect.standardized)
         case let .text(value, origin):
             drawText(value, at: origin)
@@ -626,13 +635,17 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        guard case let .mosaic(_, currentProps) = annotations[activeMosaicIndex] else {
+            return
+        }
+
         let updatedRect = updatedMosaicRect(
             from: startRect,
             startPoint: startPoint,
             currentPoint: point,
             target: activeMosaicTarget
         )
-        annotations[activeMosaicIndex] = .mosaic(updatedRect)
+        annotations[activeMosaicIndex] = .mosaic(updatedRect, currentProps)
     }
 
     private func updateMosaicHover(at point: CGPoint) {
@@ -751,7 +764,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         for index in annotations.indices.reversed() {
-            guard case let .mosaic(rect) = annotations[index] else {
+            guard case let .mosaic(rect, _) = annotations[index] else {
                 continue
             }
 
