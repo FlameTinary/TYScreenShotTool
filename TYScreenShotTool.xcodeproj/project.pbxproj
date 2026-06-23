@@ -10,6 +10,16 @@
 		086F7EC32FE8EC800004C83A /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = 086F7EC22FE8EC800004C83A /* SnapKit */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		08FC8B732FEA80B300CB99E3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 08E7B39C2FD276F200BC7687 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 08E7B3A32FD276F200BC7687;
+			remoteInfo = TYScreenShotTool;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		08E7B3A42FD276F200BC7687 /* TShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		08E7B3C02FD276F200BC7687 /* TYScreenShotToolTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TYScreenShotToolTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -29,18 +39,18 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		08E7B3C42FD276F200BC7687 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		08E7B3A12FD276F200BC7687 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				086F7EC32FE8EC800004C83A /* SnapKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		08E7B3C42FD276F200BC7687 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -52,6 +62,7 @@
 			children = (
 				08E7B3A62FD276F200BC7687 /* TYScreenShotTool */,
 				08E7B3A52FD276F200BC7687 /* Products */,
+				08FC8ADF2FEA80B300CB99E3 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -62,6 +73,14 @@
 				08E7B3C02FD276F200BC7687 /* TYScreenShotToolTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		08FC8ADF2FEA80B300CB99E3 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				08E7B3C12FD276F200BC7687 /* TYScreenShotToolTests */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -153,14 +172,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		08E7B3C52FD276F200BC7687 /* Resources */ = {
+		08E7B3A22FD276F200BC7687 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		08E7B3A22FD276F200BC7687 /* Resources */ = {
+		08E7B3C52FD276F200BC7687 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -170,14 +189,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		08E7B3C32FD276F200BC7687 /* Sources */ = {
+		08E7B3A02FD276F200BC7687 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		08E7B3A02FD276F200BC7687 /* Sources */ = {
+		08E7B3C32FD276F200BC7687 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -190,6 +209,7 @@
 		08E7B3C92FD276F200BC7687 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 08E7B3A32FD276F200BC7687 /* TYScreenShotTool */;
+			targetProxy = 08FC8B732FEA80B300CB99E3 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -385,9 +405,10 @@
 		08E7B3C72FD276F300BC7687 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_MODULES = YES;
-				COMBINE_HIDPI_IMAGES = YES;
 				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CJ5L2XW65B;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -403,16 +424,16 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TShot.app/Contents/MacOS/TShot";
-				BUNDLE_LOADER = "$(TEST_HOST)";
 			};
 			name = Debug;
 		};
 		08E7B3C82FD276F300BC7687 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_MODULES = YES;
-				COMBINE_HIDPI_IMAGES = YES;
 				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = CJ5L2XW65B;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -428,7 +449,6 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TShot.app/Contents/MacOS/TShot";
-				BUNDLE_LOADER = "$(TEST_HOST)";
 			};
 			name = Release;
 		};
@@ -444,20 +464,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		08E7B3C62FD276F200BC7687 /* Build configuration list for PBXNativeTarget "TYScreenShotToolTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				08E7B3C72FD276F300BC7687 /* Debug */,
-				08E7B3C82FD276F300BC7687 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		08E7B3AF2FD276F300BC7687 /* Build configuration list for PBXNativeTarget "TYScreenShotTool" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				08E7B3B02FD276F300BC7687 /* Debug */,
 				08E7B3B12FD276F300BC7687 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		08E7B3C62FD276F200BC7687 /* Build configuration list for PBXNativeTarget "TYScreenShotToolTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				08E7B3C72FD276F300BC7687 /* Debug */,
+				08E7B3C82FD276F300BC7687 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
