@@ -140,7 +140,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
             dragStartPoint = point
             currentPoint = point
-            temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point), MosaicProperties.default)
+            temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point), currentMosaicProperties)
             needsDisplay = true
         case .rectangle, .ellipse, .line, .arrow:
             dragStartPoint = point
@@ -177,7 +177,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
 
             currentPoint = point
-            temporaryAnnotation = .mosaic(normalizedRect(from: dragStartPoint, to: point), MosaicProperties.default)
+            temporaryAnnotation = .mosaic(normalizedRect(from: dragStartPoint, to: point), currentMosaicProperties)
             needsDisplay = true
         case .rectangle, .ellipse, .line, .arrow:
             guard let dragStartPoint else {
@@ -379,7 +379,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             guard hypot(end.x - start.x, end.y - start.y) > 8 else {
                 return
             }
-        case .line, .pen, .text:
+        case let .line(start, end, _):
+            guard hypot(end.x - start.x, end.y - start.y) > 4 else {
+                return
+            }
+        case .pen, .text:
             return
         }
 
@@ -476,7 +480,32 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.lineWidth = props.lineWidth
             path.stroke()
+
+            // 选中高亮 — 青色虚线边框
+            if let index, index == selectedAnnotationIndex {
+                let highlightRect = rect.standardized.insetBy(dx: -4, dy: -4)
+                let highlightPath = NSBezierPath(ovalIn: highlightRect)
+                NSColor.systemCyan.setStroke()
+                highlightPath.lineWidth = 2
+                let dashes: [CGFloat] = [6, 4]
+                highlightPath.setLineDash(dashes, count: 2, phase: 0)
+                highlightPath.stroke()
+            }
         case let .line(start, end, props):
+            // 选中高亮 — 加宽虚线路径，先画在底层
+            if let index, index == selectedAnnotationIndex {
+                let highlightPath = NSBezierPath()
+                highlightPath.move(to: start)
+                highlightPath.line(to: end)
+                highlightPath.lineWidth = props.lineWidth + 4
+                highlightPath.lineCapStyle = .round
+                highlightPath.lineJoinStyle = .round
+                NSColor.systemCyan.setStroke()
+                let dashes: [CGFloat] = [6, 4]
+                highlightPath.setLineDash(dashes, count: 2, phase: 0)
+                highlightPath.stroke()
+            }
+
             let path = NSBezierPath()
             path.move(to: start)
             path.line(to: end)
@@ -486,12 +515,38 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
         case let .arrow(start, end, props):
+            // 选中高亮 — 加宽虚线路径，先画在底层
+            if let index, index == selectedAnnotationIndex {
+                let highlightPath = arrowPath(from: start, to: end, isCurved: props.isCurved)
+                highlightPath.lineWidth = props.lineWidth + 4
+                NSColor.systemCyan.setStroke()
+                let dashes: [CGFloat] = [6, 4]
+                highlightPath.setLineDash(dashes, count: 2, phase: 0)
+                highlightPath.stroke()
+            }
+
             let path = arrowPath(from: start, to: end, isCurved: props.isCurved)
             path.lineWidth = props.lineWidth
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
         case let .pen(points, props):
             guard let first = points.first else { return }
+
+            // 选中高亮 — 加宽虚线路径，先画在底层
+            if let index, index == selectedAnnotationIndex {
+                let highlightPath = NSBezierPath()
+                highlightPath.lineWidth = props.lineWidth + 4
+                highlightPath.lineCapStyle = .round
+                highlightPath.lineJoinStyle = .round
+                highlightPath.move(to: first)
+                for point in points.dropFirst() {
+                    highlightPath.line(to: point)
+                }
+                NSColor.systemCyan.setStroke()
+                let dashes: [CGFloat] = [6, 4]
+                highlightPath.setLineDash(dashes, count: 2, phase: 0)
+                highlightPath.stroke()
+            }
 
             let path = NSBezierPath()
             path.lineWidth = props.lineWidth
@@ -511,6 +566,21 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
         case let .mosaic(rect, props):
             drawMosaic(in: rect.standardized, properties: props)
+
+            // 选中高亮 — 青色虚线边框
+            if let index, index == selectedAnnotationIndex {
+                let highlightRect = rect.standardized.insetBy(dx: -4, dy: -4)
+                let highlightPath = NSBezierPath(
+                    roundedRect: highlightRect,
+                    xRadius: CaptureAnnotation.mosaicCornerRadius + 4,
+                    yRadius: CaptureAnnotation.mosaicCornerRadius + 4
+                )
+                NSColor.systemCyan.setStroke()
+                highlightPath.lineWidth = 2
+                let dashes: [CGFloat] = [6, 4]
+                highlightPath.setLineDash(dashes, count: 2, phase: 0)
+                highlightPath.stroke()
+            }
         case let .text(value, origin):
             drawText(value, at: origin)
         }
@@ -913,7 +983,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                     return EditableAnnotationHit(index: index, tool: .line, properties: .line(properties))
                 }
             case let .arrow(start, end, properties):
-                if isPoint(point, nearLineFrom: start, to: end, tolerance: max(10, properties.lineWidth + 6)) {
+                if isPoint(point, nearArrowFrom: start, to: end, properties: properties) {
                     return EditableAnnotationHit(index: index, tool: .arrow, properties: .arrow(properties))
                 }
             case let .pen(points, properties):
@@ -955,6 +1025,55 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         return false
+    }
+
+    private func isPoint(_ point: CGPoint, nearArrowFrom start: CGPoint, to end: CGPoint, properties: ArrowProperties) -> Bool {
+        let tolerance = max(10, properties.lineWidth + 6)
+
+        if properties.isCurved {
+            return isPoint(point, nearPolyline: curvedArrowBodyPoints(from: start, to: end), tolerance: tolerance)
+        }
+
+        return isPoint(point, nearLineFrom: start, to: end, tolerance: tolerance)
+    }
+
+    private func curvedArrowBodyPoints(from start: CGPoint, to end: CGPoint, samples: Int = 16) -> [CGPoint] {
+        let control = CGPoint(
+            x: (start.x + end.x) / 2,
+            y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
+        )
+
+        return (0...samples).map { index in
+            let t = CGFloat(index) / CGFloat(max(samples, 1))
+            return cubicBezierPoint(start: start, control1: control, control2: control, end: end, t: t)
+        }
+    }
+
+    private func cubicBezierPoint(
+        start: CGPoint,
+        control1: CGPoint,
+        control2: CGPoint,
+        end: CGPoint,
+        t: CGFloat
+    ) -> CGPoint {
+        let oneMinusT = 1 - t
+        let oneMinusTSquared = oneMinusT * oneMinusT
+        let oneMinusTCubed = oneMinusTSquared * oneMinusT
+        let tSquared = t * t
+        let tCubed = tSquared * t
+
+        let x =
+            oneMinusTCubed * start.x
+            + 3 * oneMinusTSquared * t * control1.x
+            + 3 * oneMinusT * tSquared * control2.x
+            + tCubed * end.x
+        let y =
+            oneMinusTCubed * start.y
+            + 3 * oneMinusTSquared * t * control1.y
+            + 3 * oneMinusT * tSquared * control2.y
+            + tCubed * end.y
+
+        return CGPoint(x: x, y: y)
     }
 
     private func mosaicInteractionTarget(for point: CGPoint, in rect: CGRect) -> MosaicInteractionTarget {
