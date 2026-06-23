@@ -8,7 +8,6 @@
 import AppKit
 import Foundation
 import SnapKit
-import SwiftUI
 
 @MainActor
 final class ScrollingCapturePanelService {
@@ -20,7 +19,7 @@ final class ScrollingCapturePanelService {
 
     private var panel: ScrollingCapturePanel?
     private let containerView = NSVisualEffectView()
-    private var hostingView: NSHostingView<ScrollingCaptureControlPanelView>?
+    private let contentView = ScrollingCaptureControlPanelContentView()
 
     /// 显示长截图控制面板
     ///
@@ -28,9 +27,21 @@ final class ScrollingCapturePanelService {
     ///   - selectionRect: 当前选择的区域
     ///   - screen: 所在屏幕
     func presentCapturePanel(selectionRect: CGRect, on screen: NSScreen) {
-        let panel = panel ?? ScrollingCapturePanel(contentRect: CGRect(x: 0, y: 0, width: 480, height: 42))
-        if panel.contentView !== containerView {
-            panel.contentView = containerView
+        let panelInstance: ScrollingCapturePanel
+        if let existingPanel = self.panel {
+            panelInstance = existingPanel
+        } else {
+            let createdPanel = ScrollingCapturePanel(contentRect: CGRect(x: 0, y: 0, width: 480, height: 42))
+            self.panel = createdPanel
+            panelInstance = createdPanel
+        }
+
+        if panelInstance.contentView !== containerView {
+            panelInstance.contentView = containerView
+            containerView.addSubview(contentView)
+            contentView.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
+            }
         }
 
         containerView.material = .popover
@@ -40,10 +51,18 @@ final class ScrollingCapturePanelService {
         containerView.layer?.cornerRadius = 12
         containerView.layer?.masksToBounds = true
 
-        installContentView()
+        contentView.onCancel = { [weak self] in self?.onCancelRequested?() }
+        contentView.onOCR = { [weak self] in self?.onOCRRequested?() }
+        contentView.onAISelected = { [weak self] mode in self?.onAIRequested?(mode) }
+        contentView.onSave = { [weak self] in self?.onSaveRequested?() }
+        contentView.onCopy = { [weak self] in self?.onCopyRequested?() }
+        contentView.configure(
+            isOCREnabled: onOCRRequested != nil,
+            isAIEnabled: onAIRequested != nil
+        )
 
-        let panelSize = measuredPanelFrameSize(for: panel)
-        panel.setFrame(originRect(for: panelSize, selectionRect: selectionRect, on: screen), display: true)
+        let panelSize = measuredPanelFrameSize(for: panelInstance, selectionRect: selectionRect, on: screen)
+        panelInstance.setFrame(originRect(for: panelSize, selectionRect: selectionRect, on: screen), display: true)
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             guard let self, let panel = self.panel else {
@@ -54,19 +73,15 @@ final class ScrollingCapturePanelService {
             self.applyAppearanceStyling()
         }
 
-        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panelInstance)
         applyAppearanceStyling()
-        panel.orderFrontRegardless()
-
-        self.panel = panel
+        panelInstance.orderFrontRegardless()
     }
 
     /// 关闭面板
     func dismissPanel() {
         AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
         panel?.orderOut(nil)
-        hostingView?.removeFromSuperview()
-        hostingView = nil
         panel = nil
     }
 
@@ -86,58 +101,18 @@ final class ScrollingCapturePanelService {
         )
     }
 
-    private func installContentView() {
-        hostingView?.removeFromSuperview()
-
-        let hostingView = NSHostingView(rootView: makeRootView())
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(hostingView)
-        hostingView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        self.hostingView = hostingView
-    }
-
-    private func measuredPanelFrameSize(for panel: NSPanel) -> CGSize {
-        let minWidth: CGFloat = 360
-        let maxWidth: CGFloat = 560
-        let minHeight: CGFloat = 42
-        let maxHeight: CGFloat = 120
-
-        let unconstrainedSize = measuredContentSize()
-        let clampedWidth = min(max(ceil(unconstrainedSize.width), minWidth), maxWidth)
-        let fittedSize = measuredContentSize(constrainedToWidth: clampedWidth)
-        let clampedHeight = min(max(ceil(fittedSize.height), minHeight), maxHeight)
-
-        let contentSize = CGSize(width: clampedWidth, height: clampedHeight)
+    private func measuredPanelFrameSize(for panel: NSPanel, selectionRect: CGRect, on screen: NSScreen) -> CGSize {
+        let frame = screen.visibleFrame
+        let horizontalPadding: CGFloat = 48
+        let availableWidth = min(
+            selectionRect.midX - frame.minX - horizontalPadding,
+            frame.maxX - selectionRect.midX - horizontalPadding
+        ) * 2
+        let compact = availableWidth < 430
+        let contentSize = compact
+            ? CGSize(width: 380, height: 78)
+            : CGSize(width: 480, height: 42)
         return panel.frameRect(forContentRect: CGRect(origin: .zero, size: contentSize)).size
-    }
-
-    private func makeRootView() -> ScrollingCaptureControlPanelView {
-        ScrollingCaptureControlPanelView(
-            isOCREnabled: onOCRRequested != nil,
-            isAIEnabled: onAIRequested != nil,
-            onCancel: { [weak self] in self?.onCancelRequested?() },
-            onOCR: { [weak self] in self?.onOCRRequested?() },
-            onAISelected: { [weak self] mode in self?.onAIRequested?(mode) },
-            onSave: { [weak self] in self?.onSaveRequested?() },
-            onCopy: { [weak self] in self?.onCopyRequested?() }
-        )
-    }
-
-    private func measuredContentSize(constrainedToWidth width: CGFloat? = nil) -> CGSize {
-        if let width {
-            let hostingView = NSHostingView(
-                rootView: makeRootView().frame(width: width, alignment: .center)
-            )
-            hostingView.frame = CGRect(x: 0, y: 0, width: width, height: 1)
-            hostingView.layoutSubtreeIfNeeded()
-            return hostingView.fittingSize
-        }
-
-        let hostingView = NSHostingView(rootView: makeRootView())
-        hostingView.layoutSubtreeIfNeeded()
-        return hostingView.fittingSize
     }
 
     private func applyAppearanceStyling() {

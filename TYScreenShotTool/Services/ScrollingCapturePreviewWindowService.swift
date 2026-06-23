@@ -8,7 +8,6 @@
 import AppKit
 import CoreGraphics
 import SnapKit
-import SwiftUI
 
 /// 长截图预览窗口服务
 ///
@@ -22,7 +21,7 @@ final class ScrollingCapturePreviewWindowService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private var hostingView: NSHostingView<ScrollingCapturePreviewContentView>?
+    private let contentView = ScrollingCapturePreviewContentView()
     private(set) var attachmentSide: PreviewPlacementSide?
 
     init() {
@@ -43,6 +42,10 @@ final class ScrollingCapturePreviewWindowService {
         containerView.layer?.borderWidth = 1
 
         panel.contentView = containerView
+        containerView.addSubview(contentView)
+        contentView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
@@ -70,8 +73,8 @@ final class ScrollingCapturePreviewWindowService {
         }
         attachmentSide = panelFrame.maxX <= selectionRect.minX ? .left : .right
 
-        installContentView(
-            .preparing(
+        contentView.configure(
+            content: .preparing(
                 title: AppText.scrollingCapturePreviewPreparingTitle,
                 message: AppText.scrollingCapturePreviewPreparingMessage
             )
@@ -96,8 +99,8 @@ final class ScrollingCapturePreviewWindowService {
         }
         attachmentSide = panelFrame.maxX <= selectionRect.minX ? .left : .right
 
-        installContentView(
-            .image(NSImage(cgImage: image, size: imageSize))
+        contentView.configure(
+            content: .image(NSImage(cgImage: image, size: imageSize))
         )
 
         AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
@@ -109,26 +112,10 @@ final class ScrollingCapturePreviewWindowService {
     /// 关闭预览窗口
     func dismissPreview() {
         panel.orderOut(nil)
-        hostingView?.removeFromSuperview()
-        hostingView = nil
         attachmentSide = nil
     }
 
     // MARK: - Private
-
-    private func installContentView(_ content: ScrollingCapturePreviewContent) {
-        hostingView?.removeFromSuperview()
-
-        let hostingView = NSHostingView(
-            rootView: ScrollingCapturePreviewContentView(content: content)
-        )
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(hostingView)
-        hostingView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        self.hostingView = hostingView
-    }
 
     private func frame(for selectionRect: CGRect, on screen: NSScreen, contentSize: CGSize) -> CGRect? {
         let visibleFrame = screen.visibleFrame

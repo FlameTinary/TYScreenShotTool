@@ -6,51 +6,84 @@
 //
 
 import AppKit
-import SwiftUI
+import SnapKit
 
 enum ScrollingCapturePreviewContent {
     case preparing(title: String, message: String)
     case image(NSImage)
 }
 
-struct ScrollingCapturePreviewContentView: View {
-    let content: ScrollingCapturePreviewContent
+@MainActor
+final class ScrollingCapturePreviewContentView: NSView {
+    private let imageView = NSImageView()
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let messageLabel = NSTextField(labelWithString: "")
+    private let badgeLabel = NSTextField(labelWithString: AppText.captureLongCapture)
 
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            switch content {
-            case let .preparing(title, message):
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "rectangle.on.rectangle.angled")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.secondary)
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        buildLayout()
+    }
 
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
-                    Text(message)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-            case let .image(image):
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Text(AppText.captureLongCapture)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.regularMaterial, in: Capsule())
-            }
+    func configure(content: ScrollingCapturePreviewContent) {
+        switch content {
+        case let .preparing(title, message):
+            imageView.image = nil
+            imageView.isHidden = true
+            badgeLabel.isHidden = true
+            titleLabel.stringValue = title
+            messageLabel.stringValue = message
+        case let .image(image):
+            imageView.image = image
+            imageView.isHidden = false
+            badgeLabel.isHidden = false
+            titleLabel.stringValue = ""
+            messageLabel.stringValue = ""
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Layout
+
+private extension ScrollingCapturePreviewContentView {
+    func buildLayout() {
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+
+        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.maximumNumberOfLines = 0
+        messageLabel.alignment = .center
+
+        badgeLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        badgeLabel.textColor = .secondaryLabelColor
+        badgeLabel.isBordered = false
+        badgeLabel.drawsBackground = false
+
+        addSubview(imageView)
+        addSubview(titleLabel)
+        addSubview(messageLabel)
+        addSubview(badgeLabel)
+
+        imageView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        titleLabel.snp.makeConstraints { make in
+            make.top.leading.equalToSuperview().inset(12)
+            make.trailing.lessThanOrEqualToSuperview().offset(-12)
+        }
+        messageLabel.snp.makeConstraints { make in
+            make.top.equalTo(titleLabel.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview().inset(12)
+        }
+        badgeLabel.snp.makeConstraints { make in
+            make.top.leading.equalToSuperview().inset(8)
+        }
     }
 }
