@@ -462,10 +462,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
             // 选中高亮 — 青色虚线边框
             if let index, index == selectedAnnotationIndex {
-                let highlightRect = standardizedRect.insetBy(dx: -4, dy: -4)
+                let highlightInset = -(props.lineWidth / 2 + 4)
+                let highlightRect = standardizedRect.insetBy(dx: highlightInset, dy: highlightInset)
                 let highlightPath: NSBezierPath
                 if props.cornerRadius > 0 {
-                    highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: props.cornerRadius + 4, yRadius: props.cornerRadius + 4)
+                    highlightPath = NSBezierPath(roundedRect: highlightRect, xRadius: props.cornerRadius + props.lineWidth / 2 + 4, yRadius: props.cornerRadius + props.lineWidth / 2 + 4)
                 } else {
                     highlightPath = NSBezierPath(rect: highlightRect)
                 }
@@ -483,7 +484,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
             // 选中高亮 — 青色虚线边框
             if let index, index == selectedAnnotationIndex {
-                let highlightRect = rect.standardized.insetBy(dx: -4, dy: -4)
+                let highlightInset = -(props.lineWidth / 2 + 4)
+                let highlightRect = rect.standardized.insetBy(dx: highlightInset, dy: highlightInset)
                 let highlightPath = NSBezierPath(ovalIn: highlightRect)
                 NSColor.systemCyan.setStroke()
                 highlightPath.lineWidth = 2
