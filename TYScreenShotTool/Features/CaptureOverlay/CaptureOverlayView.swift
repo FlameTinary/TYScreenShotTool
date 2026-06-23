@@ -1329,9 +1329,11 @@ final class CaptureOverlayView: NSView {
             return
         }
 
+        if currentAnnotationTool != tool {
+            annotationCanvasView.selectedAnnotationIndex = nil
+        }
         currentAnnotationTool = tool
         annotationCanvasView.currentTool = tool
-        annotationCanvasView.selectedAnnotationIndex = nil
         refreshCurrentToolPanelFromDefaults()
         updateVisiblePropertyPanel()
         updateAnnotationToolSelection()
