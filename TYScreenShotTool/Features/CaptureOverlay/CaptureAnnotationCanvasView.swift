@@ -471,10 +471,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 highlightPath.setLineDash(dashes, count: 2, phase: 0)
                 highlightPath.stroke()
             }
-        case let .ellipse(rect, _):
+        case let .ellipse(rect, props):
             let path = NSBezierPath(ovalIn: rect.standardized)
-            configureStroke()
-            path.lineWidth = CaptureAnnotation.lineWidth
+            props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
+            path.lineWidth = props.lineWidth
             path.stroke()
         case let .line(start, end, props):
             let path = NSBezierPath()
@@ -485,9 +485,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             path.lineJoinStyle = .round
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
-        case let .arrow(start, end, _):
-            let path = arrowPath(from: start, to: end)
-            configureStroke()
+        case let .arrow(start, end, props):
+            let path = arrowPath(from: start, to: end, isCurved: props.isCurved)
+            path.lineWidth = props.lineWidth
+            props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
         case let .pen(points, _):
             guard let first = points.first else {
@@ -526,30 +527,48 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         attributedString.draw(at: origin)
     }
 
-    private func arrowPath(from start: CGPoint, to end: CGPoint) -> NSBezierPath {
+    private func arrowPath(from start: CGPoint, to end: CGPoint, isCurved: Bool) -> NSBezierPath {
         let path = NSBezierPath()
-        path.lineWidth = CaptureAnnotation.lineWidth
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        path.move(to: start)
-        path.line(to: end)
 
-        let angle = atan2(end.y - start.y, end.x - start.x)
+        let arrowEnd: CGPoint
+        let arrowAngle: CGFloat
+
+        if isCurved {
+            let control = CGPoint(
+                x: (start.x + end.x) / 2,
+                y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
+            )
+            path.move(to: start)
+            path.curve(to: end, controlPoint1: control, controlPoint2: control)
+            arrowEnd = end
+            // Approximate tangent direction at endpoint
+            let tangentDx = end.x - control.x
+            let tangentDy = end.y - control.y
+            arrowAngle = atan2(tangentDy, tangentDx)
+        } else {
+            path.move(to: start)
+            path.line(to: end)
+            arrowEnd = end
+            arrowAngle = atan2(end.y - start.y, end.x - start.x)
+        }
+
         let arrowLength: CGFloat = 14
-        let arrowAngle: CGFloat = .pi / 7
+        let arrowSpread: CGFloat = .pi / 7
 
         let leftPoint = CGPoint(
-            x: end.x - cos(angle - arrowAngle) * arrowLength,
-            y: end.y - sin(angle - arrowAngle) * arrowLength
+            x: arrowEnd.x - cos(arrowAngle - arrowSpread) * arrowLength,
+            y: arrowEnd.y - sin(arrowAngle - arrowSpread) * arrowLength
         )
         let rightPoint = CGPoint(
-            x: end.x - cos(angle + arrowAngle) * arrowLength,
-            y: end.y - sin(angle + arrowAngle) * arrowLength
+            x: arrowEnd.x - cos(arrowAngle + arrowSpread) * arrowLength,
+            y: arrowEnd.y - sin(arrowAngle + arrowSpread) * arrowLength
         )
 
-        path.move(to: end)
+        path.move(to: arrowEnd)
         path.line(to: leftPoint)
-        path.move(to: end)
+        path.move(to: arrowEnd)
         path.line(to: rightPoint)
         return path
     }
