@@ -138,7 +138,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             selectedAnnotationIndex = nil
             onAnnotationSelected?(nil, nil)
             fallthrough
-        case .ellipse, .arrow:
+        case .ellipse, .line, .arrow:
             dragStartPoint = point
             currentPoint = point
             temporaryAnnotation = makeDragAnnotation(from: point, to: point)
@@ -175,7 +175,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             currentPoint = point
             temporaryAnnotation = .mosaic(normalizedRect(from: dragStartPoint, to: point))
             needsDisplay = true
-        case .rectangle, .ellipse, .arrow:
+        case .rectangle, .ellipse, .line, .arrow:
             guard let dragStartPoint else {
                 return
             }
@@ -209,7 +209,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
 
             finalizeDragAnnotation()
-        case .rectangle, .ellipse, .arrow:
+        case .rectangle, .ellipse, .line, .arrow:
             finalizeDragAnnotation()
         case .pen:
             finalizePenAnnotation()
@@ -383,6 +383,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return .rectangle(normalizedRect(from: start, to: end), currentRectangleProperties)
         case .ellipse:
             return .ellipse(normalizedRect(from: start, to: end))
+        case .line:
+            return .arrow(start: start, end: end)
         case .arrow:
             return .arrow(start: start, end: end)
         case .mosaic:

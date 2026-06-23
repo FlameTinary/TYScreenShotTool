@@ -15,6 +15,8 @@ enum AnnotationTool: CaseIterable, Equatable {
     case rectangle
     /// 圆形工具
     case ellipse
+    /// 直线工具
+    case line
     /// 箭头工具
     case arrow
     /// 画笔工具
@@ -33,6 +35,8 @@ enum AnnotationTool: CaseIterable, Equatable {
             return "rectangle"
         case .ellipse:
             return "ellipse"
+        case .line:
+            return "line"
         case .arrow:
             return "arrow"
         case .pen:
@@ -50,6 +54,8 @@ enum AnnotationTool: CaseIterable, Equatable {
             return AppText.annotationRectangle
         case .ellipse:
             return AppText.annotationEllipse
+        case .line:
+            return AppText.annotationLine
         case .arrow:
             return AppText.annotationArrow
         case .pen:
@@ -67,6 +73,8 @@ enum AnnotationTool: CaseIterable, Equatable {
             return "rectangle"
         case .ellipse:
             return "circle"
+        case .line:
+            return "line.diagonal"
         case .arrow:
             return "arrow.up.right"
         case .pen:

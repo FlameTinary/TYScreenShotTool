@@ -44,6 +44,18 @@ enum AppText {
     static var annotationPen: String { choose(zhHans: "画笔", en: "Pen", ja: "ペン", ko: "펜", de: "Stift", fr: "Stylo") }
     static var annotationMosaic: String { choose(zhHans: "马赛克", en: "Mosaic", ja: "モザイク", ko: "모자이크", de: "Mosaik", fr: "Mosaïque") }
     static var annotationText: String { choose(zhHans: "文字", en: "Text", ja: "テキスト", ko: "텍스트", de: "Text", fr: "Texte") }
+    static var annotationLine: String {
+        choose(zhHans: "线条", en: "Line", ja: "線", ko: "선", de: "Linie", fr: "Ligne")
+    }
+    static var penModeSingleColor: String { choose(zhHans: "单一颜色", en: "Single Color", ja: "単色", ko: "단색", de: "Einfarbig", fr: "Couleur unie") }
+    static var penModeGaussianBlur: String { choose(zhHans: "高斯模糊", en: "Gaussian Blur", ja: "ガウスぼかし", ko: "가우시안 블러", de: "Gaußsche Unschärfe", fr: "Flou gaussien") }
+    static var penModeMosaic: String { choose(zhHans: "马赛克", en: "Mosaic", ja: "モザイク", ko: "모자이크", de: "Mosaik", fr: "Mosaïque") }
+    static var mosaicStyleMosaic: String { choose(zhHans: "马赛克", en: "Mosaic", ja: "モザイク", ko: "모자이크", de: "Mosaik", fr: "Mosaïque") }
+    static var mosaicStyleGlass: String { choose(zhHans: "毛玻璃", en: "Glass", ja: "すりガラス", ko: "반투명 유리", de: "Milchglas", fr: "Verre dépoli") }
+    static var annotationPanelLineWidth: String { choose(zhHans: "大小", en: "Size", ja: "サイズ", ko: "크기", de: "Größe", fr: "Taille") }
+    static var annotationPanelOpacity: String { choose(zhHans: "不透明度", en: "Opacity", ja: "不透明度", ko: "불투명도", de: "Deckkraft", fr: "Opacité") }
+    static var annotationPanelColor: String { choose(zhHans: "颜色", en: "Color", ja: "色", ko: "색상", de: "Farbe", fr: "Couleur") }
+    static var annotationPanelCurvedArrow: String { choose(zhHans: "曲线箭头", en: "Curved Arrow", ja: "曲線矢印", ko: "곡선 화살표", de: "Gebogener Pfeil", fr: "Flèche courbe") }
 
     static var captureCornerRadius: String { choose(zhHans: "圆角", en: "Corner", ja: "角丸", ko: "둥근 모서리", de: "Ecken", fr: "Coins") }
     static var rectanglePanelLineWidth: String { choose(zhHans: "粗细", en: "Width", ja: "太さ", ko: "두께", de: "Breite", fr: "Épaisseur") }
