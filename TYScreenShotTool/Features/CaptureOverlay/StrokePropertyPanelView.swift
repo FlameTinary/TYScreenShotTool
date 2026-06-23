@@ -15,8 +15,8 @@ import SnapKit
 /// 选中已有标注时，由 `updateDisplay(with:)` 反向同步面板控件。
 final class StrokePropertyPanelView: NSVisualEffectView {
 
-    static let minimumPanelSize = CGSize(width: 250, height: 86)
-    static let maximumPanelWidth: CGFloat = 320
+    static let minimumPanelSize = CGSize(width: 330, height: 86)
+    static let maximumPanelWidth: CGFloat = 400
 
     var onPropertyChanged: ((ShapeStrokeProperties) -> Void)?
 
@@ -54,6 +54,8 @@ final class StrokePropertyPanelView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.cornerCurve = .continuous
+
+        frame = CGRect(x: 0, y: 0, width: 330, height: 86)
     }
 
     private func setupControls() {

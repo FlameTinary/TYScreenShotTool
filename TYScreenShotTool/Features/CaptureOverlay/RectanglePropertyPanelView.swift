@@ -107,8 +107,9 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         layer?.cornerRadius = 12
         layer?.cornerCurve = .continuous
 
-
-
+        // 给定初始 frame（匹配 minimumPanelSize），避免零宽帧生成的
+        // NSAutoresizingMaskLayoutConstraint 与内部 SnapKit 约束冲突。
+        frame = CGRect(x: 0, y: 0, width: 360, height: 100)
     }
 
     /// 创建所有子控件并设置 target/action。
@@ -205,15 +206,14 @@ final class RectanglePropertyPanelView: NSVisualEffectView {
         contentContainer.addSubview(rightColumnStack)
 
         leftColumnStack.snp.makeConstraints { make in
-            make.leading.top.equalToSuperview()
-            make.bottom.lessThanOrEqualToSuperview()
+            make.leading.top.bottom.equalToSuperview()
             make.width.equalTo(130)
         }
 
         rightColumnStack.snp.makeConstraints { make in
             make.leading.equalTo(leftColumnStack.snp.trailing).offset(4)
-            make.trailing.top.equalToSuperview()
-            make.bottom.lessThanOrEqualToSuperview()
+            make.trailing.top.bottom.equalToSuperview()
+//            make.bottom.lessThanOrEqualToSuperview()
         }
 
         let lineWidthRow = makeLabeledRow(

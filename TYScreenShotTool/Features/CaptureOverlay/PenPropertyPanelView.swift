@@ -14,8 +14,8 @@ import SnapKit
 /// 面板采用内容驱动尺寸策略，通过 `onPropertyChanged` 回调向上传递。
 final class PenPropertyPanelView: NSVisualEffectView {
 
-    static let minimumPanelSize = CGSize(width: 320, height: 86)
-    static let maximumPanelWidth: CGFloat = 420
+    static let minimumPanelSize = CGSize(width: 340, height: 86)
+    static let maximumPanelWidth: CGFloat = 440
 
     var onPropertyChanged: ((PenProperties) -> Void)?
 
@@ -54,6 +54,8 @@ final class PenPropertyPanelView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.cornerCurve = .continuous
+
+        frame = CGRect(x: 0, y: 0, width: 340, height: 86)
     }
 
     private func setupControls() {

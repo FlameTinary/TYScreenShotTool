@@ -53,6 +53,8 @@ final class MosaicPropertyPanelView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.cornerCurve = .continuous
+
+        frame = CGRect(x: 0, y: 0, width: 220, height: 88)
     }
 
     private func setupControls() {

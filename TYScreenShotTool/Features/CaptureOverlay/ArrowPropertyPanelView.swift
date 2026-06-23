@@ -14,8 +14,8 @@ import SnapKit
 /// 面板采用内容驱动尺寸策略，通过 `onPropertyChanged` 回调向上传递。
 final class ArrowPropertyPanelView: NSVisualEffectView {
 
-    static let minimumPanelSize = CGSize(width: 300, height: 86)
-    static let maximumPanelWidth: CGFloat = 360
+    static let minimumPanelSize = CGSize(width: 330, height: 86)
+    static let maximumPanelWidth: CGFloat = 400
 
     var onPropertyChanged: ((ArrowProperties) -> Void)?
 
@@ -58,6 +58,8 @@ final class ArrowPropertyPanelView: NSVisualEffectView {
         wantsLayer = true
         layer?.cornerRadius = 12
         layer?.cornerCurve = .continuous
+
+        frame = CGRect(x: 0, y: 0, width: 330, height: 86)
     }
 
     private func setupControls() {
