@@ -52,6 +52,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var interactionStartMosaicRect: CGRect?
     private var trackingArea: NSTrackingArea?
 
+    /// 拖拽已选中标注：鼠标按下位置（overlay 坐标系）
+    private var isDraggingAnnotation = false
+    private var annotationDragStartPoint: CGPoint?
+
     /// 当前选中的标注索引（仅 rectangle 工具使用）
     var selectedAnnotationIndex: Int?
     /// 选中状态变更回调：索引, 工具, 属性值
@@ -118,26 +122,35 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
-        // 通用命中检测：选择已有标注
+        // 马赛克工具：保持原有 resize / 移动交互优先
+        if currentTool == .mosaic, beginMosaicInteraction(at: point) {
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
+        // 通用命中检测：选择已有标注，或拖拽已选中标注
         if let hitResult = hitTestEditableAnnotation(at: point) {
-            selectedAnnotationIndex = hitResult.index
-            onAnnotationSelected?(hitResult.index, hitResult.tool, hitResult.properties)
+            if hitResult.index == selectedAnnotationIndex {
+                // 再次点击已选中标注 → 进入拖拽移动
+                isDraggingAnnotation = true
+                annotationDragStartPoint = point
+            } else {
+                // 点击其他标注 → 选中
+                selectedAnnotationIndex = hitResult.index
+                onAnnotationSelected?(hitResult.index, hitResult.tool, hitResult.properties)
+            }
             needsDisplay = true
             return
         }
 
+        // 空白区域：取消选中
         selectedAnnotationIndex = nil
         onAnnotationSelected?(nil, currentTool, nil)
 
         // 按当前工具创建新标注
         switch currentTool {
         case .mosaic:
-            if beginMosaicInteraction(at: point) {
-                needsDisplay = true
-                applyCursorForCurrentState()
-                return
-            }
-
             dragStartPoint = point
             currentPoint = point
             temporaryAnnotation = .mosaic(normalizedRect(from: point, to: point), currentMosaicProperties)
@@ -162,6 +175,17 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+
+        // 拖拽已选中标注（非马赛克移动模式，马赛克走现有 resize/move 交互）
+        if isDraggingAnnotation, let startPoint = annotationDragStartPoint,
+           let idx = selectedAnnotationIndex {
+            let deltaX = point.x - startPoint.x
+            let deltaY = point.y - startPoint.y
+            moveAnnotation(at: idx, by: CGPoint(x: deltaX, y: deltaY))
+            annotationDragStartPoint = point
+            needsDisplay = true
+            return
+        }
 
         switch currentTool {
         case .mosaic:
@@ -203,6 +227,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     override func mouseUp(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         currentPoint = point
+
+        if isDraggingAnnotation {
+            isDraggingAnnotation = false
+            annotationDragStartPoint = nil
+            annotationsDidChange?(annotations)
+            applyCursorForCurrentState()
+            return
+        }
 
         switch currentTool {
         case .mosaic:
@@ -1076,6 +1108,37 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             + tCubed * end.y
 
         return CGPoint(x: x, y: y)
+    }
+
+    // MARK: - 拖拽移动已选中标注
+
+    private func moveAnnotation(at index: Int, by delta: CGPoint) {
+        guard annotations.indices.contains(index) else { return }
+
+        switch annotations[index] {
+        case let .rectangle(rect, props):
+            annotations[index] = .rectangle(rect.offsetBy(dx: delta.x, dy: delta.y), props)
+        case let .ellipse(rect, props):
+            annotations[index] = .ellipse(rect.offsetBy(dx: delta.x, dy: delta.y), props)
+        case let .line(start, end, props):
+            annotations[index] = .line(
+                start: CGPoint(x: start.x + delta.x, y: start.y + delta.y),
+                end: CGPoint(x: end.x + delta.x, y: end.y + delta.y),
+                props
+            )
+        case let .arrow(start, end, props):
+            annotations[index] = .arrow(
+                start: CGPoint(x: start.x + delta.x, y: start.y + delta.y),
+                end: CGPoint(x: end.x + delta.x, y: end.y + delta.y),
+                props
+            )
+        case let .pen(points, props):
+            annotations[index] = .pen(points: points.map { CGPoint(x: $0.x + delta.x, y: $0.y + delta.y) }, props)
+        case let .mosaic(rect, props):
+            annotations[index] = .mosaic(rect.offsetBy(dx: delta.x, dy: delta.y), props)
+        case .text:
+            break
+        }
     }
 
     private func mosaicInteractionTarget(for point: CGPoint, in rect: CGRect) -> MosaicInteractionTarget {
