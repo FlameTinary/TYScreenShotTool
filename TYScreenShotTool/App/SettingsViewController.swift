@@ -65,6 +65,17 @@ private extension SettingsViewController {
         scrollView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
+
+        let titleLabel = makeTitleLabel(AppLocalization.text("settings.title"))
+        let descriptionLabel = makeDescriptionLabel(AppLocalization.text("settings.description"))
+        let hotKeySection = makeHotKeySection()
+        let languageSection = makeLanguageSection()
+        let appearanceSection = makeAppearanceSection()
+        let aiSection = makeAISection()
+        let saveSection = makeSaveDirectorySection()
+
+        [titleLabel, descriptionLabel, hotKeySection, languageSection, appearanceSection, aiSection, saveSection]
+            .forEach(contentStack.addArrangedSubview)
     }
 
     func bindActions() {
@@ -88,12 +99,283 @@ private extension SettingsViewController {
         ) ?? .screenshot
         hotKeyField.resetRecordingState(displayedValue: storedHotKey.displayName)
         hotKeyErrorLabel.stringValue = ""
+
+        let currentLanguage = AppLanguage(rawValue: UserDefaults.standard.string(forKey: AppSettings.appLanguageKey)
+            ?? AppSettings.appLanguageDefaultValue) ?? .system
+        languagePopUp.selectItem(at: AppLanguage.allCases.firstIndex(of: currentLanguage) ?? 0)
+
+        let currentAppearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: AppSettings.appAppearanceKey)
+            ?? AppSettings.appAppearanceDefaultValue) ?? .system
+        appearancePopUp.selectItem(at: AppAppearance.allCases.firstIndex(of: currentAppearance) ?? 0)
+
+        aiVisionCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey) ? .on : .off
+        saveDirectoryLabel.stringValue = currentSaveDirectoryPath
+    }
+
+    func reloadLocalizedTexts() {
+        let windowTitle = AppLocalization.text("window.settings.title")
+        view.window?.title = windowTitle
+
+        reloadValues()
+        languagePopUp.removeAllItems()
+        languagePopUp.addItems(withTitles: [
+            AppLocalization.text("settings.language.option.system"),
+            AppLocalization.text("settings.language.option.zh_hans"),
+            AppLocalization.text("settings.language.option.en"),
+            AppLocalization.text("settings.language.option.ja"),
+            AppLocalization.text("settings.language.option.ko"),
+            AppLocalization.text("settings.language.option.de"),
+            AppLocalization.text("settings.language.option.fr"),
+        ])
+        let currentLanguage = AppLanguage(rawValue: UserDefaults.standard.string(forKey: AppSettings.appLanguageKey)
+            ?? AppSettings.appLanguageDefaultValue) ?? .system
+        languagePopUp.selectItem(at: AppLanguage.allCases.firstIndex(of: currentLanguage) ?? 0)
+
+        appearancePopUp.removeAllItems()
+        appearancePopUp.addItems(withTitles: [
+            AppLocalization.text("settings.appearance.option.system"),
+            AppLocalization.text("settings.appearance.option.light"),
+            AppLocalization.text("settings.appearance.option.dark"),
+        ])
+        let currentAppearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: AppSettings.appAppearanceKey)
+            ?? AppSettings.appAppearanceDefaultValue) ?? .system
+        appearancePopUp.selectItem(at: AppAppearance.allCases.firstIndex(of: currentAppearance) ?? 0)
+
+        hotKeyField.placeholderString = AppLocalization.text("settings.hotkey.placeholder")
+        aiVisionCheckbox.title = AppLocalization.text("settings.ai.use_vision")
+
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
 
     var currentSaveDirectoryPath: String {
         let path = UserDefaults.standard.string(forKey: AppSettings.saveDirectoryPathKey) ?? ""
         return path.isEmpty ? AppLocalization.text("settings.save.not_configured") : path
+    }
+}
+
+// MARK: - Section Builders
+
+private extension SettingsViewController {
+    func makeTitleLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 18, weight: .semibold)
+        return label
+    }
+
+    func makeDescriptionLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 12)
+        label.textColor = .secondaryLabelColor
+        label.maximumNumberOfLines = 0
+        return label
+    }
+
+    func makeSectionTitle(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 13, weight: .semibold)
+        return label
+    }
+
+    func makeSecondaryLabel(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 11)
+        label.textColor = .secondaryLabelColor
+        label.maximumNumberOfLines = 0
+        return label
+    }
+
+    func makeHotKeySection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.hotkey.section"))
+        let label = makeSecondaryLabel(AppLocalization.text("settings.hotkey.label"))
+
+        hotKeyField.placeholderString = AppLocalization.text("settings.hotkey.placeholder")
+
+        let helpLabel = makeSecondaryLabel(AppLocalization.text("settings.hotkey.help"))
+
+        hotKeyErrorLabel.font = .systemFont(ofSize: 11)
+        hotKeyErrorLabel.textColor = .systemRed
+        hotKeyErrorLabel.maximumNumberOfLines = 0
+
+        container.addSubview(sectionTitle)
+        container.addSubview(label)
+        container.addSubview(hotKeyField)
+        container.addSubview(hotKeyErrorLabel)
+        container.addSubview(helpLabel)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        label.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview()
+        }
+        hotKeyField.snp.makeConstraints { make in
+            make.top.equalTo(label.snp.bottom).offset(6)
+            make.leading.equalToSuperview()
+            make.width.equalTo(220)
+            make.height.equalTo(28)
+        }
+        hotKeyErrorLabel.snp.makeConstraints { make in
+            make.top.equalTo(hotKeyField.snp.bottom).offset(4)
+            make.leading.trailing.equalToSuperview()
+        }
+        helpLabel.snp.makeConstraints { make in
+            make.top.equalTo(hotKeyErrorLabel.snp.bottom).offset(4)
+            make.leading.trailing.bottom.equalToSuperview()
+        }
+
+        return container
+    }
+
+    func makeLanguageSection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.language.section"))
+        let label = makeSecondaryLabel(AppLocalization.text("settings.language.label"))
+
+        languagePopUp.removeAllItems()
+        languagePopUp.addItems(withTitles: [
+            AppLocalization.text("settings.language.option.system"),
+            AppLocalization.text("settings.language.option.zh_hans"),
+            AppLocalization.text("settings.language.option.en"),
+            AppLocalization.text("settings.language.option.ja"),
+            AppLocalization.text("settings.language.option.ko"),
+            AppLocalization.text("settings.language.option.de"),
+            AppLocalization.text("settings.language.option.fr"),
+        ])
+
+        container.addSubview(sectionTitle)
+        container.addSubview(label)
+        container.addSubview(languagePopUp)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        label.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview()
+        }
+        languagePopUp.snp.makeConstraints { make in
+            make.top.equalTo(label.snp.bottom).offset(6)
+            make.leading.bottom.equalToSuperview()
+            make.width.equalTo(240)
+        }
+
+        return container
+    }
+
+    func makeAppearanceSection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.appearance.section"))
+        let label = makeSecondaryLabel(AppLocalization.text("settings.appearance.label"))
+
+        appearancePopUp.removeAllItems()
+        appearancePopUp.addItems(withTitles: [
+            AppLocalization.text("settings.appearance.option.system"),
+            AppLocalization.text("settings.appearance.option.light"),
+            AppLocalization.text("settings.appearance.option.dark"),
+        ])
+
+        container.addSubview(sectionTitle)
+        container.addSubview(label)
+        container.addSubview(appearancePopUp)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        label.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview()
+        }
+        appearancePopUp.snp.makeConstraints { make in
+            make.top.equalTo(label.snp.bottom).offset(6)
+            make.leading.bottom.equalToSuperview()
+            make.width.equalTo(240)
+        }
+
+        return container
+    }
+
+    func makeAISection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.ai.section"))
+
+        aiVisionCheckbox.title = AppLocalization.text("settings.ai.use_vision")
+
+        let helpLabel = makeSecondaryLabel(AppLocalization.text("settings.ai.help"))
+
+        container.addSubview(sectionTitle)
+        container.addSubview(aiVisionCheckbox)
+        container.addSubview(helpLabel)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        aiVisionCheckbox.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.equalToSuperview()
+        }
+        helpLabel.snp.makeConstraints { make in
+            make.top.equalTo(aiVisionCheckbox.snp.bottom).offset(4)
+            make.leading.trailing.bottom.equalToSuperview()
+        }
+
+        return container
+    }
+
+    func makeSaveDirectorySection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.save.section"))
+
+        saveDirectoryLabel.font = .systemFont(ofSize: 12)
+        saveDirectoryLabel.textColor = .secondaryLabelColor
+        saveDirectoryLabel.maximumNumberOfLines = 2
+
+        let chooseButton = NSButton(
+            title: AppLocalization.text("settings.save.choose"),
+            target: self,
+            action: #selector(handleChooseSaveDirectory)
+        )
+        let clearButton = NSButton(
+            title: AppLocalization.text("settings.save.clear"),
+            target: self,
+            action: #selector(handleClearSaveDirectory)
+        )
+
+        let helpLabel = makeSecondaryLabel(AppLocalization.text("settings.save.help"))
+
+        container.addSubview(sectionTitle)
+        container.addSubview(saveDirectoryLabel)
+        container.addSubview(chooseButton)
+        container.addSubview(clearButton)
+        container.addSubview(helpLabel)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        saveDirectoryLabel.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview()
+        }
+        chooseButton.snp.makeConstraints { make in
+            make.top.equalTo(saveDirectoryLabel.snp.bottom).offset(8)
+            make.leading.equalToSuperview()
+        }
+        clearButton.snp.makeConstraints { make in
+            make.centerY.equalTo(chooseButton)
+            make.leading.equalTo(chooseButton.snp.trailing).offset(12)
+        }
+        helpLabel.snp.makeConstraints { make in
+            make.top.equalTo(chooseButton.snp.bottom).offset(6)
+            make.leading.trailing.bottom.equalToSuperview()
+        }
+
+        return container
     }
 }
 
@@ -117,6 +399,9 @@ private extension SettingsViewController {
             forKey: AppSettings.aiUseVisionTextExtractionKey
         )
     }
+
+    @objc func handleChooseSaveDirectory() { chooseSaveDirectory() }
+    @objc func handleClearSaveDirectory() { clearSaveDirectory() }
 
     func beginHotKeyRecording() {
         let current = ScreenshotHotKey(

@@ -94,6 +94,8 @@ enum AppText {
     static var captureCopy: String { choose(zhHans: "复制", en: "Copy", ja: "コピー", ko: "복사", de: "Kopieren", fr: "Copier") }
     static var captureSave: String { choose(zhHans: "保存", en: "Save", ja: "保存", ko: "저장", de: "Speichern", fr: "Enregistrer") }
     static var captureCancel: String { choose(zhHans: "取消", en: "Cancel", ja: "キャンセル", ko: "취소", de: "Abbrechen", fr: "Annuler") }
+    static var captureOCR: String { choose(zhHans: "OCR", en: "OCR", ja: "OCR", ko: "OCR", de: "OCR", fr: "OCR") }
+    static var captureAI: String { choose(zhHans: "AI", en: "AI", ja: "AI", ko: "AI", de: "KI", fr: "IA") }
     static var captureTextInputPlaceholder: String { choose(zhHans: "输入文字", en: "Enter text", ja: "文字を入力", ko: "텍스트 입력", de: "Text eingeben", fr: "Saisir du texte") }
 
     static var ocrWindowTitle: String { choose(zhHans: "OCR 结果", en: "OCR Result", ja: "OCR 結果", ko: "OCR 결과", de: "OCR-Ergebnis", fr: "Résultat OCR") }
@@ -179,6 +181,7 @@ enum AppText {
     static var longScreenshotFailedToast: String { choose(zhHans: "长截图失败，请调整滚动步进后重试", en: "Long capture failed. Adjust the scroll step and try again.", ja: "長いキャプチャに失敗しました。スクロール間隔を調整して再試行してください。", ko: "긴 캡처에 실패했습니다. 스크롤 간격을 조정한 뒤 다시 시도해 주세요.", de: "Lange Aufnahme fehlgeschlagen. Passe den Scrollschritt an und versuche es erneut.", fr: "La capture longue a échoué. Ajustez le pas de défilement puis réessayez.") }
 
     static var openSettingsButton: String { choose(zhHans: "打开设置", en: "Open Settings", ja: "設定を開く", ko: "설정 열기", de: "Einstellungen öffnen", fr: "Ouvrir les réglages") }
+    static var appQuit: String { choose(zhHans: "退出", en: "Quit", ja: "終了", ko: "종료", de: "Beenden", fr: "Quitter") }
     static var cancelButton: String { choose(zhHans: "取消", en: "Cancel", ja: "キャンセル", ko: "취소", de: "Abbrechen", fr: "Annuler") }
     static var saveDirNotConfiguredTitle: String { choose(zhHans: "未配置保存目录", en: "Save folder not configured", ja: "保存先フォルダが未設定です", ko: "저장 폴더가 설정되지 않았습니다", de: "Kein Speicherordner konfiguriert", fr: "Dossier d’enregistrement non configuré") }
     static var saveDirNotConfiguredMessage: String { choose(zhHans: "请前往 Settings 选择截图 PNG 的保存目录，然后再执行保存。", en: "Open Settings and choose a folder for screenshot PNG files before saving.", ja: "保存する前に、設定でスクリーンショット PNG の保存先フォルダを選択してください。", ko: "저장하기 전에 설정에서 스크린샷 PNG 저장 폴더를 선택해 주세요.", de: "Öffne die Einstellungen und wähle vor dem Speichern einen Ordner für Screenshot-PNG-Dateien.", fr: "Ouvrez les réglages et choisissez un dossier pour les PNG avant d’enregistrer.") }
