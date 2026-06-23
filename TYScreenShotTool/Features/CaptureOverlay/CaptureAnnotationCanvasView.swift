@@ -490,13 +490,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             path.lineWidth = props.lineWidth
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
-        case let .pen(points, _):
-            guard let first = points.first else {
-                return
-            }
+        case let .pen(points, props):
+            guard let first = points.first else { return }
 
             let path = NSBezierPath()
-            path.lineWidth = CaptureAnnotation.lineWidth
+            path.lineWidth = props.lineWidth
             path.lineCapStyle = .round
             path.lineJoinStyle = .round
             path.move(to: first)
@@ -505,10 +503,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 path.line(to: point)
             }
 
-            (NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed).setStroke()
-            path.stroke()
-        case let .mosaic(rect, _):
-            drawMosaic(in: rect.standardized)
+            if props.mode == .singleColor {
+                props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
+                path.stroke()
+            } else {
+                drawEffectStroke(path: path, mode: props.mode)
+            }
+        case let .mosaic(rect, props):
+            drawMosaic(in: rect.standardized, properties: props)
         case let .text(value, origin):
             drawText(value, at: origin)
         }
@@ -573,7 +575,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         return path
     }
 
-    private func drawMosaic(in rect: CGRect) {
+    private func drawMosaic(in rect: CGRect, properties: MosaicProperties) {
         guard rect.width > 0, rect.height > 0 else {
             return
         }
@@ -601,21 +603,37 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         let fullImage = CIImage(cgImage: sourceImage)
-        guard
-            let filter = CIFilter(name: "CIGaussianBlur"),
-            let outputContext = NSGraphicsContext.current?.cgContext
-        else {
+        guard let outputContext = NSGraphicsContext.current?.cgContext else {
             drawMosaicFallback(in: rect)
             return
         }
 
-        filter.setValue(fullImage, forKey: kCIInputImageKey)
-        filter.setValue(CaptureAnnotation.mosaicBlurRadius, forKey: kCIInputRadiusKey)
+        let cutoutImage: CGImage?
 
-        guard
-            let blurredImage = filter.outputImage?.cropped(to: fullImage.extent),
-            let blurredCGImage = ciContext.createCGImage(blurredImage, from: imageRect)
-        else {
+        switch properties.style {
+        case .mosaic:
+            guard let filter = CIFilter(name: "CIPixellate") else {
+                drawMosaicFallback(in: rect)
+                return
+            }
+            filter.setValue(fullImage, forKey: kCIInputImageKey)
+            filter.setValue(max(10, properties.size * 8), forKey: kCIInputScaleKey)
+            cutoutImage = filter.outputImage
+                .flatMap { $0.cropped(to: fullImage.extent) }
+                .flatMap { ciContext.createCGImage($0, from: imageRect) }
+        case .glass:
+            guard let filter = CIFilter(name: "CIGaussianBlur") else {
+                drawMosaicFallback(in: rect)
+                return
+            }
+            filter.setValue(fullImage, forKey: kCIInputImageKey)
+            filter.setValue(max(8, properties.size * 6), forKey: kCIInputRadiusKey)
+            cutoutImage = filter.outputImage
+                .flatMap { $0.cropped(to: fullImage.extent) }
+                .flatMap { ciContext.createCGImage($0, from: imageRect) }
+        }
+
+        guard let cutoutImage else {
             drawMosaicFallback(in: rect)
             return
         }
@@ -627,7 +645,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         )
         outputContext.saveGState()
         path.addClip()
-        outputContext.draw(blurredCGImage, in: rect)
+        outputContext.draw(cutoutImage, in: rect)
         outputContext.setFillColor(NSColor.white.withAlphaComponent(CaptureAnnotation.mosaicOverlayAlpha).cgColor)
         outputContext.fill(rect)
         outputContext.restoreGState()
@@ -641,6 +659,53 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         )
         NSColor.white.withAlphaComponent(0.16).setFill()
         path.fill()
+    }
+
+    private func drawEffectStroke(path: NSBezierPath, mode: PenMode) {
+        guard let sourceImage, let context = NSGraphicsContext.current?.cgContext else {
+            return
+        }
+
+        let clipBounds = path.bounds.insetBy(dx: -20, dy: -20)
+        guard clipBounds.width > 0, clipBounds.height > 0, bounds.width > 0, bounds.height > 0 else {
+            return
+        }
+
+        let imageScaleX = CGFloat(sourceImage.width) / bounds.width
+        let imageScaleY = CGFloat(sourceImage.height) / bounds.height
+        let cropRect = CGRect(
+            x: clipBounds.minX * imageScaleX,
+            y: clipBounds.minY * imageScaleY,
+            width: clipBounds.width * imageScaleX,
+            height: clipBounds.height * imageScaleY
+        ).integral
+
+        let input = CIImage(cgImage: sourceImage).cropped(to: cropRect)
+        let output: CIImage?
+
+        switch mode {
+        case .gaussianBlur:
+            let filter = CIFilter(name: "CIGaussianBlur")
+            filter?.setValue(input, forKey: kCIInputImageKey)
+            filter?.setValue(12, forKey: kCIInputRadiusKey)
+            output = filter?.outputImage?.cropped(to: cropRect)
+        case .mosaic:
+            let filter = CIFilter(name: "CIPixellate")
+            filter?.setValue(input, forKey: kCIInputImageKey)
+            filter?.setValue(18, forKey: kCIInputScaleKey)
+            output = filter?.outputImage?.cropped(to: cropRect)
+        case .singleColor:
+            output = nil
+        }
+
+        guard let output, let cgImage = ciContext.createCGImage(output, from: cropRect) else {
+            return
+        }
+
+        context.saveGState()
+        path.addClip()
+        context.draw(cgImage, in: clipBounds)
+        context.restoreGState()
     }
 
     private var hoverOrActiveMosaicTarget: MosaicInteractionTarget {
