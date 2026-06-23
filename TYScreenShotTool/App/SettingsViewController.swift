@@ -12,7 +12,6 @@ import SnapKit
 final class SettingsViewController: NSViewController {
     private let globalHotKeyService: GlobalHotKeyService
 
-    private let scrollView = NSScrollView()
     private let contentStack = NSStackView()
     private let hotKeyField = HotKeyRecorderTextField()
     private let hotKeyErrorLabel = NSTextField(labelWithString: "")
@@ -49,20 +48,10 @@ extension SettingsViewController {
         contentStack.orientation = .vertical
         contentStack.alignment = .leading
         contentStack.spacing = 16
+        contentStack.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
 
-        let documentView = NSView()
-        documentView.addSubview(contentStack)
+        view.addSubview(contentStack)
         contentStack.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(24)
-            make.width.equalToSuperview().offset(-48)
-        }
-
-        scrollView.documentView = documentView
-        scrollView.hasVerticalScroller = true
-        scrollView.drawsBackground = false
-
-        view.addSubview(scrollView)
-        scrollView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
 
@@ -76,6 +65,14 @@ extension SettingsViewController {
 
         [titleLabel, descriptionLabel, hotKeySection, languageSection, appearanceSection, aiSection, saveSection]
             .forEach(contentStack.addArrangedSubview)
+
+        // NSStackView .leading alignment does not stretch arranged subviews;
+        // each section container fills the stack width explicitly.
+        for section in [hotKeySection, languageSection, appearanceSection, aiSection, saveSection] {
+            section.snp.makeConstraints { make in
+                make.width.equalTo(contentStack.snp.width).offset(-48)
+            }
+        }
     }
 
     func bindActions() {
