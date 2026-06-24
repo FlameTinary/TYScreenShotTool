@@ -67,6 +67,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     var currentArrowProperties = ArrowProperties.default
     var currentPenProperties = PenProperties.default
     var currentMosaicProperties = MosaicProperties.default
+    var currentTextProperties = TextProperties.default {
+        didSet {
+            guard let activeTextField else { return }
+            applyTextProperties(currentTextProperties, to: activeTextField)
+        }
+    }
 
     override var acceptsFirstResponder: Bool {
         true
@@ -295,6 +301,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             annotations[idx] = .pen(points: points, value)
         case let (.mosaic(rect, _), .mosaic(value)):
             annotations[idx] = .mosaic(rect, value)
+        case let (.text(value, origin, _), .text(properties)):
+            annotations[idx] = .text(value: value, origin: origin, properties: properties)
         default:
             return
         }
@@ -351,7 +359,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
-        annotations.append(.text(value: text, origin: activeTextOrigin))
+        annotations.append(.text(value: text, origin: activeTextOrigin, properties: currentTextProperties))
         annotationsDidChange?(annotations)
         needsDisplay = true
     }
@@ -363,10 +371,15 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     }
 
     private func beginTextInput(at point: CGPoint) {
-        let textField = NSTextField(frame: CGRect(x: point.x, y: point.y, width: 180, height: 30))
+        let textField = NSTextField(
+            frame: CGRect(
+                x: point.x,
+                y: point.y,
+                width: max(180, currentTextProperties.fontSize * 6),
+                height: currentTextProperties.editorHeight
+            )
+        )
         textField.delegate = self
-        textField.font = .systemFont(ofSize: CaptureAnnotation.fontSize, weight: .semibold)
-        textField.textColor = NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed
         textField.isBordered = false
         textField.focusRingType = .none
         textField.drawsBackground = true
@@ -375,6 +388,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.target = self
         textField.action = #selector(commitTextInput)
         style(textField: textField)
+        applyTextProperties(currentTextProperties, to: textField)
 
         addSubview(textField)
         activeTextField = textField
@@ -615,21 +629,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 highlightPath.setLineDash(dashes, count: 2, phase: 0)
                 highlightPath.stroke()
             }
-        case let .text(value, origin):
-            drawText(value, at: origin)
+        case let .text(value, origin, properties):
+            drawText(value, at: origin, properties: properties)
         }
     }
 
-    private func configureStroke() {
-        (NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed).setStroke()
-    }
-
-    private func drawText(_ text: String, at origin: CGPoint) {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: CaptureAnnotation.fontSize, weight: .semibold),
-            .foregroundColor: NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed
-        ]
-        let attributedString = NSAttributedString(string: text, attributes: attributes)
+    private func drawText(_ text: String, at origin: CGPoint, properties: TextProperties) {
+        let attributedString = NSAttributedString(string: text, attributes: properties.textAttributes)
         attributedString.draw(at: origin)
     }
 
@@ -1177,6 +1183,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         if let activeTextField {
             style(textField: activeTextField)
         }
+    }
+
+    private func applyTextProperties(_ properties: TextProperties, to textField: NSTextField) {
+        textField.font = properties.font
+        textField.textColor = properties.textColor
+        var frame = textField.frame
+        frame.size.height = properties.editorHeight
+        textField.frame = frame
     }
 
     private func style(textField: NSTextField) {

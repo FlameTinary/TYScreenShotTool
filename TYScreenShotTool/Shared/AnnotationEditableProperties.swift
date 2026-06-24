@@ -15,4 +15,5 @@ enum AnnotationEditableProperties: Equatable {
     case arrow(ArrowProperties)
     case pen(PenProperties)
     case mosaic(MosaicProperties)
+    case text(TextProperties)
 }

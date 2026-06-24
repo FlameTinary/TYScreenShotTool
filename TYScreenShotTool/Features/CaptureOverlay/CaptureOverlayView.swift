@@ -96,6 +96,7 @@ final class CaptureOverlayView: NSView {
     private let arrowPanelView = ArrowPropertyPanelView()
     private let penPanelView = PenPropertyPanelView()
     private let mosaicPanelView = MosaicPropertyPanelView()
+    private let textPanelView = TextPropertyPanelView()
     /// 当前属性（新标注默认值 + 面板状态）
     private var currentRectangleProperties = RectangleProperties.default
     private var currentEllipseProperties = ShapeStrokeProperties.default
@@ -103,6 +104,7 @@ final class CaptureOverlayView: NSView {
     private var currentArrowProperties = ArrowProperties.default
     private var currentPenProperties = PenProperties.default
     private var currentMosaicProperties = MosaicProperties.default
+    private var currentTextProperties = TextProperties.default
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -348,6 +350,7 @@ final class CaptureOverlayView: NSView {
         arrowPanelView.isHidden = true
         penPanelView.isHidden = true
         mosaicPanelView.isHidden = true
+        textPanelView.isHidden = true
         annotationCanvasView.resetAnnotations()
         updateAnnotationToolSelection()
 
@@ -381,6 +384,7 @@ final class CaptureOverlayView: NSView {
         arrowPanelView.isHidden = true
         penPanelView.isHidden = true
         mosaicPanelView.isHidden = true
+        textPanelView.isHidden = true
         needsDisplay = true
     }
 
@@ -431,6 +435,7 @@ final class CaptureOverlayView: NSView {
         arrowPanelView.isHidden = true
         penPanelView.isHidden = true
         mosaicPanelView.isHidden = true
+        textPanelView.isHidden = true
         aiButton.isEnabled = true
         needsDisplay = true
         NSCursor.crosshair.set()
@@ -924,6 +929,13 @@ final class CaptureOverlayView: NSView {
             self.annotationCanvasView.updateSelectedAnnotationProperties(.mosaic(properties))
         }
 
+        textPanelView.onPropertyChanged = { [weak self] properties in
+            guard let self else { return }
+            self.currentTextProperties = properties
+            self.annotationCanvasView.currentTextProperties = properties
+            self.annotationCanvasView.updateSelectedAnnotationProperties(.text(properties))
+        }
+
         annotationCanvasView.onAnnotationSelected = { [weak self] index, tool, properties in
             guard let self else { return }
             self.annotationCanvasView.selectedAnnotationIndex = index
@@ -944,12 +956,14 @@ final class CaptureOverlayView: NSView {
         arrowPanelView.isHidden = true
         penPanelView.isHidden = true
         mosaicPanelView.isHidden = true
+        textPanelView.isHidden = true
 
         addSubview(rectanglePanelView)
         addSubview(strokePanelView)
         addSubview(arrowPanelView)
         addSubview(penPanelView)
         addSubview(mosaicPanelView)
+        addSubview(textPanelView)
     }
 
     private func configureToolbar() {
@@ -1208,7 +1222,9 @@ final class CaptureOverlayView: NSView {
             layoutPropertyPanel(penPanelView, tool: .pen, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
         case .mosaic:
             layoutPropertyPanel(mosaicPanelView, tool: .mosaic, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
-        case .text, nil:
+        case .text:
+            layoutPropertyPanel(textPanelView, tool: .text, toolbarFrame: toolbarContainerView.frame, topBarFrame: topBarContainerView.frame)
+        case nil:
             break
         }
     }
@@ -1616,7 +1632,8 @@ final class CaptureOverlayView: NSView {
             minSize = MosaicPropertyPanelView.minimumPanelSize
             maxWidth = MosaicPropertyPanelView.maximumPanelWidth
         case .text:
-            return
+            minSize = TextPropertyPanelView.minimumPanelSize
+            maxWidth = TextPropertyPanelView.maximumPanelWidth
         }
 
         let panelSize = CGSize(
@@ -1706,6 +1723,10 @@ final class CaptureOverlayView: NSView {
             currentMosaicProperties = value
             annotationCanvasView.currentMosaicProperties = value
             mosaicPanelView.updateDisplay(with: value)
+        case let .text(value):
+            currentTextProperties = value
+            annotationCanvasView.currentTextProperties = value
+            textPanelView.updateDisplay(with: value)
         case nil:
             refreshCurrentToolPanelFromDefaults()
         }
@@ -1731,7 +1752,10 @@ final class CaptureOverlayView: NSView {
         case .mosaic:
             annotationCanvasView.currentMosaicProperties = currentMosaicProperties
             mosaicPanelView.updateDisplay(with: currentMosaicProperties)
-        case .text, nil:
+        case .text:
+            annotationCanvasView.currentTextProperties = currentTextProperties
+            textPanelView.updateDisplay(with: currentTextProperties)
+        case nil:
             break
         }
     }
@@ -1742,6 +1766,7 @@ final class CaptureOverlayView: NSView {
         arrowPanelView.isHidden = currentAnnotationTool != .arrow
         penPanelView.isHidden = currentAnnotationTool != .pen
         mosaicPanelView.isHidden = currentAnnotationTool != .mosaic
+        textPanelView.isHidden = currentAnnotationTool != .text
     }
 
     private func updateAnnotationSourceImage() {

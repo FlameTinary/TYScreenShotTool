@@ -1682,8 +1682,8 @@ final class CaptureSessionService {
                     previewSize: previewSize,
                     in: context
                 )
-            case let .text(value, origin):
-                drawText(value, at: origin, in: context)
+            case let .text(value, origin, properties):
+                drawText(value, at: origin, properties: properties, in: context)
             }
         }
 
@@ -1750,13 +1750,8 @@ final class CaptureSessionService {
         context.restoreGState()
     }
 
-    private func drawText(_ text: String, at origin: CGPoint, in context: CGContext) {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: CaptureAnnotation.fontSize, weight: .semibold),
-            .foregroundColor: NSColor(cgColor: CaptureAnnotation.strokeColor) ?? .systemRed
-        ]
-
-        let attributedString = NSAttributedString(string: text, attributes: attributes)
+    private func drawText(_ text: String, at origin: CGPoint, properties: TextProperties, in context: CGContext) {
+        let attributedString = NSAttributedString(string: text, attributes: properties.textAttributes)
         let line = CTLineCreateWithAttributedString(attributedString)
 
         context.saveGState()

@@ -25,8 +25,8 @@ enum CaptureAnnotation: Equatable {
     case pen(points: [CGPoint], PenProperties)
     /// 马赛克标注
     case mosaic(CGRect, MosaicProperties)
-    /// 文字标注，包含文本内容和位置
-    case text(value: String, origin: CGPoint)
+    /// 文字标注，包含文本内容、位置和样式
+    case text(value: String, origin: CGPoint, properties: TextProperties)
 
     /// 标注描边颜色（红色）
     static let strokeColor = CGColor(red: 0.93, green: 0.24, blue: 0.21, alpha: 1)
@@ -79,14 +79,8 @@ enum CaptureAnnotation: Equatable {
             ) { partialResult, point in
                 partialResult.union(CGRect(origin: point, size: .zero).insetBy(dx: -inset, dy: -inset))
             }
-        case let .text(value, origin):
-            let width = max(CGFloat(value.count) * CaptureAnnotation.fontSize * 0.6, CaptureAnnotation.fontSize)
-            return CGRect(
-                x: origin.x,
-                y: origin.y,
-                width: width,
-                height: CaptureAnnotation.fontSize * 1.4
-            )
+        case let .text(value, origin, properties):
+            return properties.estimatedBounds(for: value, origin: origin)
         }
     }
 }
