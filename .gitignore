@@ -20,6 +20,7 @@ xcuserdata/
 
 # Logs
 *.log
+tmp/
 
 # AI workflow local artifacts
 .superpowers/
