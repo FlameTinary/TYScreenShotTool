@@ -242,6 +242,12 @@ HotKey 配置
 
 暂无进行中的 Sprint。
 
+当前有效的 UI 开发口径：
+
+- 当前主要业务 UI 现状以 AppKit 实现，布局常用 SnapKit
+- 后续开发默认推荐 AppKit + SnapKit
+- 但这不是唯一限制；若评估后 SwiftUI 或手动 `frame` 更适合具体场景，也可按场景选用
+
 ---
 
 ### Sprint 46
