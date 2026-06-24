@@ -60,10 +60,9 @@ final class ScrollingCaptureControlPanelContentView: NSView {
         arrangeButtons()
     }
 
-    /// Called once during buildLayout and again when data changes.
-    /// Arranges buttons for wide mode. Narrow-mode fallback (second row) is
-    /// only triggered by explicit configure() calls — never during layout,
-    /// because NSPanel is non-resizable so the width does not change at runtime.
+    /// 在 buildLayout 中调用一次，数据变化时再次调用。
+    /// 为宽模式排列按钮。窄模式回退（第二行）仅在显式调用 configure() 时触发 ——
+    /// 从不在布局期间触发，因为 NSPanel 不可调整大小，所以宽度在运行时不会改变。
     private func arrangeButtons() {
         let compact = bounds.width < 430
         secondRowStackView.isHidden = compact == false
