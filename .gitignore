@@ -1,5 +1,6 @@
 # Xcode
 DerivedData/
+DerivedDataTests/
 archived/
 build/
 .build/
