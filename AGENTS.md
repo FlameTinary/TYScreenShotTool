@@ -340,6 +340,28 @@ fix(hotkey): 修复快捷键问题
 
 ---
 
+# 构建与测试策略
+
+## 脚本优先原则
+
+执行构建、归档和测试时，**必须优先使用项目内的脚本**：
+
+| 操作 | 脚本路径 | 用途 | 默认配置 |
+|------|----------|------|----------|
+| 构建 | `./scripts/build.sh` | 编译项目 | Debug 配置，`DerivedData/` 目录，关闭签名 |
+| 归档 | `./scripts/archive.sh` | 生成归档包 | Release 配置，输出到 `archived/` 目录 |
+| 测试 | `./scripts/test.sh` | 运行单元测试 | Debug 配置，`DerivedDataTests/` 目录，精简输出 |
+
+### 规则
+
+* 只有在脚本本身需要调整、排障或明确要求时，才直接调用底层 `xcodebuild` 命令
+* 脚本会自动处理路径、目录创建等准备工作
+* 支持通过环境变量或命令行参数传递配置
+  * 构建/归档：`CONFIGURATION=Release ./scripts/build.sh`
+  * 测试：`./scripts/test.sh -c Release -t AppLanguageTests`
+
+---
+
 # 修改范围控制
 
 默认：
