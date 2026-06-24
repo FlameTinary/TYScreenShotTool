@@ -29,6 +29,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 activeMosaicTarget = .none
                 hoverRectTarget = .none
                 activeRectTarget = .none
+                hoverEllipseTarget = .none
+                activeEllipseTarget = .none
                 needsDisplay = true
                 applyCursorForCurrentState()
             }
@@ -41,6 +43,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private static let mosaicEdgeHitThickness: CGFloat = 8
     private static let mosaicCornerHitSize: CGFloat = 12
     private static let minimumMosaicSize: CGFloat = 12
+    private static let minimumEllipseRadius: CGFloat = 10
 
     private var dragStartPoint: CGPoint?
     private var currentPoint: CGPoint?
@@ -58,6 +61,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var activeRectTarget: AnnotationResizeTarget = .none
     private var interactionStartRect: CGRect?
     private var hoverRectTarget: AnnotationResizeTarget = .none
+
+    private var activeEllipseIndex: Int?
+    private var activeEllipseTarget: AnnotationResizeTarget = .none
+    private var interactionStartEllipseRect: CGRect?
+    private var hoverEllipseTarget: AnnotationResizeTarget = .none
 
     /// 拖拽已选中标注：鼠标按下位置（overlay 坐标系）
     private var isDraggingAnnotation = false
@@ -154,6 +162,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // 椭圆工具：选中椭圆后支持 resize / 移动交互
+        if currentTool == .ellipse, let result = ellipseInteraction(at: point) {
+            activeEllipseIndex = result.index
+            activeEllipseTarget = result.target
+            interactionStartMousePoint = point
+            interactionStartEllipseRect = result.rect
+            hoverEllipseTarget = result.target
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
         // 通用命中检测：选择已有标注，或拖拽已选中标注
         if let hitResult = hitTestEditableAnnotation(at: point) {
             if hitResult.index == selectedAnnotationIndex {
@@ -201,9 +221,15 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
 
-        // 矩形工具：选中矩形后支持 resize / 移动交互
+        // 矩形/椭圆工具：选中后支持 resize / 移动交互
         if currentTool == .rectangle, activeRectTarget != .none {
             updateSelectedRectangle(with: point)
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+        if currentTool == .ellipse, activeEllipseTarget != .none {
+            updateSelectedEllipse(with: point)
             needsDisplay = true
             applyCursorForCurrentState()
             return
@@ -269,7 +295,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
-        // 矩形工具：选中矩形后支持 resize / 移动交互
+        // 矩形/椭圆工具：选中后支持 resize / 移动交互
         if currentTool == .rectangle, activeRectTarget != .none {
             updateSelectedRectangle(with: point)
             activeRectIndex = nil
@@ -277,6 +303,17 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             interactionStartMousePoint = nil
             interactionStartRect = nil
             updateRectHover(at: point)
+            annotationsDidChange?(annotations)
+            applyCursorForCurrentState()
+            return
+        }
+        if currentTool == .ellipse, activeEllipseTarget != .none {
+            updateSelectedEllipse(with: point)
+            activeEllipseIndex = nil
+            activeEllipseTarget = .none
+            interactionStartMousePoint = nil
+            interactionStartEllipseRect = nil
+            updateEllipseHover(at: point)
             annotationsDidChange?(annotations)
             applyCursorForCurrentState()
             return
@@ -304,17 +341,20 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         let point = convert(event.locationInWindow, from: nil)
         updateMosaicHover(at: point)
         updateRectHover(at: point)
+        updateEllipseHover(at: point)
     }
 
     override func cursorUpdate(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         updateMosaicHover(at: point)
         updateRectHover(at: point)
+        updateEllipseHover(at: point)
     }
 
     override func mouseExited(with event: NSEvent) {
         hoverMosaicTarget = .none
         hoverRectTarget = .none
+        hoverEllipseTarget = .none
         applyCursorForCurrentState()
     }
 
@@ -329,6 +369,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         activeRectTarget = .none
         hoverRectTarget = .none
         interactionStartRect = nil
+        activeEllipseIndex = nil
+        activeEllipseTarget = .none
+        hoverEllipseTarget = .none
+        interactionStartEllipseRect = nil
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
@@ -572,21 +616,28 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             }
         case let .ellipse(rect, props):
-            let path = NSBezierPath(ovalIn: rect.standardized)
+            let standardizedRect = rect.standardized
+            let path = NSBezierPath(ovalIn: standardizedRect)
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.lineWidth = props.lineWidth
             path.stroke()
 
-            // 选中高亮 — 青色虚线边框
+            // 选中高亮 — 8 个缩放控制点
             if let index, index == selectedAnnotationIndex {
-                let highlightInset = -(props.lineWidth / 2 + 4)
-                let highlightRect = rect.standardized.insetBy(dx: highlightInset, dy: highlightInset)
-                let highlightPath = NSBezierPath(ovalIn: highlightRect)
-                NSColor.systemCyan.setStroke()
-                highlightPath.lineWidth = 2
-                let dashes: [CGFloat] = [6, 4]
-                highlightPath.setLineDash(dashes, count: 2, phase: 0)
-                highlightPath.stroke()
+                let controlPoints = ellipseResizeControlPoints(for: standardizedRect)
+                for point in controlPoints {
+                    let handlePath = NSBezierPath(ovalIn: CGRect(
+                        x: point.x - 6,
+                        y: point.y - 6,
+                        width: 12,
+                        height: 12
+                    ))
+                    NSColor.white.setFill()
+                    handlePath.fill()
+                    NSColor.red.setStroke()
+                    handlePath.lineWidth = 2
+                    handlePath.stroke()
+                }
             }
         case let .line(start, end, props):
             // 选中高亮 — 加宽虚线路径，先画在底层
@@ -950,17 +1001,22 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
     private func applyCursorForCurrentState() {
         let target: AnnotationResizeTarget
+        var isActiveMove = false
         if currentTool == .mosaic {
             target = hoverOrActiveMosaicTarget
+            isActiveMove = activeMosaicTarget == .move
         } else if currentTool == .rectangle {
             target = hoverOrActiveRectTarget
+            isActiveMove = activeRectTarget == .move
+        } else if currentTool == .ellipse {
+            target = hoverOrActiveEllipseTarget
+            isActiveMove = activeEllipseTarget == .move
         } else {
             NSCursor.crosshair.set()
             return
         }
         if target == .move {
-            let isActive = (currentTool == .mosaic ? activeMosaicTarget : activeRectTarget) == .move
-            (isActive ? NSCursor.closedHand : NSCursor.openHand).set()
+            (isActiveMove ? NSCursor.closedHand : NSCursor.openHand).set()
         } else {
             cursor(for: target).set()
         }
@@ -1126,6 +1182,176 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         return .none
+    }
+
+    // MARK: - Ellipse Resize Interaction
+
+    private func ellipseResizeControlPoints(for rect: CGRect) -> [CGPoint] {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let rx = rect.width / 2
+        let ry = rect.height / 2
+        let d: CGFloat = 0.7071067811865475 // cos(45°)
+
+        return [
+            CGPoint(x: center.x - rx * d, y: center.y - ry * d), // bottom-left
+            CGPoint(x: center.x, y: center.y - ry),               // bottom
+            CGPoint(x: center.x + rx * d, y: center.y - ry * d), // bottom-right
+            CGPoint(x: center.x + rx, y: center.y),               // right
+            CGPoint(x: center.x + rx * d, y: center.y + ry * d), // top-right
+            CGPoint(x: center.x, y: center.y + ry),               // top
+            CGPoint(x: center.x - rx * d, y: center.y + ry * d), // top-left
+            CGPoint(x: center.x - rx, y: center.y),               // left
+        ]
+    }
+
+    private var hoverOrActiveEllipseTarget: AnnotationResizeTarget {
+        activeEllipseTarget != .none ? activeEllipseTarget : hoverEllipseTarget
+    }
+
+    private func ellipseInteraction(at point: CGPoint) -> (index: Int, rect: CGRect, target: AnnotationResizeTarget)? {
+        guard let selectedIndex = selectedAnnotationIndex,
+              annotations.indices.contains(selectedIndex),
+              case let .ellipse(rect, _) = annotations[selectedIndex] else {
+            return nil
+        }
+
+        let standardizedRect = rect.standardized
+        let target = ellipseInteractionTarget(for: point, in: standardizedRect)
+        if target != .none {
+            return (selectedIndex, standardizedRect, target)
+        }
+
+        return nil
+    }
+
+    private func ellipseInteractionTarget(for point: CGPoint, in rect: CGRect) -> AnnotationResizeTarget {
+        let controlPoints = ellipseResizeControlPoints(for: rect)
+        let hitRadius: CGFloat = 12
+
+        for (i, cp) in controlPoints.enumerated() {
+            if hypot(point.x - cp.x, point.y - cp.y) <= hitRadius {
+                switch i {
+                case 0: return .resizeBottomLeft
+                case 1: return .resizeBottom
+                case 2: return .resizeBottomRight
+                case 3: return .resizeRight
+                case 4: return .resizeTopRight
+                case 5: return .resizeTop
+                case 6: return .resizeTopLeft
+                case 7: return .resizeLeft
+                default: return .none
+                }
+            }
+        }
+
+        if rect.insetBy(dx: -6, dy: -6).contains(point) {
+            return .move
+        }
+
+        return .none
+    }
+
+    private func updateEllipseHover(at point: CGPoint) {
+        let previous = hoverEllipseTarget
+        hoverEllipseTarget = ellipseInteraction(at: point)?.target ?? .none
+        if previous != hoverEllipseTarget || activeEllipseTarget != .none {
+            applyCursorForCurrentState()
+        }
+    }
+
+    private func updateSelectedEllipse(with point: CGPoint) {
+        guard
+            let activeEllipseIndex = activeEllipseIndex,
+            let startPoint = interactionStartMousePoint,
+            let startRect = interactionStartEllipseRect,
+            activeEllipseTarget != .none,
+            annotations.indices.contains(activeEllipseIndex),
+            case .ellipse = annotations[activeEllipseIndex]
+        else {
+            return
+        }
+
+        guard case let .ellipse(_, currentProps) = annotations[activeEllipseIndex] else {
+            return
+        }
+
+        let updatedRect = updatedEllipseFromResize(
+            from: startRect,
+            startPoint: startPoint,
+            currentPoint: point,
+            target: activeEllipseTarget
+        )
+        annotations[activeEllipseIndex] = .ellipse(updatedRect, currentProps)
+    }
+
+    private func updatedEllipseFromResize(
+        from rect: CGRect,
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        target: AnnotationResizeTarget
+    ) -> CGRect {
+        let deltaX = currentPoint.x - startPoint.x
+        let deltaY = currentPoint.y - startPoint.y
+        let minRadius = Self.minimumEllipseRadius
+
+        switch target {
+        case .move:
+            return constrainedRect(rect.offsetBy(dx: deltaX, dy: deltaY))
+        case .resizeTop:
+            var newRect = rect
+            newRect.size.height = max(minRadius * 2, rect.size.height + deltaY)
+            return constrainedRect(newRect)
+        case .resizeBottom:
+            var newRect = rect
+            newRect.origin.y += deltaY
+            newRect.size.height = max(minRadius * 2, rect.size.height - deltaY)
+            return constrainedRect(newRect)
+        case .resizeLeft:
+            var newRect = rect
+            newRect.origin.x += deltaX
+            newRect.size.width = max(minRadius * 2, rect.size.width - deltaX)
+            return constrainedRect(newRect)
+        case .resizeRight:
+            var newRect = rect
+            newRect.size.width = max(minRadius * 2, rect.size.width + deltaX)
+            return constrainedRect(newRect)
+        case .resizeTopLeft, .resizeTopRight, .resizeBottomLeft, .resizeBottomRight:
+            return updatedEllipseFromDiagonalResize(from: rect, startPoint: startPoint, currentPoint: currentPoint, target: target)
+        case .none:
+            return rect
+        }
+    }
+
+    private func updatedEllipseFromDiagonalResize(
+        from rect: CGRect,
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        target: AnnotationResizeTarget
+    ) -> CGRect {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let initialRx = rect.width / 2
+        let initialRy = rect.height / 2
+        let minRadius = Self.minimumEllipseRadius
+
+        let startVec = CGPoint(x: startPoint.x - center.x, y: startPoint.y - center.y)
+        let currentVec = CGPoint(x: currentPoint.x - center.x, y: currentPoint.y - center.y)
+        let startDist = hypot(startVec.x, startVec.y)
+        let currentDist = hypot(currentVec.x, currentVec.y)
+
+        guard startDist > 0 else { return rect }
+
+        let scale = max(minRadius / min(initialRx, initialRy), currentDist / startDist)
+        let newRx = max(initialRx * scale, minRadius)
+        let newRy = max(initialRy * scale, minRadius)
+
+        let newRect = CGRect(
+            x: center.x - newRx,
+            y: center.y - newRy,
+            width: 2 * newRx,
+            height: 2 * newRy
+        )
+
+        return constrainedRect(newRect)
     }
 
     // MARK: - Multi-Tool Hit Testing
