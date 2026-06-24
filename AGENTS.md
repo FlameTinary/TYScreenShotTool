@@ -185,20 +185,6 @@ Sprint：
 * 优先已有方案
 * 控制复杂度
 
-## UI 技术规则
-
-默认：
-
-* UI 使用 AppKit + SnapKit
-* 普通界面布局优先 SnapKit
-* 只有窗口定位、Overlay 绘制、逐像素控制等低层场景才使用手动 frame
-
-禁止：
-
-* 新增 SwiftUI 页面或控件
-* 新增 NSHostingView / NSHostingController 桥接
-* 无明确理由引入第二套 UI 技术栈
-
 ---
 
 # 架构策略
