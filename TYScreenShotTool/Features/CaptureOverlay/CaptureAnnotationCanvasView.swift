@@ -35,6 +35,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 activeLineTarget = .none
                 hoverArrowTarget = .none
                 activeArrowTarget = .none
+                hoverPenTarget = .none
+                activePenTarget = .none
                 needsDisplay = true
                 applyCursorForCurrentState()
             }
@@ -87,6 +89,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var interactionStartArrowControl2: CGPoint?
     private var interactionStartArrowIsCurved: Bool = false
     private var hoverArrowTarget: AnnotationResizeTarget = .none
+
+    // MARK: - 画笔交互状态
+
+    private var activePenIndex: Int?
+    private var activePenTarget: AnnotationResizeTarget = .none
+    private var interactionStartPenPoints: [CGPoint]?
+    private var hoverPenTarget: AnnotationResizeTarget = .none
 
     /// 拖拽已选中标注：鼠标按下位置（overlay 坐标系）
     private var isDraggingAnnotation = false
@@ -226,6 +235,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // 画笔工具：选中画笔后支持端点拖拽交互
+        if currentTool == .pen, let result = penInteraction(at: point) {
+            activePenIndex = result.index
+            activePenTarget = result.target
+            interactionStartMousePoint = point
+            interactionStartPenPoints = result.points
+            hoverPenTarget = result.target
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
         // 通用命中检测：选择已有标注，或拖拽已选中标注
         if let hitResult = hitTestEditableAnnotation(at: point) {
             if hitResult.index == selectedAnnotationIndex {
@@ -295,6 +316,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
         if currentTool == .arrow, activeArrowTarget != .none {
             updateSelectedArrow(with: point)
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
+        if currentTool == .pen, activePenTarget != .none {
+            updateSelectedPen(with: point)
             needsDisplay = true
             applyCursorForCurrentState()
             return
@@ -412,6 +440,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        if currentTool == .pen, activePenTarget != .none {
+            updateSelectedPen(with: point)
+            activePenIndex = nil
+            activePenTarget = .none
+            interactionStartMousePoint = nil
+            interactionStartPenPoints = nil
+            updatePenHover(at: point)
+            annotationsDidChange?(annotations)
+            applyCursorForCurrentState()
+            return
+        }
+
         switch currentTool {
         case .mosaic:
             if activeMosaicTarget != .none {
@@ -437,6 +477,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateEllipseHover(at: point)
         updateLineHover(at: point)
         updateArrowHover(at: point)
+        updatePenHover(at: point)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -446,6 +487,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateEllipseHover(at: point)
         updateLineHover(at: point)
         updateArrowHover(at: point)
+        updatePenHover(at: point)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -454,6 +496,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         hoverEllipseTarget = .none
         hoverLineTarget = .none
         hoverArrowTarget = .none
+        hoverPenTarget = .none
         applyCursorForCurrentState()
     }
 
@@ -485,6 +528,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         interactionStartArrowControl1 = nil
         interactionStartArrowControl2 = nil
         interactionStartArrowIsCurved = false
+        activePenIndex = nil
+        activePenTarget = .none
+        hoverPenTarget = .none
+        interactionStartPenPoints = nil
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
@@ -818,23 +865,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             }
         case let .pen(points, props):
-            guard let first = points.first else { return }
-
-            // 选中高亮 — 加宽虚线路径，先画在底层
-            if let index, index == selectedAnnotationIndex {
-                let highlightPath = NSBezierPath()
-                highlightPath.lineWidth = props.lineWidth + 4
-                highlightPath.lineCapStyle = .round
-                highlightPath.lineJoinStyle = .round
-                highlightPath.move(to: first)
-                for point in points.dropFirst() {
-                    highlightPath.line(to: point)
-                }
-                NSColor.systemCyan.setStroke()
-                let dashes: [CGFloat] = [6, 4]
-                highlightPath.setLineDash(dashes, count: 2, phase: 0)
-                highlightPath.stroke()
-            }
+            guard let first = points.first, let last = points.last else { return }
 
             let path = NSBezierPath()
             path.lineWidth = props.lineWidth
@@ -851,6 +882,24 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 path.stroke()
             } else {
                 drawEffectStroke(path: path, mode: props.mode)
+            }
+
+            // 选中高亮 — 端点控制节点
+            if let index, index == selectedAnnotationIndex {
+                let controlPoints = [first, last]
+                for point in controlPoints {
+                    let handlePath = NSBezierPath(ovalIn: CGRect(
+                        x: point.x - 6,
+                        y: point.y - 6,
+                        width: 12,
+                        height: 12
+                    ))
+                    NSColor.white.setFill()
+                    handlePath.fill()
+                    NSColor.red.setStroke()
+                    handlePath.lineWidth = 2
+                    handlePath.stroke()
+                }
             }
         case let .mosaic(rect, props):
             drawMosaic(in: rect.standardized, properties: props)
@@ -1165,6 +1214,9 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         } else if currentTool == .arrow {
             target = hoverOrActiveArrowTarget
             isActiveMove = activeArrowTarget == .move
+        } else if currentTool == .pen {
+            target = hoverOrActivePenTarget
+            isActiveMove = activePenTarget == .move
         } else {
             NSCursor.crosshair.set()
             return
@@ -1810,6 +1862,125 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
     }
 
+    // MARK: - Pen (画笔) Resize Interaction
+
+    private var hoverOrActivePenTarget: AnnotationResizeTarget {
+        activePenTarget != .none ? activePenTarget : hoverPenTarget
+    }
+
+    private func penInteractionTarget(for point: CGPoint, points: [CGPoint], lineWidth: CGFloat) -> AnnotationResizeTarget {
+        guard let first = points.first, let last = points.last else {
+            return .none
+        }
+
+        let hitRadius: CGFloat = 12
+
+        if hypot(point.x - first.x, point.y - first.y) <= hitRadius {
+            return .resizeLineStart
+        }
+
+        if hypot(point.x - last.x, point.y - last.y) <= hitRadius {
+            return .resizeLineEnd
+        }
+
+        let tolerance = max(10, lineWidth / 2 + 4)
+        if isPoint(point, nearPolyline: points, tolerance: tolerance) {
+            return .move
+        }
+
+        return .none
+    }
+
+    private func penInteraction(at point: CGPoint) -> (index: Int, points: [CGPoint], target: AnnotationResizeTarget)? {
+        guard let selectedIndex = selectedAnnotationIndex,
+              annotations.indices.contains(selectedIndex),
+              case let .pen(points, props) = annotations[selectedIndex] else {
+            return nil
+        }
+
+        let target = penInteractionTarget(for: point, points: points, lineWidth: props.lineWidth)
+        if target != .none {
+            return (selectedIndex, points, target)
+        }
+
+        return nil
+    }
+
+    private func updatePenHover(at point: CGPoint) {
+        let previous = hoverPenTarget
+        hoverPenTarget = penInteraction(at: point)?.target ?? .none
+        if previous != hoverPenTarget || activePenTarget != .none {
+            applyCursorForCurrentState()
+        }
+    }
+
+    private func updateSelectedPen(with point: CGPoint) {
+        guard
+            let activePenIndex = activePenIndex,
+            let startPoints = interactionStartPenPoints,
+            let startPoint = interactionStartMousePoint,
+            activePenTarget != .none,
+            annotations.indices.contains(activePenIndex),
+            case .pen = annotations[activePenIndex]
+        else {
+            return
+        }
+
+        guard case let .pen(_, currentProps) = annotations[activePenIndex] else {
+            return
+        }
+
+        let newPoints = updatedPenFromResize(
+            fromPoints: startPoints,
+            startPoint: startPoint,
+            currentPoint: point,
+            target: activePenTarget
+        )
+        annotations[activePenIndex] = .pen(points: newPoints, currentProps)
+    }
+
+    private func updatedPenFromResize(
+        fromPoints: [CGPoint],
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        target: AnnotationResizeTarget
+    ) -> [CGPoint] {
+        let deltaX = currentPoint.x - startPoint.x
+        let deltaY = currentPoint.y - startPoint.y
+
+        switch target {
+        case .resizeLineStart:
+            guard !fromPoints.isEmpty else { return fromPoints }
+            var newPoints = fromPoints
+            newPoints[0] = CGPoint(
+                x: min(max(newPoints[0].x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(newPoints[0].y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return newPoints
+
+        case .resizeLineEnd:
+            guard !fromPoints.isEmpty else { return fromPoints }
+            var newPoints = fromPoints
+            let lastIndex = newPoints.count - 1
+            newPoints[lastIndex] = CGPoint(
+                x: min(max(newPoints[lastIndex].x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(newPoints[lastIndex].y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return newPoints
+
+        case .move:
+            return fromPoints.map { point in
+                CGPoint(
+                    x: min(max(point.x + deltaX, bounds.minX), bounds.maxX),
+                    y: min(max(point.y + deltaY, bounds.minY), bounds.maxY)
+                )
+            }
+
+        default:
+            return fromPoints
+        }
+    }
+
     // MARK: - Multi-Tool Hit Testing
 
     private struct EditableAnnotationHit {
@@ -1847,6 +2018,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             case let .pen(points, properties):
                 if isPoint(point, nearPolyline: points, tolerance: max(10, properties.lineWidth / 2 + 4)) {
+                    return EditableAnnotationHit(index: index, tool: .pen, properties: .pen(properties))
+                }
+                // 也检测端点控制节点区域
+                let hitRadius: CGFloat = 14
+                if let first = points.first, hypot(point.x - first.x, point.y - first.y) <= hitRadius {
+                    return EditableAnnotationHit(index: index, tool: .pen, properties: .pen(properties))
+                }
+                if let last = points.last, hypot(point.x - last.x, point.y - last.y) <= hitRadius {
                     return EditableAnnotationHit(index: index, tool: .pen, properties: .pen(properties))
                 }
             case let .mosaic(rect, properties):
