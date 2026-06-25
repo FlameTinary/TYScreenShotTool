@@ -96,6 +96,7 @@ private extension AIAnalysisPreviewContentView {
     func buildLayout() {
         titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
 
+        bodyStack.translatesAutoresizingMaskIntoConstraints = false
         bodyStack.orientation = .vertical
         bodyStack.spacing = 12
         bodyStack.alignment = .leading

@@ -1606,8 +1606,6 @@ final class CaptureOverlayView: NSView {
         toolbarFrame: CGRect,
         topBarFrame: CGRect
     ) {
-        panel.layoutSubtreeIfNeeded()
-
         let fittingSize = panel.fittingSize
         let measuredWidth = fittingSize.width
         let measuredHeight = fittingSize.height
