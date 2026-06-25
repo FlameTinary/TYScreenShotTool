@@ -1715,14 +1715,11 @@ final class CaptureSessionService {
         let arrowAngle: CGFloat
 
         if properties.isCurved {
-            let control = CGPoint(
-                x: (start.x + end.x) / 2,
-                y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
-            )
+            let (control1, control2) = properties.effectiveControlPoints(from: start, to: end)
             context.move(to: start)
-            context.addCurve(to: end, control1: control, control2: control)
+            context.addCurve(to: end, control1: control1, control2: control2)
             arrowEnd = end
-            arrowAngle = atan2(end.y - control.y, end.x - control.x)
+            arrowAngle = atan2(end.y - control2.y, end.x - control2.x)
         } else {
             context.move(to: start)
             context.addLine(to: end)

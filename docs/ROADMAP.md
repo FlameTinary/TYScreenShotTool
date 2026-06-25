@@ -836,3 +836,33 @@ App 外观切换
 - 面板值作为新矩形默认值
 
 ---
+
+### Sprint 47
+
+箭头端点与曲线控制节点
+
+状态：
+✅ Done
+
+目标：
+
+- 箭头标注选中后，取消青色虚线边框，改为显示白色圆形控制节点
+- 直线箭头选中后显示 2 个端点控制节点，支持端点单独拖拽
+- 曲线箭头选中后显示 4 个控制节点（2 个端点 + 2 个曲线控制点）
+- 曲线控制节点支持拖拽调节曲线弧度方向和大小
+- 箭头主体区域支持按住拖动整体移动（含控制点跟随）
+
+成果：
+
+- 箭头绘制已使用 ArrowProperties 中的存储控制点替代硬编码默认曲线
+- `ArrowProperties` 新增 `curveControl1` / `curveControl2` 可选字段
+- 新增 `arrowControlPoints`、`arrowInteractionTarget`、`arrowInteraction` 等全套交互方法
+- 新增 `AnnotationResizeTarget` 的 `.resizeArrowControl1` / `.resizeArrowControl2` 枚举值
+- 新增 `updateSelectedArrow`、`updatedArrowFromResize`、`updateArrowHover` 交互方法
+- 箭头导出渲染（CaptureSessionService）同步使用存储控制点
+- `hitTestEditableAnnotation` 支持通过控制节点选中箭头
+- 属性面板切换 `isCurved` 时自动维护控制点数据一致性
+- 选中后移动箭头时，曲线控制点同步跟随移动
+- 142 个自动化测试全部通过
+
+---

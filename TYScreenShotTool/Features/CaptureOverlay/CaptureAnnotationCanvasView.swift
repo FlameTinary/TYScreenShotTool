@@ -33,6 +33,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 activeEllipseTarget = .none
                 hoverLineTarget = .none
                 activeLineTarget = .none
+                hoverArrowTarget = .none
+                activeArrowTarget = .none
                 needsDisplay = true
                 applyCursorForCurrentState()
             }
@@ -74,6 +76,17 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var interactionStartLineStart: CGPoint?
     private var interactionStartLineEnd: CGPoint?
     private var hoverLineTarget: AnnotationResizeTarget = .none
+
+    // MARK: - 箭头交互状态
+
+    private var activeArrowIndex: Int?
+    private var activeArrowTarget: AnnotationResizeTarget = .none
+    private var interactionStartArrowStart: CGPoint?
+    private var interactionStartArrowEnd: CGPoint?
+    private var interactionStartArrowControl1: CGPoint?
+    private var interactionStartArrowControl2: CGPoint?
+    private var interactionStartArrowIsCurved: Bool = false
+    private var hoverArrowTarget: AnnotationResizeTarget = .none
 
     /// 拖拽已选中标注：鼠标按下位置（overlay 坐标系）
     private var isDraggingAnnotation = false
@@ -195,6 +208,24 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // 箭头工具：选中箭头后支持端点/曲线控制节点拖拽交互
+        if currentTool == .arrow, let result = arrowInteraction(at: point) {
+            activeArrowIndex = result.index
+            activeArrowTarget = result.target
+            interactionStartMousePoint = point
+            interactionStartArrowStart = result.start
+            interactionStartArrowEnd = result.end
+            interactionStartArrowControl1 = result.control1
+            interactionStartArrowControl2 = result.control2
+            if case let .arrow(_, _, props) = annotations[result.index] {
+                interactionStartArrowIsCurved = props.isCurved
+            }
+            hoverArrowTarget = result.target
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
         // 通用命中检测：选择已有标注，或拖拽已选中标注
         if let hitResult = hitTestEditableAnnotation(at: point) {
             if hitResult.index == selectedAnnotationIndex {
@@ -257,6 +288,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
         if currentTool == .line, activeLineTarget != .none {
             updateSelectedLine(with: point)
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
+        if currentTool == .arrow, activeArrowTarget != .none {
+            updateSelectedArrow(with: point)
             needsDisplay = true
             applyCursorForCurrentState()
             return
@@ -358,6 +396,22 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        if currentTool == .arrow, activeArrowTarget != .none {
+            updateSelectedArrow(with: point)
+            activeArrowIndex = nil
+            activeArrowTarget = .none
+            interactionStartMousePoint = nil
+            interactionStartArrowStart = nil
+            interactionStartArrowEnd = nil
+            interactionStartArrowControl1 = nil
+            interactionStartArrowControl2 = nil
+            interactionStartArrowIsCurved = false
+            updateArrowHover(at: point)
+            annotationsDidChange?(annotations)
+            applyCursorForCurrentState()
+            return
+        }
+
         switch currentTool {
         case .mosaic:
             if activeMosaicTarget != .none {
@@ -382,6 +436,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateRectHover(at: point)
         updateEllipseHover(at: point)
         updateLineHover(at: point)
+        updateArrowHover(at: point)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -390,6 +445,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateRectHover(at: point)
         updateEllipseHover(at: point)
         updateLineHover(at: point)
+        updateArrowHover(at: point)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -397,6 +453,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         hoverRectTarget = .none
         hoverEllipseTarget = .none
         hoverLineTarget = .none
+        hoverArrowTarget = .none
         applyCursorForCurrentState()
     }
 
@@ -420,6 +477,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         hoverLineTarget = .none
         interactionStartLineStart = nil
         interactionStartLineEnd = nil
+        activeArrowIndex = nil
+        activeArrowTarget = .none
+        hoverArrowTarget = .none
+        interactionStartArrowStart = nil
+        interactionStartArrowEnd = nil
+        interactionStartArrowControl1 = nil
+        interactionStartArrowControl2 = nil
+        interactionStartArrowIsCurved = false
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
@@ -435,8 +500,21 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             annotations[idx] = .ellipse(rect, value)
         case let (.line(start, end, _), .line(value)):
             annotations[idx] = .line(start: start, end: end, value)
-        case let (.arrow(start, end, _), .arrow(value)):
-            annotations[idx] = .arrow(start: start, end: end, value)
+        case let (.arrow(start, end, currentProps), .arrow(value)):
+            var newValue = value
+            if value.isCurved && value.curveControl1 == nil {
+                // isCurved 从 false 切换到 true 时，使用当前起始/终点计算默认控制点
+                newValue = value.withDefaultControlPoints(from: start, to: end)
+            } else if !value.isCurved {
+                // isCurved 从 true 切换到 false 时，清除控制点
+                newValue.curveControl1 = nil
+                newValue.curveControl2 = nil
+            } else if value.isCurved && currentProps.isCurved {
+                // isCurved 保持 true，保留原有的控制点
+                newValue.curveControl1 = currentProps.curveControl1
+                newValue.curveControl2 = currentProps.curveControl2
+            }
+            annotations[idx] = .arrow(start: start, end: end, newValue)
         case let (.pen(points, _), .pen(value)):
             annotations[idx] = .pen(points: points, value)
         case let (.mosaic(rect, _), .mosaic(value)):
@@ -604,7 +682,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .line:
             return .line(start: start, end: end, currentLineProperties)
         case .arrow:
-            return .arrow(start: start, end: end, currentArrowProperties)
+            let props = currentArrowProperties.isCurved
+                ? currentArrowProperties.withDefaultControlPoints(from: start, to: end)
+                : currentArrowProperties
+            return .arrow(start: start, end: end, props)
         case .mosaic:
             return .mosaic(normalizedRect(from: start, to: end), currentMosaicProperties)
         case .pen, .text, .none:
@@ -714,20 +795,28 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             }
         case let .arrow(start, end, props):
-            // 选中高亮 — 加宽虚线路径，先画在底层
-            if let index, index == selectedAnnotationIndex {
-                let highlightPath = arrowPath(from: start, to: end, isCurved: props.isCurved)
-                highlightPath.lineWidth = props.lineWidth + 4
-                NSColor.systemCyan.setStroke()
-                let dashes: [CGFloat] = [6, 4]
-                highlightPath.setLineDash(dashes, count: 2, phase: 0)
-                highlightPath.stroke()
-            }
-
-            let path = arrowPath(from: start, to: end, isCurved: props.isCurved)
+            let path = arrowPath(from: start, to: end, properties: props)
             path.lineWidth = props.lineWidth
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
+
+            // 选中高亮 — 控制节点
+            if let index, index == selectedAnnotationIndex {
+                let controlPoints = arrowControlPoints(start: start, end: end, properties: props)
+                for point in controlPoints {
+                    let handlePath = NSBezierPath(ovalIn: CGRect(
+                        x: point.x - 6,
+                        y: point.y - 6,
+                        width: 12,
+                        height: 12
+                    ))
+                    NSColor.white.setFill()
+                    handlePath.fill()
+                    NSColor.red.setStroke()
+                    handlePath.lineWidth = 2
+                    handlePath.stroke()
+                }
+            }
         case let .pen(points, props):
             guard let first = points.first else { return }
 
@@ -790,7 +879,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         attributedString.draw(at: origin)
     }
 
-    private func arrowPath(from start: CGPoint, to end: CGPoint, isCurved: Bool) -> NSBezierPath {
+    private func arrowPath(from start: CGPoint, to end: CGPoint, properties: ArrowProperties) -> NSBezierPath {
         let path = NSBezierPath()
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
@@ -798,17 +887,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         let arrowEnd: CGPoint
         let arrowAngle: CGFloat
 
-        if isCurved {
-            let control = CGPoint(
-                x: (start.x + end.x) / 2,
-                y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
-            )
+        if properties.isCurved {
+            let (control1, control2) = properties.effectiveControlPoints(from: start, to: end)
             path.move(to: start)
-            path.curve(to: end, controlPoint1: control, controlPoint2: control)
+            path.curve(to: end, controlPoint1: control1, controlPoint2: control2)
             arrowEnd = end
             // Approximate tangent direction at endpoint
-            let tangentDx = end.x - control.x
-            let tangentDy = end.y - control.y
+            let tangentDx = end.x - control2.x
+            let tangentDy = end.y - control2.y
             arrowAngle = atan2(tangentDy, tangentDx)
         } else {
             path.move(to: start)
@@ -834,6 +920,17 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         path.move(to: arrowEnd)
         path.line(to: rightPoint)
         return path
+    }
+
+    /// 获取箭头的控制节点列表
+    /// - 直线箭头：起点和终点，共 2 个
+    /// - 曲线箭头：起点、控制点1、控制点2、终点，共 4 个
+    private func arrowControlPoints(start: CGPoint, end: CGPoint, properties: ArrowProperties) -> [CGPoint] {
+        if properties.isCurved {
+            let (control1, control2) = properties.effectiveControlPoints(from: start, to: end)
+            return [start, control1, control2, end]
+        }
+        return [start, end]
     }
 
     private func resizeControlPoints(for rect: CGRect) -> [CGPoint] {
@@ -1065,6 +1162,9 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         } else if currentTool == .line {
             target = hoverOrActiveLineTarget
             isActiveMove = activeLineTarget == .move
+        } else if currentTool == .arrow {
+            target = hoverOrActiveArrowTarget
+            isActiveMove = activeArrowTarget == .move
         } else {
             NSCursor.crosshair.set()
             return
@@ -1089,6 +1189,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .resizeTopRight, .resizeBottomLeft:
             return .resizeNorthEastSouthWest
         case .resizeLineStart, .resizeLineEnd:
+            return .openHand
+        case .resizeArrowControl1, .resizeArrowControl2:
             return .openHand
         case .none:
             return .crosshair
@@ -1138,7 +1240,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .resizeBottomRight:
             maxX += deltaX
             minY += deltaY
-        case .resizeLineStart, .resizeLineEnd, .none:
+        case .resizeLineStart, .resizeLineEnd, .resizeArrowControl1, .resizeArrowControl2, .none:
             return rect
         }
 
@@ -1373,7 +1475,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return constrainedRect(newRect)
         case .resizeTopLeft, .resizeTopRight, .resizeBottomLeft, .resizeBottomRight:
             return updatedEllipseFromDiagonalResize(from: rect, startPoint: startPoint, currentPoint: currentPoint, target: target)
-        case .resizeLineStart, .resizeLineEnd, .none:
+        case .resizeLineStart, .resizeLineEnd, .resizeArrowControl1, .resizeArrowControl2, .none:
             return rect
         }
     }
@@ -1527,6 +1629,187 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
     }
 
+    // MARK: - Arrow Resize Interaction
+
+    private var hoverOrActiveArrowTarget: AnnotationResizeTarget {
+        activeArrowTarget != .none ? activeArrowTarget : hoverArrowTarget
+    }
+
+    private func arrowInteraction(at point: CGPoint) -> (index: Int, start: CGPoint, end: CGPoint, control1: CGPoint, control2: CGPoint, target: AnnotationResizeTarget)? {
+        guard let selectedIndex = selectedAnnotationIndex,
+              annotations.indices.contains(selectedIndex),
+              case let .arrow(start, end, props) = annotations[selectedIndex] else {
+            return nil
+        }
+
+        let (control1, control2) = props.effectiveControlPoints(from: start, to: end)
+        let target = arrowInteractionTarget(for: point, start: start, end: end, control1: control1, control2: control2, properties: props)
+        if target != .none {
+            return (selectedIndex, start, end, control1, control2, target)
+        }
+
+        return nil
+    }
+
+    private func arrowInteractionTarget(
+        for point: CGPoint,
+        start: CGPoint,
+        end: CGPoint,
+        control1: CGPoint,
+        control2: CGPoint,
+        properties: ArrowProperties
+    ) -> AnnotationResizeTarget {
+        let hitRadius: CGFloat = 12
+
+        if properties.isCurved {
+            // 曲线箭头：4 个控制节点 — 按顺序检测：控制点2、控制点1、端点2、端点1
+            // (从靠近鼠标的区域优先检测)
+            if hypot(point.x - control2.x, point.y - control2.y) <= hitRadius {
+                return .resizeArrowControl2
+            }
+            if hypot(point.x - control1.x, point.y - control1.y) <= hitRadius {
+                return .resizeArrowControl1
+            }
+        }
+
+        // 端点检测（直线和曲线通用）
+        if hypot(point.x - end.x, point.y - end.y) <= hitRadius {
+            return .resizeLineEnd
+        }
+        if hypot(point.x - start.x, point.y - start.y) <= hitRadius {
+            return .resizeLineStart
+        }
+
+        // 箭头主体命中检测
+        if isPoint(point, nearArrowFrom: start, to: end, properties: properties) {
+            return .move
+        }
+
+        return .none
+    }
+
+    private func updateArrowHover(at point: CGPoint) {
+        let previous = hoverArrowTarget
+        hoverArrowTarget = arrowInteraction(at: point)?.target ?? .none
+        if previous != hoverArrowTarget || activeArrowTarget != .none {
+            applyCursorForCurrentState()
+        }
+    }
+
+    private func updateSelectedArrow(with point: CGPoint) {
+        guard
+            let activeArrowIndex = activeArrowIndex,
+            let startPoint = interactionStartMousePoint,
+            let startArrowStart = interactionStartArrowStart,
+            let startArrowEnd = interactionStartArrowEnd,
+            let startControl1 = interactionStartArrowControl1,
+            let startControl2 = interactionStartArrowControl2,
+            activeArrowTarget != .none,
+            annotations.indices.contains(activeArrowIndex),
+            case .arrow = annotations[activeArrowIndex]
+        else {
+            return
+        }
+
+        guard case let .arrow(_, _, currentProps) = annotations[activeArrowIndex] else {
+            return
+        }
+
+        let (newStart, newEnd, newControl1, newControl2) = updatedArrowFromResize(
+            fromStart: startArrowStart,
+            fromEnd: startArrowEnd,
+            fromControl1: startControl1,
+            fromControl2: startControl2,
+            startPoint: startPoint,
+            currentPoint: point,
+            target: activeArrowTarget,
+            isCurved: interactionStartArrowIsCurved
+        )
+
+        var newProps = currentProps
+        if interactionStartArrowIsCurved {
+            newProps.curveControl1 = newControl1
+            newProps.curveControl2 = newControl2
+        }
+        annotations[activeArrowIndex] = .arrow(start: newStart, end: newEnd, newProps)
+    }
+
+    private func updatedArrowFromResize(
+        fromStart: CGPoint,
+        fromEnd: CGPoint,
+        fromControl1: CGPoint,
+        fromControl2: CGPoint,
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        target: AnnotationResizeTarget,
+        isCurved: Bool
+    ) -> (start: CGPoint, end: CGPoint, control1: CGPoint?, control2: CGPoint?) {
+        let deltaX = currentPoint.x - startPoint.x
+        let deltaY = currentPoint.y - startPoint.y
+
+        switch target {
+        case .resizeLineStart:
+            let newStart = CGPoint(
+                x: min(max(fromStart.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromStart.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            // 拖动起始端时，控制点1跟随起始端移动
+            let newControl1 = isCurved ? CGPoint(
+                x: min(max(fromControl1.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromControl1.y + deltaY, bounds.minY), bounds.maxY)
+            ) : nil
+            return (newStart, fromEnd, newControl1, isCurved ? fromControl2 : nil)
+
+        case .resizeLineEnd:
+            let newEnd = CGPoint(
+                x: min(max(fromEnd.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromEnd.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            // 拖动终止端时，控制点2跟随终止端移动
+            let newControl2 = isCurved ? CGPoint(
+                x: min(max(fromControl2.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromControl2.y + deltaY, bounds.minY), bounds.maxY)
+            ) : nil
+            return (fromStart, newEnd, isCurved ? fromControl1 : nil, newControl2)
+
+        case .resizeArrowControl1:
+            let newControl1 = CGPoint(
+                x: min(max(fromControl1.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromControl1.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return (fromStart, fromEnd, newControl1, fromControl2)
+
+        case .resizeArrowControl2:
+            let newControl2 = CGPoint(
+                x: min(max(fromControl2.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromControl2.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return (fromStart, fromEnd, fromControl1, newControl2)
+
+        case .move:
+            let newStart = CGPoint(
+                x: min(max(fromStart.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromStart.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            let newEnd = CGPoint(
+                x: min(max(fromEnd.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromEnd.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            let newControl1 = isCurved ? CGPoint(
+                x: min(max(fromControl1.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromControl1.y + deltaY, bounds.minY), bounds.maxY)
+            ) : nil
+            let newControl2 = isCurved ? CGPoint(
+                x: min(max(fromControl2.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromControl2.y + deltaY, bounds.minY), bounds.maxY)
+            ) : nil
+            return (newStart, newEnd, newControl1, newControl2)
+
+        default:
+            return (fromStart, fromEnd, isCurved ? fromControl1 : nil, isCurved ? fromControl2 : nil)
+        }
+    }
+
     // MARK: - Multi-Tool Hit Testing
 
     private struct EditableAnnotationHit {
@@ -1553,6 +1836,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             case let .arrow(start, end, properties):
                 if isPoint(point, nearArrowFrom: start, to: end, properties: properties) {
                     return EditableAnnotationHit(index: index, tool: .arrow, properties: .arrow(properties))
+                }
+                // 也检测控制节点区域（让点击控制节点也能选中箭头）
+                let hitRadius: CGFloat = 14
+                let controls = arrowControlPoints(start: start, end: end, properties: properties)
+                for cp in controls {
+                    if hypot(point.x - cp.x, point.y - cp.y) <= hitRadius {
+                        return EditableAnnotationHit(index: index, tool: .arrow, properties: .arrow(properties))
+                    }
                 }
             case let .pen(points, properties):
                 if isPoint(point, nearPolyline: points, tolerance: max(10, properties.lineWidth / 2 + 4)) {
@@ -1599,21 +1890,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         let tolerance = max(10, properties.lineWidth + 6)
 
         if properties.isCurved {
-            return isPoint(point, nearPolyline: curvedArrowBodyPoints(from: start, to: end), tolerance: tolerance)
+            return isPoint(point, nearPolyline: curvedArrowBodyPoints(from: start, to: end, properties: properties), tolerance: tolerance)
         }
 
         return isPoint(point, nearLineFrom: start, to: end, tolerance: tolerance)
     }
 
-    private func curvedArrowBodyPoints(from start: CGPoint, to end: CGPoint, samples: Int = 16) -> [CGPoint] {
-        let control = CGPoint(
-            x: (start.x + end.x) / 2,
-            y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
-        )
+    private func curvedArrowBodyPoints(from start: CGPoint, to end: CGPoint, properties: ArrowProperties, samples: Int = 16) -> [CGPoint] {
+        let (control1, control2) = properties.effectiveControlPoints(from: start, to: end)
 
         return (0...samples).map { index in
             let t = CGFloat(index) / CGFloat(max(samples, 1))
-            return cubicBezierPoint(start: start, control1: control, control2: control, end: end, t: t)
+            return cubicBezierPoint(start: start, control1: control1, control2: control2, end: end, t: t)
         }
     }
 
@@ -1661,10 +1949,17 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 props
             )
         case let .arrow(start, end, props):
+            var movedProps = props
+            if let c1 = props.curveControl1 {
+                movedProps.curveControl1 = CGPoint(x: c1.x + delta.x, y: c1.y + delta.y)
+            }
+            if let c2 = props.curveControl2 {
+                movedProps.curveControl2 = CGPoint(x: c2.x + delta.x, y: c2.y + delta.y)
+            }
             annotations[index] = .arrow(
                 start: CGPoint(x: start.x + delta.x, y: start.y + delta.y),
                 end: CGPoint(x: end.x + delta.x, y: end.y + delta.y),
-                props
+                movedProps
             )
         case let .pen(points, props):
             annotations[index] = .pen(points: points.map { CGPoint(x: $0.x + delta.x, y: $0.y + delta.y) }, props)
@@ -1737,7 +2032,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .resizeBottomRight:
             maxX += deltaX
             minY += deltaY
-        case .resizeLineStart, .resizeLineEnd, .none:
+        case .resizeLineStart, .resizeLineEnd, .resizeArrowControl1, .resizeArrowControl2, .none:
             return rect
         }
 
@@ -1811,6 +2106,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case resizeBottomRight
         case resizeLineStart
         case resizeLineEnd
+        case resizeArrowControl1
+        case resizeArrowControl2
     }
 }
 
