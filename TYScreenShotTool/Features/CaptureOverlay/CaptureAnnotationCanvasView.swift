@@ -1875,12 +1875,13 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
         let hitRadius: CGFloat = 12
 
+        // 端点仅作为视觉指示器，回到鼠标时即整体移动
         if hypot(point.x - first.x, point.y - first.y) <= hitRadius {
-            return .resizeLineStart
+            return .move
         }
 
         if hypot(point.x - last.x, point.y - last.y) <= hitRadius {
-            return .resizeLineEnd
+            return .move
         }
 
         let tolerance = max(10, lineWidth / 2 + 4)
