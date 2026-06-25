@@ -41,12 +41,13 @@ extension TextProperties {
     }
 
     func estimatedBounds(for text: String, origin: CGPoint) -> CGRect {
-        let width = max(CGFloat(text.count) * fontSize * 0.6, fontSize)
+        let attributedString = NSAttributedString(string: text, attributes: textAttributes)
+        let size = attributedString.size()
         return CGRect(
             x: origin.x,
             y: origin.y,
-            width: width,
-            height: fontSize * 1.4
+            width: size.width,
+            height: size.height
         )
     }
 }
