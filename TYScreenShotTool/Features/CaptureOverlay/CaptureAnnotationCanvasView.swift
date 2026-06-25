@@ -31,6 +31,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 activeRectTarget = .none
                 hoverEllipseTarget = .none
                 activeEllipseTarget = .none
+                hoverLineTarget = .none
+                activeLineTarget = .none
                 needsDisplay = true
                 applyCursorForCurrentState()
             }
@@ -66,6 +68,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var activeEllipseTarget: AnnotationResizeTarget = .none
     private var interactionStartEllipseRect: CGRect?
     private var hoverEllipseTarget: AnnotationResizeTarget = .none
+
+    private var activeLineIndex: Int?
+    private var activeLineTarget: AnnotationResizeTarget = .none
+    private var interactionStartLineStart: CGPoint?
+    private var interactionStartLineEnd: CGPoint?
+    private var hoverLineTarget: AnnotationResizeTarget = .none
 
     /// 拖拽已选中标注：鼠标按下位置（overlay 坐标系）
     private var isDraggingAnnotation = false
@@ -174,6 +182,19 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // 线条工具：选中线条后支持端点拖拽交互
+        if currentTool == .line, let result = lineInteraction(at: point) {
+            activeLineIndex = result.index
+            activeLineTarget = result.target
+            interactionStartMousePoint = point
+            interactionStartLineStart = result.start
+            interactionStartLineEnd = result.end
+            hoverLineTarget = result.target
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+
         // 通用命中检测：选择已有标注，或拖拽已选中标注
         if let hitResult = hitTestEditableAnnotation(at: point) {
             if hitResult.index == selectedAnnotationIndex {
@@ -230,6 +251,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
         if currentTool == .ellipse, activeEllipseTarget != .none {
             updateSelectedEllipse(with: point)
+            needsDisplay = true
+            applyCursorForCurrentState()
+            return
+        }
+        if currentTool == .line, activeLineTarget != .none {
+            updateSelectedLine(with: point)
             needsDisplay = true
             applyCursorForCurrentState()
             return
@@ -318,6 +345,18 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             applyCursorForCurrentState()
             return
         }
+        if currentTool == .line, activeLineTarget != .none {
+            updateSelectedLine(with: point)
+            activeLineIndex = nil
+            activeLineTarget = .none
+            interactionStartMousePoint = nil
+            interactionStartLineStart = nil
+            interactionStartLineEnd = nil
+            updateLineHover(at: point)
+            annotationsDidChange?(annotations)
+            applyCursorForCurrentState()
+            return
+        }
 
         switch currentTool {
         case .mosaic:
@@ -342,6 +381,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateMosaicHover(at: point)
         updateRectHover(at: point)
         updateEllipseHover(at: point)
+        updateLineHover(at: point)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -349,12 +389,14 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateMosaicHover(at: point)
         updateRectHover(at: point)
         updateEllipseHover(at: point)
+        updateLineHover(at: point)
     }
 
     override func mouseExited(with event: NSEvent) {
         hoverMosaicTarget = .none
         hoverRectTarget = .none
         hoverEllipseTarget = .none
+        hoverLineTarget = .none
         applyCursorForCurrentState()
     }
 
@@ -373,6 +415,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         activeEllipseTarget = .none
         hoverEllipseTarget = .none
         interactionStartEllipseRect = nil
+        activeLineIndex = nil
+        activeLineTarget = .none
+        hoverLineTarget = .none
+        interactionStartLineStart = nil
+        interactionStartLineEnd = nil
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
@@ -640,20 +687,6 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             }
         case let .line(start, end, props):
-            // 选中高亮 — 加宽虚线路径，先画在底层
-            if let index, index == selectedAnnotationIndex {
-                let highlightPath = NSBezierPath()
-                highlightPath.move(to: start)
-                highlightPath.line(to: end)
-                highlightPath.lineWidth = props.lineWidth + 4
-                highlightPath.lineCapStyle = .round
-                highlightPath.lineJoinStyle = .round
-                NSColor.systemCyan.setStroke()
-                let dashes: [CGFloat] = [6, 4]
-                highlightPath.setLineDash(dashes, count: 2, phase: 0)
-                highlightPath.stroke()
-            }
-
             let path = NSBezierPath()
             path.move(to: start)
             path.line(to: end)
@@ -662,6 +695,24 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             path.lineJoinStyle = .round
             props.color.toNSColor().withAlphaComponent(props.opacity).setStroke()
             path.stroke()
+
+            // 选中高亮 — 两个端点控制节点
+            if let index, index == selectedAnnotationIndex {
+                let controlPoints = [start, end]
+                for point in controlPoints {
+                    let handlePath = NSBezierPath(ovalIn: CGRect(
+                        x: point.x - 6,
+                        y: point.y - 6,
+                        width: 12,
+                        height: 12
+                    ))
+                    NSColor.white.setFill()
+                    handlePath.fill()
+                    NSColor.red.setStroke()
+                    handlePath.lineWidth = 2
+                    handlePath.stroke()
+                }
+            }
         case let .arrow(start, end, props):
             // 选中高亮 — 加宽虚线路径，先画在底层
             if let index, index == selectedAnnotationIndex {
@@ -1011,6 +1062,9 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         } else if currentTool == .ellipse {
             target = hoverOrActiveEllipseTarget
             isActiveMove = activeEllipseTarget == .move
+        } else if currentTool == .line {
+            target = hoverOrActiveLineTarget
+            isActiveMove = activeLineTarget == .move
         } else {
             NSCursor.crosshair.set()
             return
@@ -1034,6 +1088,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return .resizeNorthWestSouthEast
         case .resizeTopRight, .resizeBottomLeft:
             return .resizeNorthEastSouthWest
+        case .resizeLineStart, .resizeLineEnd:
+            return .openHand
         case .none:
             return .crosshair
         }
@@ -1082,7 +1138,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .resizeBottomRight:
             maxX += deltaX
             minY += deltaY
-        case .none:
+        case .resizeLineStart, .resizeLineEnd, .none:
             return rect
         }
 
@@ -1317,7 +1373,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return constrainedRect(newRect)
         case .resizeTopLeft, .resizeTopRight, .resizeBottomLeft, .resizeBottomRight:
             return updatedEllipseFromDiagonalResize(from: rect, startPoint: startPoint, currentPoint: currentPoint, target: target)
-        case .none:
+        case .resizeLineStart, .resizeLineEnd, .none:
             return rect
         }
     }
@@ -1352,6 +1408,123 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         )
 
         return constrainedRect(newRect)
+    }
+
+    // MARK: - Line Resize Interaction
+
+    private var hoverOrActiveLineTarget: AnnotationResizeTarget {
+        activeLineTarget != .none ? activeLineTarget : hoverLineTarget
+    }
+
+    private func lineResizeControlPoints(start: CGPoint, end: CGPoint) -> [CGPoint] {
+        [start, end]
+    }
+
+    private func lineInteractionTarget(for point: CGPoint, start: CGPoint, end: CGPoint, lineWidth: CGFloat) -> AnnotationResizeTarget {
+        let hitRadius: CGFloat = 12
+
+        if hypot(point.x - start.x, point.y - start.y) <= hitRadius {
+            return .resizeLineStart
+        }
+
+        if hypot(point.x - end.x, point.y - end.y) <= hitRadius {
+            return .resizeLineEnd
+        }
+
+        let tolerance = max(8, lineWidth + 4)
+        if isPoint(point, nearLineFrom: start, to: end, tolerance: tolerance) {
+            return .move
+        }
+
+        return .none
+    }
+
+    private func lineInteraction(at point: CGPoint) -> (index: Int, start: CGPoint, end: CGPoint, target: AnnotationResizeTarget)? {
+        guard let selectedIndex = selectedAnnotationIndex,
+              annotations.indices.contains(selectedIndex),
+              case let .line(start, end, props) = annotations[selectedIndex] else {
+            return nil
+        }
+
+        let target = lineInteractionTarget(for: point, start: start, end: end, lineWidth: props.lineWidth)
+        if target != .none {
+            return (selectedIndex, start, end, target)
+        }
+
+        return nil
+    }
+
+    private func updateLineHover(at point: CGPoint) {
+        let previous = hoverLineTarget
+        hoverLineTarget = lineInteraction(at: point)?.target ?? .none
+        if previous != hoverLineTarget || activeLineTarget != .none {
+            applyCursorForCurrentState()
+        }
+    }
+
+    private func updateSelectedLine(with point: CGPoint) {
+        guard
+            let activeLineIndex = activeLineIndex,
+            let startPoint = interactionStartMousePoint,
+            let startLineStart = interactionStartLineStart,
+            let startLineEnd = interactionStartLineEnd,
+            activeLineTarget != .none,
+            annotations.indices.contains(activeLineIndex),
+            case .line = annotations[activeLineIndex]
+        else {
+            return
+        }
+
+        guard case let .line(_, _, currentProps) = annotations[activeLineIndex] else {
+            return
+        }
+
+        let (newStart, newEnd) = updatedLineFromResize(
+            fromStart: startLineStart,
+            fromEnd: startLineEnd,
+            startPoint: startPoint,
+            currentPoint: point,
+            target: activeLineTarget
+        )
+        annotations[activeLineIndex] = .line(start: newStart, end: newEnd, currentProps)
+    }
+
+    private func updatedLineFromResize(
+        fromStart: CGPoint,
+        fromEnd: CGPoint,
+        startPoint: CGPoint,
+        currentPoint: CGPoint,
+        target: AnnotationResizeTarget
+    ) -> (start: CGPoint, end: CGPoint) {
+        let deltaX = currentPoint.x - startPoint.x
+        let deltaY = currentPoint.y - startPoint.y
+
+        switch target {
+        case .resizeLineStart:
+            let newStart = CGPoint(
+                x: min(max(fromStart.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromStart.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return (newStart, fromEnd)
+        case .resizeLineEnd:
+            let newEnd = CGPoint(
+                x: min(max(fromEnd.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromEnd.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return (fromStart, newEnd)
+        case .move:
+            let newStart = CGPoint(
+                x: min(max(fromStart.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromStart.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            let newEnd = CGPoint(
+                x: min(max(fromEnd.x + deltaX, bounds.minX), bounds.maxX),
+                y: min(max(fromEnd.y + deltaY, bounds.minY), bounds.maxY)
+            )
+            return (newStart, newEnd)
+        default:
+            return (fromStart, fromEnd)
+        }
     }
 
     // MARK: - Multi-Tool Hit Testing
@@ -1564,7 +1737,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case .resizeBottomRight:
             maxX += deltaX
             minY += deltaY
-        case .none:
+        case .resizeLineStart, .resizeLineEnd, .none:
             return rect
         }
 
@@ -1636,6 +1809,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case resizeTopRight
         case resizeBottomLeft
         case resizeBottomRight
+        case resizeLineStart
+        case resizeLineEnd
     }
 }
 
