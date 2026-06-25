@@ -994,23 +994,23 @@ final class CaptureOverlayView: NSView {
             toolTip: AppText.captureUndo,
             action: #selector(requestUndo)
         )
-        configureToolbarTextButton(
+        configureToolbarSVGButton(
             longCaptureButton,
-            title: AppText.captureLongCapture,
+            resourceName: "icon-long-capture",
             accessibilityDescription: AppText.captureLongCapture,
             toolTip: AppText.captureLongCapture,
             action: #selector(requestLongCapture)
         )
-        configureToolbarTextButton(
+        configureToolbarSVGButton(
             ocrButton,
-            title: "OCR",
+            resourceName: "icon-ocr",
             accessibilityDescription: "OCR",
             toolTip: "OCR",
             action: #selector(requestOCR)
         )
-        configureToolbarTextButton(
+        configureToolbarSVGButton(
             aiButton,
-            title: "AI",
+            resourceName: "icon-ai",
             accessibilityDescription: "AI",
             toolTip: "AI",
             action: #selector(requestAI)
@@ -1174,7 +1174,9 @@ final class CaptureOverlayView: NSView {
         [undoButton, pinButton, copyButton, saveButton, cancelButton].forEach { button in
             button.frame.size = toolbarButtonSize
         }
-        [longCaptureButton, ocrButton, aiButton].forEach(sizeToolbarTextButton(_:))
+        [longCaptureButton, ocrButton, aiButton].forEach { button in
+            button.frame.size = toolbarButtonSize
+        }
 
         let toolbarPaddingX: CGFloat = 12
         let toolbarPaddingY: CGFloat = 6
@@ -1473,6 +1475,38 @@ final class CaptureOverlayView: NSView {
         button.sizeToFit()
         let width = max(toolbarTextButtonMinWidth, button.frame.width + 10)
         button.frame.size = CGSize(width: width, height: toolbarButtonSize.height)
+    }
+
+    private func configureToolbarSVGButton(
+        _ button: ToolbarHoverButton,
+        resourceName: String,
+        accessibilityDescription: String,
+        toolTip: String,
+        action: Selector
+    ) {
+        let image = NSImage(named: resourceName)?
+            .withSymbolConfiguration(toolbarSymbolConfiguration) ?? NSImage()
+        image.isTemplate = true
+
+        button.title = ""
+        button.image = image
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.focusRingType = .none
+        button.toolTip = toolTip
+        button.hoverToolTip = toolTip
+        button.onHoverChanged = { [weak self, weak button] isHovered in
+            guard let self, let button else {
+                return
+            }
+            self.handleToolbarButtonHover(isHovered: isHovered, button: button)
+        }
+        button.target = self
+        button.action = action
+        button.setAccessibilityLabel(accessibilityDescription)
+        applyToolbarButtonAppearance(button, isSelected: false)
     }
 
     private func animateToolbarSelectionFeedback(for button: NSButton) {
