@@ -278,6 +278,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 // 点击其他标注 → 选中
                 selectedAnnotationIndex = hitResult.index
                 onAnnotationSelected?(hitResult.index, hitResult.tool, hitResult.properties)
+
+                // 文字工具：第一次点击即启用拖拽/编辑，无需预选中步骤
+                if currentTool == .text, hitResult.tool == .text {
+                    pendingTextEditClick = hitResult.index
+                    annotationDragStartPoint = point
+                }
             }
             needsDisplay = true
             return
@@ -753,7 +759,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         guard case let .text(value, origin, properties) = annotations[index] else { return }
 
         let textBounds = properties.estimatedBounds(for: value, origin: origin)
-        let textField = NSTextField(frame: textBounds)
+        // 编辑框宽度保证足够的编辑空间，与新建输入保持一致
+        let editorWidth = max(180, properties.fontSize * 6, textBounds.width)
+        let editorFrame = CGRect(x: origin.x, y: origin.y, width: editorWidth, height: properties.editorHeight)
+        let textField = NSTextField(frame: editorFrame)
         textField.delegate = self
         textField.isBordered = false
         textField.focusRingType = .none
@@ -762,6 +771,9 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.alignment = .left
         textField.target = self
         textField.action = #selector(commitTextInput)
+        textField.wantsLayer = true
+        textField.layer?.borderWidth = 2
+        textField.layer?.borderColor = NSColor.systemRed.cgColor
         style(textField: textField)
         applyTextProperties(properties, to: textField)
 
@@ -1047,27 +1059,30 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             }
         case let .text(value, origin, properties):
-            drawText(value, at: origin, properties: properties)
+            if let index, index != textEditingIndex {
+                // 非编辑态：绘制文字和边框
+                // 编辑态由 NSTextField 自行处理（layer border）
+                drawText(value, at: origin, properties: properties)
 
-            if let index, index == selectedAnnotationIndex {
-                // 选中态或编辑态：实线边框
-                let textBounds = properties.estimatedBounds(for: value, origin: origin)
-                let borderRect = textBounds.insetBy(dx: -10, dy: -8)
-                let path = NSBezierPath(rect: borderRect)
-                let isEditing = (index == textEditingIndex)
-                (isEditing ? NSColor.systemRed : NSColor(cgColor: CaptureAnnotation.strokeColor) ?? NSColor.systemRed).setStroke()
-                path.lineWidth = isEditing ? 2 : 1.5
-                path.stroke()
-            } else if let hoveredIdx = hoverTextIndex, hoveredIdx == index {
-                // 悬停态：灰色虚线边框
-                let textBounds = properties.estimatedBounds(for: value, origin: origin)
-                let borderRect = textBounds.insetBy(dx: -10, dy: -8)
-                let path = NSBezierPath(rect: borderRect)
-                NSColor.gray.setStroke()
-                path.lineWidth = 1
-                let dash: [CGFloat] = [4, 2]
-                path.setLineDash(dash, count: 2, phase: 0)
-                path.stroke()
+                if index == selectedAnnotationIndex {
+                    // 选中态：实线边框
+                    let textBounds = properties.estimatedBounds(for: value, origin: origin)
+                    let borderRect = textBounds.insetBy(dx: -10, dy: -8)
+                    let path = NSBezierPath(rect: borderRect)
+                    (NSColor(cgColor: CaptureAnnotation.strokeColor) ?? NSColor.systemRed).setStroke()
+                    path.lineWidth = 1.5
+                    path.stroke()
+                } else if let hoveredIdx = hoverTextIndex, hoveredIdx == index {
+                    // 悬停态：灰色虚线边框
+                    let textBounds = properties.estimatedBounds(for: value, origin: origin)
+                    let borderRect = textBounds.insetBy(dx: -10, dy: -8)
+                    let path = NSBezierPath(rect: borderRect)
+                    NSColor.gray.setStroke()
+                    path.lineWidth = 1
+                    let dash: [CGFloat] = [4, 2]
+                    path.setLineDash(dash, count: 2, phase: 0)
+                    path.stroke()
+                }
             }
         }
     }
