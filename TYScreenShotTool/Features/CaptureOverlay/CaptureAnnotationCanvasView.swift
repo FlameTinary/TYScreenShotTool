@@ -904,9 +904,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         case let .mosaic(rect, props):
             drawMosaic(in: rect.standardized, properties: props)
 
-            // 选中高亮 — 青色虚线边框
+            // 选中高亮 — 青色虚线边框 + 8 个控制节点
             if let index, index == selectedAnnotationIndex {
-                let highlightRect = rect.standardized.insetBy(dx: -4, dy: -4)
+                let standardizedRect = rect.standardized
+                let highlightRect = standardizedRect.insetBy(dx: -4, dy: -4)
                 let highlightPath = NSBezierPath(
                     roundedRect: highlightRect,
                     xRadius: CaptureAnnotation.mosaicCornerRadius + 4,
@@ -917,6 +918,21 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 let dashes: [CGFloat] = [6, 4]
                 highlightPath.setLineDash(dashes, count: 2, phase: 0)
                 highlightPath.stroke()
+
+                let controlPoints = resizeControlPoints(for: standardizedRect)
+                for point in controlPoints {
+                    let handlePath = NSBezierPath(ovalIn: CGRect(
+                        x: point.x - 6,
+                        y: point.y - 6,
+                        width: 12,
+                        height: 12
+                    ))
+                    NSColor.white.setFill()
+                    handlePath.fill()
+                    NSColor.red.setStroke()
+                    handlePath.lineWidth = 2
+                    handlePath.stroke()
+                }
             }
         case let .text(value, origin, properties):
             drawText(value, at: origin, properties: properties)
@@ -1333,19 +1349,16 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     }
 
     private func mosaicInteraction(at point: CGPoint) -> (index: Int, rect: CGRect, target: AnnotationResizeTarget)? {
-        guard currentTool == .mosaic else {
+        guard let selectedIndex = selectedAnnotationIndex,
+              annotations.indices.contains(selectedIndex),
+              case let .mosaic(rect, _) = annotations[selectedIndex] else {
             return nil
         }
 
-        for index in annotations.indices.reversed() {
-            guard case let .mosaic(rect, _) = annotations[index] else {
-                continue
-            }
-
-            let target = mosaicInteractionTarget(for: point, in: rect.standardized)
-            if target != .none {
-                return (index, rect.standardized, target)
-            }
+        let standardizedRect = rect.standardized
+        let target = mosaicInteractionTarget(for: point, in: standardizedRect)
+        if target != .none {
+            return (selectedIndex, standardizedRect, target)
         }
 
         return nil
