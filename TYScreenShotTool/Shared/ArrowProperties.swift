@@ -25,29 +25,39 @@ struct ArrowProperties: Equatable {
         isCurved: false
     )
 
-    /// 根据起点和终点计算默认的贝塞尔控制点（单个控制点，产生单弧曲线）
-    static func defaultControlPoint(from start: CGPoint, to end: CGPoint) -> CGPoint {
-        CGPoint(
-            x: (start.x + end.x) / 2,
-            y: max(start.y, end.y) + min(abs(end.x - start.x), 60)
+    /// 计算直线段上三等分位置的两个点，作为曲线箭头的初始控制点
+    /// - 第一个控制点位于线段 1/3 处
+    /// - 第二个控制点位于线段 2/3 处
+    /// 初始状态下两个控制点落在直线上，箭头显示为直线
+    /// 用户拖动控制点离开直线后，箭头变为曲线
+    private static func straightLineControlPoints(from start: CGPoint, to end: CGPoint) -> (CGPoint, CGPoint) {
+        (
+            CGPoint(
+                x: start.x + (end.x - start.x) / 3,
+                y: start.y + (end.y - start.y) / 3
+            ),
+            CGPoint(
+                x: start.x + 2 * (end.x - start.x) / 3,
+                y: start.y + 2 * (end.y - start.y) / 3
+            )
         )
     }
 
-    /// 获取有效的贝塞尔控制点，如果未存储则计算默认值
+    /// 获取有效的贝塞尔控制点，如果未存储则计算线段三等分位置的默认值
     func effectiveControlPoints(from start: CGPoint, to end: CGPoint) -> (CGPoint, CGPoint) {
-        let defaultCP = Self.defaultControlPoint(from: start, to: end)
+        let defaults = Self.straightLineControlPoints(from: start, to: end)
         return (
-            curveControl1 ?? defaultCP,
-            curveControl2 ?? defaultCP
+            curveControl1 ?? defaults.0,
+            curveControl2 ?? defaults.1
         )
     }
 
-    /// 返回设置了默认控制点的新实例（isCurved 为 true 时使用）
+    /// 返回设置了直线段三等分初始控制点的新实例（isCurved 为 true 时使用）
     func withDefaultControlPoints(from start: CGPoint, to end: CGPoint) -> ArrowProperties {
-        let defaultCP = Self.defaultControlPoint(from: start, to: end)
+        let (cp1, cp2) = Self.straightLineControlPoints(from: start, to: end)
         var copy = self
-        copy.curveControl1 = defaultCP
-        copy.curveControl2 = defaultCP
+        copy.curveControl1 = cp1
+        copy.curveControl2 = cp2
         return copy
     }
 }
