@@ -350,22 +350,20 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
 
         // 文字工具：pendingTextEditClick 时发生拖拽 → 取消编辑转为拖拽移动
-        if let pendingIdx = pendingTextEditClick {
-            pendingTextEditClick = nil
-            if let startPoint = annotationDragStartPoint {
-                let deltaX = point.x - startPoint.x
-                let deltaY = point.y - startPoint.y
-                if abs(deltaX) > 2 || abs(deltaY) > 2 {
-                    // 确实在拖拽 → 进入拖拽移动
-                    isDraggingAnnotation = true
-                    moveAnnotation(at: pendingIdx, by: CGPoint(x: deltaX, y: deltaY))
-                    annotationDragStartPoint = point
-                    needsDisplay = true
-                    return
-                }
-                // 微小移动 → 重新记录起点，继续等待
+        if let pendingIdx = pendingTextEditClick,
+           let startPoint = annotationDragStartPoint {
+            let deltaX = point.x - startPoint.x
+            let deltaY = point.y - startPoint.y
+            if abs(deltaX) > 2 || abs(deltaY) > 2 {
+                // 确实在拖拽 → 清除 pending，进入拖拽移动
+                pendingTextEditClick = nil
+                isDraggingAnnotation = true
+                moveAnnotation(at: pendingIdx, by: CGPoint(x: deltaX, y: deltaY))
                 annotationDragStartPoint = point
+                needsDisplay = true
+                return
             }
+            // 微小移动 → 不清除 pending，等待 mouseUp 进入编辑态
         }
 
         // 拖拽已选中标注（非马赛克移动模式，马赛克走现有 resize/move 交互）
@@ -1054,7 +1052,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             if let index, index == selectedAnnotationIndex {
                 // 选中态或编辑态：实线边框
                 let textBounds = properties.estimatedBounds(for: value, origin: origin)
-                let borderRect = textBounds.insetBy(dx: -4, dy: -2)
+                let borderRect = textBounds.insetBy(dx: -10, dy: -8)
                 let path = NSBezierPath(rect: borderRect)
                 let isEditing = (index == textEditingIndex)
                 (isEditing ? NSColor.systemRed : NSColor(cgColor: CaptureAnnotation.strokeColor) ?? NSColor.systemRed).setStroke()
@@ -1063,7 +1061,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             } else if let hoveredIdx = hoverTextIndex, hoveredIdx == index {
                 // 悬停态：灰色虚线边框
                 let textBounds = properties.estimatedBounds(for: value, origin: origin)
-                let borderRect = textBounds.insetBy(dx: -4, dy: -2)
+                let borderRect = textBounds.insetBy(dx: -10, dy: -8)
                 let path = NSBezierPath(rect: borderRect)
                 NSColor.gray.setStroke()
                 path.lineWidth = 1
@@ -2075,7 +2073,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             guard case let .text(value, origin, properties) = annotations[index],
                   index != selectedAnnotationIndex else { continue }
             let textBounds = properties.estimatedBounds(for: value, origin: origin)
-            if textBounds.insetBy(dx: -6, dy: -6).contains(point) {
+            if textBounds.insetBy(dx: -12, dy: -12).contains(point) {
                 newTarget = .move
                 newHoveredIndex = index
                 break
@@ -2210,7 +2208,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 }
             case let .text(value, origin, properties):
                 let textBounds = properties.estimatedBounds(for: value, origin: origin)
-                if textBounds.insetBy(dx: -6, dy: -6).contains(point) {
+                if textBounds.insetBy(dx: -12, dy: -12).contains(point) {
                     return EditableAnnotationHit(index: index, tool: .text, properties: .text(properties))
                 }
             }
