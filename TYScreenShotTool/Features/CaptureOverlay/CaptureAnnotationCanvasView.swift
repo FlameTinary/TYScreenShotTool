@@ -37,6 +37,10 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 activeArrowTarget = .none
                 hoverPenTarget = .none
                 activePenTarget = .none
+                hoverTextTarget = .none
+                hoverTextIndex = nil
+                pendingTextEditClick = nil
+                textEditingIndex = nil
                 needsDisplay = true
                 applyCursorForCurrentState()
             }
@@ -96,6 +100,16 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
     private var activePenTarget: AnnotationResizeTarget = .none
     private var interactionStartPenPoints: [CGPoint]?
     private var hoverPenTarget: AnnotationResizeTarget = .none
+
+    // MARK: - 文字交互状态
+
+    private var hoverTextTarget: AnnotationResizeTarget = .none
+    /// 悬停的文字标注索引
+    private var hoverTextIndex: Int?
+    /// 正在编辑的文字标注索引（nil = 新建文字输入）
+    private var textEditingIndex: Int?
+    /// 文字工具：鼠标按下时等待进入编辑态的索引（mouseUp 时进入编辑态，drag 时取消）
+    private var pendingTextEditClick: Int?
 
     /// 拖拽已选中标注：鼠标按下位置（overlay 坐标系）
     private var isDraggingAnnotation = false
@@ -250,9 +264,16 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         // 通用命中检测：选择已有标注，或拖拽已选中标注
         if let hitResult = hitTestEditableAnnotation(at: point) {
             if hitResult.index == selectedAnnotationIndex {
-                // 再次点击已选中标注 → 进入拖拽移动
-                isDraggingAnnotation = true
-                annotationDragStartPoint = point
+                if currentTool == .text, hitResult.tool == .text {
+                    // 文字工具：再次点击已选中文字 → 延迟 mouseUp 进入编辑态
+                    // 如果用户在 mouseUp 前拖动→取消编辑态转为拖拽移动
+                    pendingTextEditClick = hitResult.index
+                    annotationDragStartPoint = point
+                } else {
+                    // 其他标注：再次点击已选中标注 → 进入拖拽移动
+                    isDraggingAnnotation = true
+                    annotationDragStartPoint = point
+                }
             } else {
                 // 点击其他标注 → 选中
                 selectedAnnotationIndex = hitResult.index
@@ -328,6 +349,25 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // 文字工具：pendingTextEditClick 时发生拖拽 → 取消编辑转为拖拽移动
+        if let pendingIdx = pendingTextEditClick {
+            pendingTextEditClick = nil
+            if let startPoint = annotationDragStartPoint {
+                let deltaX = point.x - startPoint.x
+                let deltaY = point.y - startPoint.y
+                if abs(deltaX) > 2 || abs(deltaY) > 2 {
+                    // 确实在拖拽 → 进入拖拽移动
+                    isDraggingAnnotation = true
+                    moveAnnotation(at: pendingIdx, by: CGPoint(x: deltaX, y: deltaY))
+                    annotationDragStartPoint = point
+                    needsDisplay = true
+                    return
+                }
+                // 微小移动 → 重新记录起点，继续等待
+                annotationDragStartPoint = point
+            }
+        }
+
         // 拖拽已选中标注（非马赛克移动模式，马赛克走现有 resize/move 交互）
         if isDraggingAnnotation, let startPoint = annotationDragStartPoint,
            let idx = selectedAnnotationIndex {
@@ -385,6 +425,16 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             annotationDragStartPoint = nil
             annotationsDidChange?(annotations)
             applyCursorForCurrentState()
+            return
+        }
+
+        // 文字工具：点击未拖拽 → 进入编辑态
+        if let pendingIdx = pendingTextEditClick {
+            pendingTextEditClick = nil
+            annotationDragStartPoint = nil
+            commitActiveTextIfNeeded()
+            beginEditText(at: pendingIdx)
+            needsDisplay = true
             return
         }
 
@@ -478,6 +528,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateLineHover(at: point)
         updateArrowHover(at: point)
         updatePenHover(at: point)
+        updateTextHover(at: point)
     }
 
     override func cursorUpdate(with event: NSEvent) {
@@ -488,6 +539,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         updateLineHover(at: point)
         updateArrowHover(at: point)
         updatePenHover(at: point)
+        updateTextHover(at: point)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -497,6 +549,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         hoverLineTarget = .none
         hoverArrowTarget = .none
         hoverPenTarget = .none
+        hoverTextTarget = .none
+        hoverTextIndex = nil
         applyCursorForCurrentState()
     }
 
@@ -532,6 +586,9 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         activePenTarget = .none
         hoverPenTarget = .none
         interactionStartPenPoints = nil
+        hoverTextTarget = .none
+        hoverTextIndex = nil
+        textEditingIndex = nil
         annotationsDidChange?(annotations)
         needsDisplay = true
         applyCursorForCurrentState()
@@ -619,12 +676,40 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         self.activeTextField = nil
         self.activeTextOrigin = nil
 
-        guard text.isEmpty == false else {
-            needsDisplay = true
-            return
+        if let editingIdx = textEditingIndex {
+            // 重新编辑已有文字标注
+            self.textEditingIndex = nil
+            if text.isEmpty {
+                // 文字被清空 → 删除该标注
+                guard annotations.indices.contains(editingIdx) else {
+                    needsDisplay = true
+                    return
+                }
+                annotations.remove(at: editingIdx)
+                if selectedAnnotationIndex == editingIdx {
+                    selectedAnnotationIndex = nil
+                    onAnnotationSelected?(nil, currentTool, nil)
+                } else if let sel = selectedAnnotationIndex, sel > editingIdx {
+                    selectedAnnotationIndex = sel - 1
+                }
+            } else {
+                // 更新文字内容
+                guard annotations.indices.contains(editingIdx),
+                      case .text = annotations[editingIdx] else {
+                    needsDisplay = true
+                    return
+                }
+                annotations[editingIdx] = .text(value: text, origin: activeTextOrigin, properties: currentTextProperties)
+            }
+        } else {
+            // 新建文字标注
+            guard text.isEmpty == false else {
+                needsDisplay = true
+                return
+            }
+            annotations.append(.text(value: text, origin: activeTextOrigin, properties: currentTextProperties))
         }
 
-        annotations.append(.text(value: text, origin: activeTextOrigin, properties: currentTextProperties))
         annotationsDidChange?(annotations)
         needsDisplay = true
     }
@@ -633,6 +718,8 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         activeTextField?.removeFromSuperview()
         activeTextField = nil
         activeTextOrigin = nil
+        textEditingIndex = nil
+        pendingTextEditClick = nil
     }
 
     private func beginTextInput(at point: CGPoint) {
@@ -659,6 +746,33 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         activeTextField = textField
         activeTextOrigin = point
         window?.makeFirstResponder(textField)
+    }
+
+    /// 进入已有文字标注的编辑模式
+    /// - 在文字标注位置创建预填文字的 NSTextField
+    /// - 用户可修改内容后按回车提交（或点击外部失去焦点后提交）
+    private func beginEditText(at index: Int) {
+        guard case let .text(value, origin, properties) = annotations[index] else { return }
+
+        let textBounds = properties.estimatedBounds(for: value, origin: origin)
+        let textField = NSTextField(frame: textBounds)
+        textField.delegate = self
+        textField.isBordered = false
+        textField.focusRingType = .none
+        textField.drawsBackground = true
+        textField.stringValue = value
+        textField.alignment = .left
+        textField.target = self
+        textField.action = #selector(commitTextInput)
+        style(textField: textField)
+        applyTextProperties(properties, to: textField)
+
+        addSubview(textField)
+        activeTextField = textField
+        activeTextOrigin = origin
+        textEditingIndex = index
+        window?.makeFirstResponder(textField)
+        needsDisplay = true
     }
 
     private func finalizeDragAnnotation() {
@@ -936,6 +1050,27 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             }
         case let .text(value, origin, properties):
             drawText(value, at: origin, properties: properties)
+
+            if let index, index == selectedAnnotationIndex {
+                // 选中态或编辑态：实线边框
+                let textBounds = properties.estimatedBounds(for: value, origin: origin)
+                let borderRect = textBounds.insetBy(dx: -4, dy: -2)
+                let path = NSBezierPath(rect: borderRect)
+                let isEditing = (index == textEditingIndex)
+                (isEditing ? NSColor.systemRed : NSColor(cgColor: CaptureAnnotation.strokeColor) ?? NSColor.systemRed).setStroke()
+                path.lineWidth = isEditing ? 2 : 1.5
+                path.stroke()
+            } else if let hoveredIdx = hoverTextIndex, hoveredIdx == index {
+                // 悬停态：灰色虚线边框
+                let textBounds = properties.estimatedBounds(for: value, origin: origin)
+                let borderRect = textBounds.insetBy(dx: -4, dy: -2)
+                let path = NSBezierPath(rect: borderRect)
+                NSColor.gray.setStroke()
+                path.lineWidth = 1
+                let dash: [CGFloat] = [4, 2]
+                path.setLineDash(dash, count: 2, phase: 0)
+                path.stroke()
+            }
         }
     }
 
@@ -1233,6 +1368,9 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         } else if currentTool == .pen {
             target = hoverOrActivePenTarget
             isActiveMove = activePenTarget == .move
+        } else if currentTool == .text {
+            target = hoverTextTarget
+            isActiveMove = false
         } else {
             NSCursor.crosshair.set()
             return
@@ -1928,6 +2066,30 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         }
     }
 
+    private func updateTextHover(at point: CGPoint) {
+        let previous = hoverTextTarget
+        var newTarget: AnnotationResizeTarget = .none
+        var newHoveredIndex: Int?
+
+        for index in annotations.indices.reversed() {
+            guard case let .text(value, origin, properties) = annotations[index],
+                  index != selectedAnnotationIndex else { continue }
+            let textBounds = properties.estimatedBounds(for: value, origin: origin)
+            if textBounds.insetBy(dx: -6, dy: -6).contains(point) {
+                newTarget = .move
+                newHoveredIndex = index
+                break
+            }
+        }
+
+        hoverTextTarget = newTarget
+        hoverTextIndex = newHoveredIndex
+        if previous != hoverTextTarget || hoverTextIndex != nil {
+            needsDisplay = true
+            applyCursorForCurrentState()
+        }
+    }
+
     private func updateSelectedPen(with point: CGPoint) {
         guard
             let activePenIndex = activePenIndex,
@@ -2046,8 +2208,11 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
                 if rect.standardized.insetBy(dx: -6, dy: -6).contains(point) {
                     return EditableAnnotationHit(index: index, tool: .mosaic, properties: .mosaic(properties))
                 }
-            case .text:
-                continue
+            case let .text(value, origin, properties):
+                let textBounds = properties.estimatedBounds(for: value, origin: origin)
+                if textBounds.insetBy(dx: -6, dy: -6).contains(point) {
+                    return EditableAnnotationHit(index: index, tool: .text, properties: .text(properties))
+                }
             }
         }
 
@@ -2158,8 +2323,12 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
             annotations[index] = .pen(points: points.map { CGPoint(x: $0.x + delta.x, y: $0.y + delta.y) }, props)
         case let .mosaic(rect, props):
             annotations[index] = .mosaic(rect.offsetBy(dx: delta.x, dy: delta.y), props)
-        case .text:
-            break
+        case let .text(value, origin, props):
+            annotations[index] = .text(
+                value: value,
+                origin: CGPoint(x: origin.x + delta.x, y: origin.y + delta.y),
+                properties: props
+            )
         }
     }
 
