@@ -741,6 +741,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.drawsBackground = true
         textField.placeholderString = AppText.captureTextInputPlaceholder
         textField.alignment = .left
+        textField.usesSingleLineMode = true
         textField.target = self
         textField.action = #selector(commitTextInput)
         style(textField: textField)
@@ -769,6 +770,7 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
         textField.drawsBackground = true
         textField.stringValue = value
         textField.alignment = .left
+        textField.usesSingleLineMode = true
         textField.target = self
         textField.action = #selector(commitTextInput)
         textField.wantsLayer = true
@@ -2462,6 +2464,16 @@ final class CaptureAnnotationCanvasView: NSView, NSTextFieldDelegate {
 
     private func style(textField: NSTextField) {
         textField.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.92)
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        guard let textField = activeTextField else { return }
+        let textWidth = textField.attributedStringValue.size().width
+        let minWidth: CGFloat = 180
+        let newWidth = max(textWidth + 20, minWidth)
+        var frame = textField.frame
+        frame.size.width = newWidth
+        textField.frame = frame
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
