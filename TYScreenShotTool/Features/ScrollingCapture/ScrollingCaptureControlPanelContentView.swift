@@ -15,7 +15,6 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     private let symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
     private let buttonTintColor = NSColor.white
     private let disabledTintColor = NSColor.white.withAlphaComponent(0.35)
-    private static let tooltipOffset: CGFloat = 8
 
     // MARK: - Buttons
 
@@ -25,11 +24,6 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     private let saveButton = ToolbarHoverButton()
     private let copyButton = ToolbarHoverButton()
 
-    // MARK: - Tooltip
-
-    private let tooltipView = NSVisualEffectView()
-    private let tooltipLabel = NSTextField(labelWithString: "")
-
     // MARK: - Callbacks
 
     var onCancel: (() -> Void)?
@@ -37,6 +31,11 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     var onAISelected: ((AIAnalysisMode) -> Void)?
     var onSave: (() -> Void)?
     var onCopy: (() -> Void)?
+
+    /// 显示 tooltip 的回调，传递图片文字和按钮的屏幕坐标 frame
+    var onTooltipShow: ((String, NSRect) -> Void)?
+    /// 隐藏 tooltip 的回调
+    var onTooltipHide: (() -> Void)?
 
     // MARK: - Button Size
 
@@ -49,7 +48,6 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         buildLayout()
-        configureTooltip()
     }
 
     @available(*, unavailable)
@@ -154,7 +152,7 @@ private extension ScrollingCaptureControlPanelContentView {
         button.hoverToolTip = toolTip
         button.onHoverChanged = { [weak self, weak button] isHovered in
             guard let self, let button else { return }
-            self.handleButtonHover(isHovered: isHovered, button: button)
+            self.handleHover(isHovered: isHovered, button: button)
         }
         button.target = self
         button.action = action
@@ -184,7 +182,7 @@ private extension ScrollingCaptureControlPanelContentView {
         button.hoverToolTip = toolTip
         button.onHoverChanged = { [weak self, weak button] isHovered in
             guard let self, let button else { return }
-            self.handleButtonHover(isHovered: isHovered, button: button)
+            self.handleHover(isHovered: isHovered, button: button)
         }
         button.target = self
         button.action = action
@@ -202,78 +200,27 @@ private extension ScrollingCaptureControlPanelContentView {
     }
 }
 
-// MARK: - Tooltip
+// MARK: - Hover Tooltip (delegated to ScrollingCapturePanelService)
 
 private extension ScrollingCaptureControlPanelContentView {
-    func configureTooltip() {
-        tooltipView.material = .popover
-        tooltipView.blendingMode = .withinWindow
-        tooltipView.state = .active
-        tooltipView.wantsLayer = true
-        tooltipView.layer?.cornerRadius = 8
-        tooltipView.layer?.masksToBounds = true
-        tooltipView.isHidden = true
-
-        tooltipLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        tooltipLabel.textColor = .labelColor
-        tooltipView.addSubview(tooltipLabel)
-
-        // Add tooltip after the stack view so it renders on top
-        addSubview(tooltipView)
-    }
-
-    func handleButtonHover(isHovered: Bool, button: ToolbarHoverButton) {
+    /// 将按钮的 hover 事件转换为回调，由 service 层用单独的 tooltip 浮窗显示
+    func handleHover(isHovered: Bool, button: ToolbarHoverButton) {
         if isHovered {
-            showTooltip(for: button)
+            let text = button.hoverToolTip.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.isEmpty == false else { return }
+            let buttonFrameInWindow = button.convert(button.bounds, to: nil)
+            guard let windowFrame = window?.frame else { return }
+            let buttonScreenFrame = NSRect(
+                origin: NSPoint(
+                    x: windowFrame.origin.x + buttonFrameInWindow.origin.x,
+                    y: windowFrame.origin.y + buttonFrameInWindow.origin.y
+                ),
+                size: buttonFrameInWindow.size
+            )
+            onTooltipShow?(text, buttonScreenFrame)
         } else {
-            hideTooltip()
+            onTooltipHide?()
         }
-    }
-
-    func showTooltip(for button: ToolbarHoverButton) {
-        let tooltip = button.hoverToolTip.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard tooltip.isEmpty == false else {
-            hideTooltip()
-            return
-        }
-
-        tooltipLabel.stringValue = tooltip
-        tooltipLabel.sizeToFit()
-
-        let paddingX: CGFloat = 10
-        let paddingY: CGFloat = 6
-        let width = tooltipLabel.frame.width + paddingX * 2
-        let height = tooltipLabel.frame.height + paddingY * 2
-        tooltipView.frame.size = CGSize(width: width, height: height)
-        tooltipLabel.frame.origin = CGPoint(
-            x: paddingX,
-            y: (height - tooltipLabel.frame.height) / 2
-        )
-
-        positionTooltip(relativeTo: button)
-        tooltipView.isHidden = false
-    }
-
-    func hideTooltip() {
-        tooltipView.isHidden = true
-    }
-
-    func positionTooltip(relativeTo button: ToolbarHoverButton) {
-        let buttonFrame = convert(button.bounds, from: button)
-        let preferredX = buttonFrame.midX - tooltipView.frame.width / 2
-        let clampedX = min(
-            max(preferredX, 16),
-            bounds.width - tooltipView.frame.width - 16
-        )
-
-        // Show above the button by default
-        var tooltipY = buttonFrame.minY - tooltipView.frame.height - Self.tooltipOffset
-        if tooltipY < 0 {
-            // Not enough space above, flip below
-            tooltipY = buttonFrame.maxY + Self.tooltipOffset
-        }
-
-        tooltipView.frame.origin = CGPoint(x: clampedX, y: tooltipY)
     }
 }
 
