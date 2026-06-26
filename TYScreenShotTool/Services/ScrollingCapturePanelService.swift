@@ -49,7 +49,7 @@ final class ScrollingCapturePanelService {
         containerView.state = .active
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 12
-        containerView.layer?.masksToBounds = false
+        containerView.layer?.masksToBounds = true
 
         contentView.onCancel = { [weak self] in self?.onCancelRequested?() }
         contentView.onOCR = { [weak self] in self?.onOCRRequested?() }
@@ -108,10 +108,19 @@ final class ScrollingCapturePanelService {
             selectionRect.midX - frame.minX - horizontalPadding,
             frame.maxX - selectionRect.midX - horizontalPadding
         ) * 2
-        let compact = availableWidth < 430
-        let contentSize = compact
-            ? CGSize(width: 380, height: 78)
-            : CGSize(width: 480, height: 42)
+
+        let buttonSize: CGFloat = 30
+        let spacing: CGFloat = 10
+        let sidePadding: CGFloat = 12 * 2
+
+        let visibleCount = contentView.visibleButtonCount
+        let contentWidth = CGFloat(visibleCount) * buttonSize
+            + CGFloat(max(visibleCount - 1, 0)) * spacing
+            + sidePadding
+        let contentHeight = buttonSize + 6 * 2
+
+        let clampedWidth = min(contentWidth, max(availableWidth, 140))
+        let contentSize = CGSize(width: clampedWidth, height: contentHeight)
         return panel.frameRect(forContentRect: CGRect(origin: .zero, size: contentSize)).size
     }
 

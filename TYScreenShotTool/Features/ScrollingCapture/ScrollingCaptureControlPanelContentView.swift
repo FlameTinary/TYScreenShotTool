@@ -38,6 +38,10 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     var onSave: (() -> Void)?
     var onCopy: (() -> Void)?
 
+    // MARK: - Button Size
+
+    private static let toolbarButtonSize = CGSize(width: 30, height: 30)
+
     // MARK: - Layout
 
     private let stackView = NSStackView()
@@ -56,10 +60,17 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     // MARK: - Public API
 
     func configure(isOCREnabled: Bool, isAIEnabled: Bool) {
+        ocrButton.isHidden = !isOCREnabled
+        aiButton.isHidden = !isAIEnabled
         ocrButton.isEnabled = isOCREnabled
         aiButton.isEnabled = isAIEnabled
         applyButtonAppearance(ocrButton)
         applyButtonAppearance(aiButton)
+    }
+
+    /// 当前可见按钮数量（用于计算工具栏宽度）
+    var visibleButtonCount: Int {
+        [cancelButton, ocrButton, aiButton, saveButton, copyButton].filter { !$0.isHidden }.count
     }
 }
 
@@ -147,6 +158,9 @@ private extension ScrollingCaptureControlPanelContentView {
         }
         button.target = self
         button.action = action
+        button.snp.makeConstraints { make in
+            make.size.equalTo(Self.toolbarButtonSize)
+        }
         applyButtonAppearance(button)
     }
 
@@ -174,6 +188,9 @@ private extension ScrollingCaptureControlPanelContentView {
         }
         button.target = self
         button.action = action
+        button.snp.makeConstraints { make in
+            make.size.equalTo(Self.toolbarButtonSize)
+        }
         applyButtonAppearance(button)
     }
 
