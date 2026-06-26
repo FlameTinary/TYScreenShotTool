@@ -27,6 +27,11 @@ final class ScrollingCapturePanelService {
     private let tooltipView = NSVisualEffectView()
     private let tooltipLabel = NSTextField(labelWithString: "")
 
+    /// tooltip 面板是否已显示在屏幕上（用于控制 orderFrontRegardless 只调用一次）
+    private var tooltipPanelIsOnScreen = false
+    /// tooltip 防抖 timer，避免快速滑过按钮时频繁显示/隐藏
+    private var tooltipShowTimer: Timer?
+
     /// 显示长截图控制面板
     ///
     /// - Parameters:
@@ -95,8 +100,11 @@ final class ScrollingCapturePanelService {
     /// 关闭面板
     func dismissPanel() {
         AppThemeCoordinator.shared.unregisterRefreshHandler(for: self)
+        tooltipShowTimer?.invalidate()
+        tooltipShowTimer = nil
         hideTooltip()
-        tooltipPanel = nil
+        tooltipPanel?.orderOut(nil)
+        tooltipPanelIsOnScreen = false
         panel?.orderOut(nil)
         panel = nil
     }
@@ -184,39 +192,61 @@ final class ScrollingCapturePanelService {
     private func showTooltip(text: String, buttonScreenFrame: NSRect) {
         guard let tipPanel = tooltipPanel else { return }
 
-        tooltipLabel.stringValue = text
-        tooltipLabel.sizeToFit()
+        // 防抖：取消上一个 pending 的 timer，仅最后一个有效
+        tooltipShowTimer?.invalidate()
 
-        let paddingX: CGFloat = 10
-        let paddingY: CGFloat = 6
-        let width = tooltipLabel.frame.width + paddingX * 2
-        let height = tooltipLabel.frame.height + paddingY * 2
-        tooltipView.frame.size = CGSize(width: width, height: height)
-        tooltipLabel.frame.origin = CGPoint(
-            x: paddingX,
-            y: (height - tooltipLabel.frame.height) / 2
-        )
+        // 捕获当前值，timer 触发时使用（避免快速滑过时读到已变化的值）
+        let capturedText = text
+        let capturedFrame = buttonScreenFrame
 
-        // 与普通截图工具栏一致：默认显示在按钮下方，空间不足时翻转至上方
-        let tooltipOffset: CGFloat = 10
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let preferredX = min(
-            max(buttonScreenFrame.midX - width / 2, screenFrame.minX + 8),
-            screenFrame.maxX - width - 8
-        )
-        let tooltipY: CGFloat
-        if buttonScreenFrame.minY - height - tooltipOffset >= screenFrame.minY {
-            tooltipY = buttonScreenFrame.minY - height - tooltipOffset // 下方
-        } else {
-            tooltipY = buttonScreenFrame.maxY + tooltipOffset         // 上方
+        tooltipShowTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
+            guard let self else { return }
+
+            tooltipLabel.stringValue = capturedText
+            tooltipLabel.sizeToFit()
+
+            let paddingX: CGFloat = 10
+            let paddingY: CGFloat = 6
+            let width = tooltipLabel.frame.width + paddingX * 2
+            let height = tooltipLabel.frame.height + paddingY * 2
+            tooltipView.frame.size = CGSize(width: width, height: height)
+            tooltipLabel.frame.origin = CGPoint(
+                x: paddingX,
+                y: (height - tooltipLabel.frame.height) / 2
+            )
+
+            // 使用 toolbar 面板所在的屏幕，不要用 NSScreen.main
+            let tooltipOffset: CGFloat = 10
+            let screenFrame = self.panel?.screen?.visibleFrame ?? .zero
+            let preferredX = min(
+                max(capturedFrame.midX - width / 2, screenFrame.minX + 8),
+                screenFrame.maxX - width - 8
+            )
+            let tooltipY: CGFloat
+            if capturedFrame.maxY + tooltipOffset + height <= screenFrame.maxY {
+                tooltipY = capturedFrame.maxY + tooltipOffset         // 上方（默认）
+            } else {
+                tooltipY = capturedFrame.minY - height - tooltipOffset // 下方（容错）
+            }
+
+            // 先更新 frame 再取消隐藏，避免旧位置闪现
+            tipPanel.setFrame(CGRect(x: preferredX, y: tooltipY, width: width, height: height), display: false)
+            tooltipView.isHidden = false
+
+            // 仅在首次显示时调用 orderFront，后续只切换 isHidden
+            if !tooltipPanelIsOnScreen {
+                tipPanel.orderFrontRegardless()
+                tooltipPanelIsOnScreen = true
+            }
         }
-
-        tipPanel.setFrame(CGRect(x: preferredX, y: tooltipY, width: width, height: height), display: false)
-        tipPanel.orderFrontRegardless()
     }
 
     private func hideTooltip() {
-        tooltipPanel?.orderOut(nil)
+        // 取消等待中的 timer
+        tooltipShowTimer?.invalidate()
+        tooltipShowTimer = nil
+        // 不调用 orderOut — panel 常驻屏幕，只隐藏内容
+        tooltipView.isHidden = true
     }
 }
 
