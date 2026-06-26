@@ -1865,42 +1865,6 @@ final class CaptureOverlayView: NSView {
         case resizeBottomRight
     }
 }
-
-private final class ToolbarHoverButton: NSButton {
-    var hoverToolTip: String = ""
-    var onHoverChanged: ((Bool) -> Void)?
-
-    private var trackingArea: NSTrackingArea?
-    private(set) var isHovering = false
-
-    override func updateTrackingAreas() {
-        if let trackingArea {
-            removeTrackingArea(trackingArea)
-        }
-
-        let trackingArea = NSTrackingArea(
-            rect: bounds,
-            options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(trackingArea)
-        self.trackingArea = trackingArea
-
-        super.updateTrackingAreas()
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        isHovering = true
-        onHoverChanged?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        isHovering = false
-        onHoverChanged?(false)
-    }
-}
-
 private extension NSCursor {
     static var _windowResizeNorthWestSouthEast: NSCursor {
         NSCursor(image: NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil) ?? NSImage(), hotSpot: NSPoint(x: 8, y: 8))

@@ -49,7 +49,7 @@ final class ScrollingCapturePanelService {
         containerView.state = .active
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 12
-        containerView.layer?.masksToBounds = true
+        containerView.layer?.masksToBounds = false
 
         contentView.onCancel = { [weak self] in self?.onCancelRequested?() }
         contentView.onOCR = { [weak self] in self?.onOCRRequested?() }

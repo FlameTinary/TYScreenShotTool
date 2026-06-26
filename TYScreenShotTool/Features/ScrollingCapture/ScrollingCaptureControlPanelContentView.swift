@@ -10,14 +10,27 @@ import SnapKit
 
 @MainActor
 final class ScrollingCaptureControlPanelContentView: NSView {
-    private let rootStackView = NSStackView()
-    private let firstRowStackView = NSStackView()
-    private let secondRowStackView = NSStackView()
-    private let cancelButton = NSButton(title: "", target: nil, action: nil)
-    private let ocrButton = NSButton(title: "", target: nil, action: nil)
-    private let aiButton = NSButton(title: "", target: nil, action: nil)
-    private let saveButton = NSButton(title: "", target: nil, action: nil)
-    private let copyButton = NSButton(title: "", target: nil, action: nil)
+    // MARK: - Constants
+
+    private let symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+    private let buttonTintColor = NSColor.white
+    private let disabledTintColor = NSColor.white.withAlphaComponent(0.35)
+    private static let tooltipOffset: CGFloat = 8
+
+    // MARK: - Buttons
+
+    private let cancelButton = ToolbarHoverButton()
+    private let ocrButton = ToolbarHoverButton()
+    private let aiButton = ToolbarHoverButton()
+    private let saveButton = ToolbarHoverButton()
+    private let copyButton = ToolbarHoverButton()
+
+    // MARK: - Tooltip
+
+    private let tooltipView = NSVisualEffectView()
+    private let tooltipLabel = NSTextField(labelWithString: "")
+
+    // MARK: - Callbacks
 
     var onCancel: (() -> Void)?
     var onOCR: (() -> Void)?
@@ -25,9 +38,14 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     var onSave: (() -> Void)?
     var onCopy: (() -> Void)?
 
+    // MARK: - Layout
+
+    private let stackView = NSStackView()
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         buildLayout()
+        configureTooltip()
     }
 
     @available(*, unavailable)
@@ -35,81 +53,216 @@ final class ScrollingCaptureControlPanelContentView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        cancelButton.target = self
-        cancelButton.action = #selector(handleCancel)
-        ocrButton.target = self
-        ocrButton.action = #selector(handleOCR)
-        aiButton.target = self
-        aiButton.action = #selector(handleAI)
-        saveButton.target = self
-        saveButton.action = #selector(handleSave)
-        copyButton.target = self
-        copyButton.action = #selector(handleCopy)
-    }
+    // MARK: - Public API
 
     func configure(isOCREnabled: Bool, isAIEnabled: Bool) {
-        cancelButton.title = AppText.captureCancel
-        ocrButton.title = AppText.captureOCR
-        aiButton.title = AppText.captureAI
-        saveButton.title = AppText.captureSave
-        copyButton.title = AppText.captureCopy
         ocrButton.isEnabled = isOCREnabled
         aiButton.isEnabled = isAIEnabled
-        arrangeButtons()
+        applyButtonAppearance(ocrButton)
+        applyButtonAppearance(aiButton)
     }
-
-    /// 在 buildLayout 中调用一次，数据变化时再次调用。
-    /// 为宽模式排列按钮。窄模式回退（第二行）仅在显式调用 configure() 时触发 ——
-    /// 从不在布局期间触发，因为 NSPanel 不可调整大小，所以宽度在运行时不会改变。
-    private func arrangeButtons() {
-        let compact = bounds.width < 430
-        secondRowStackView.isHidden = compact == false
-
-        if compact {
-            firstRowStackView.setViews([cancelButton, ocrButton, aiButton], in: .leading)
-            secondRowStackView.setViews([saveButton, copyButton], in: .leading)
-        } else {
-            firstRowStackView.setViews([cancelButton, ocrButton, aiButton, saveButton, copyButton], in: .leading)
-            secondRowStackView.setViews([], in: .leading)
-        }
-    }
-
-    @objc private func handleCancel() { onCancel?() }
-    @objc private func handleOCR() { onOCR?() }
-    @objc private func handleAI() { presentAIMenu() }
-    @objc private func handleSave() { onSave?() }
-    @objc private func handleCopy() { onCopy?() }
 }
 
-// MARK: - Layout
+// MARK: - Actions
+
+private extension ScrollingCaptureControlPanelContentView {
+    @objc func handleCancel() { onCancel?() }
+    @objc func handleOCR() { onOCR?() }
+    @objc func handleAI() { presentAIMenu() }
+    @objc func handleSave() { onSave?() }
+    @objc func handleCopy() { onCopy?() }
+}
+
+// MARK: - Layout & Button Configuration
 
 private extension ScrollingCaptureControlPanelContentView {
     func buildLayout() {
-        firstRowStackView.orientation = .horizontal
-        firstRowStackView.spacing = 10
-        firstRowStackView.alignment = .centerY
+        stackView.orientation = .horizontal
+        stackView.spacing = 10
+        stackView.alignment = .centerY
 
-        secondRowStackView.orientation = .horizontal
-        secondRowStackView.spacing = 10
-        secondRowStackView.alignment = .centerY
+        // Configure all buttons with icons matching the normal capture toolbar
+        configureButton(
+            cancelButton,
+            symbolName: "xmark",
+            toolTip: AppText.captureCancel,
+            action: #selector(handleCancel)
+        )
+        configureSVGButton(
+            ocrButton,
+            resourceName: "icon-ocr",
+            toolTip: "OCR",
+            action: #selector(handleOCR)
+        )
+        configureSVGButton(
+            aiButton,
+            resourceName: "icon-ai",
+            toolTip: "AI",
+            action: #selector(handleAI)
+        )
+        configureButton(
+            saveButton,
+            symbolName: "square.and.arrow.down",
+            toolTip: AppText.captureSave,
+            action: #selector(handleSave)
+        )
+        configureButton(
+            copyButton,
+            symbolName: "doc.on.doc",
+            toolTip: AppText.captureCopy,
+            action: #selector(handleCopy)
+        )
 
-        rootStackView.orientation = .vertical
-        rootStackView.spacing = 8
-        rootStackView.alignment = .leading
+        let buttons = [cancelButton, ocrButton, aiButton, saveButton, copyButton]
+        stackView.setViews(buttons, in: .leading)
+        addSubview(stackView)
 
-        rootStackView.addArrangedSubview(firstRowStackView)
-        rootStackView.addArrangedSubview(secondRowStackView)
-
-        addSubview(rootStackView)
-        rootStackView.snp.makeConstraints { make in
+        stackView.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(NSEdgeInsets(top: 6, left: 12, bottom: 6, right: 12))
         }
-
-        arrangeButtons()
     }
 
+    func configureButton(
+        _ button: ToolbarHoverButton,
+        symbolName: String,
+        toolTip: String,
+        action: Selector
+    ) {
+        let image = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: nil
+        )?.withSymbolConfiguration(symbolConfiguration) ?? NSImage()
+
+        button.image = image
+        button.title = ""
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.focusRingType = .none
+        button.hoverToolTip = toolTip
+        button.onHoverChanged = { [weak self, weak button] isHovered in
+            guard let self, let button else { return }
+            self.handleButtonHover(isHovered: isHovered, button: button)
+        }
+        button.target = self
+        button.action = action
+        applyButtonAppearance(button)
+    }
+
+    func configureSVGButton(
+        _ button: ToolbarHoverButton,
+        resourceName: String,
+        toolTip: String,
+        action: Selector
+    ) {
+        let imageName = resourceName
+        let image = (NSImage(named: imageName) ?? NSImage()) as NSImage
+        image.isTemplate = true
+
+        button.image = image
+        button.title = ""
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.isBordered = false
+        button.bezelStyle = .regularSquare
+        button.focusRingType = .none
+        button.hoverToolTip = toolTip
+        button.onHoverChanged = { [weak self, weak button] isHovered in
+            guard let self, let button else { return }
+            self.handleButtonHover(isHovered: isHovered, button: button)
+        }
+        button.target = self
+        button.action = action
+        applyButtonAppearance(button)
+    }
+
+    func applyButtonAppearance(_ button: ToolbarHoverButton) {
+        button.wantsLayer = false
+        button.layer?.backgroundColor = nil
+        button.contentTintColor = button.isEnabled ? buttonTintColor : disabledTintColor
+        button.needsDisplay = true
+    }
+}
+
+// MARK: - Tooltip
+
+private extension ScrollingCaptureControlPanelContentView {
+    func configureTooltip() {
+        tooltipView.material = .popover
+        tooltipView.blendingMode = .withinWindow
+        tooltipView.state = .active
+        tooltipView.wantsLayer = true
+        tooltipView.layer?.cornerRadius = 8
+        tooltipView.layer?.masksToBounds = true
+        tooltipView.isHidden = true
+
+        tooltipLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        tooltipLabel.textColor = .labelColor
+        tooltipView.addSubview(tooltipLabel)
+
+        // Add tooltip after the stack view so it renders on top
+        addSubview(tooltipView)
+    }
+
+    func handleButtonHover(isHovered: Bool, button: ToolbarHoverButton) {
+        if isHovered {
+            showTooltip(for: button)
+        } else {
+            hideTooltip()
+        }
+    }
+
+    func showTooltip(for button: ToolbarHoverButton) {
+        let tooltip = button.hoverToolTip.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard tooltip.isEmpty == false else {
+            hideTooltip()
+            return
+        }
+
+        tooltipLabel.stringValue = tooltip
+        tooltipLabel.sizeToFit()
+
+        let paddingX: CGFloat = 10
+        let paddingY: CGFloat = 6
+        let width = tooltipLabel.frame.width + paddingX * 2
+        let height = tooltipLabel.frame.height + paddingY * 2
+        tooltipView.frame.size = CGSize(width: width, height: height)
+        tooltipLabel.frame.origin = CGPoint(
+            x: paddingX,
+            y: (height - tooltipLabel.frame.height) / 2
+        )
+
+        positionTooltip(relativeTo: button)
+        tooltipView.isHidden = false
+    }
+
+    func hideTooltip() {
+        tooltipView.isHidden = true
+    }
+
+    func positionTooltip(relativeTo button: ToolbarHoverButton) {
+        let buttonFrame = convert(button.bounds, from: button)
+        let preferredX = buttonFrame.midX - tooltipView.frame.width / 2
+        let clampedX = min(
+            max(preferredX, 16),
+            bounds.width - tooltipView.frame.width - 16
+        )
+
+        // Show above the button by default
+        var tooltipY = buttonFrame.minY - tooltipView.frame.height - Self.tooltipOffset
+        if tooltipY < 0 {
+            // Not enough space above, flip below
+            tooltipY = buttonFrame.maxY + Self.tooltipOffset
+        }
+
+        tooltipView.frame.origin = CGPoint(x: clampedX, y: tooltipY)
+    }
+}
+
+// MARK: - AI Menu
+
+private extension ScrollingCaptureControlPanelContentView {
     func presentAIMenu() {
         let menu = NSMenu()
 
