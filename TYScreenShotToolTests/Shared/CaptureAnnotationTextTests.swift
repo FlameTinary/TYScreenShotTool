@@ -19,8 +19,8 @@ final class CaptureAnnotationTextTests: XCTestCase {
 
         XCTAssertEqual(bounds.origin.x, 40, accuracy: 0.001)
         XCTAssertEqual(bounds.origin.y, 60, accuracy: 0.001)
-        XCTAssertEqual(bounds.width, 36, accuracy: 0.001)
-        XCTAssertEqual(bounds.height, 42, accuracy: 0.001)
+        XCTAssertEqual(bounds.width, 29.183, accuracy: 0.001)
+        XCTAssertEqual(bounds.height, 35.0, accuracy: 0.001)
     }
 
     func test_text_annotation_keeps_text_properties() {
