@@ -440,6 +440,14 @@ created_at
 - 大陆模式下 `showAIEntrances = true` 也不能展示商业 AI
 - 本地 OCR、本地翻译、复制、保存、Pin 不受影响
 
+实现记录：
+
+- 已新增 `RegionPolicy`、`RegionPolicyResolver` 和 `AIAvailabilityService`
+- `CHN` 进入中国大陆模式，商业 AI、登录、订阅和 server API 全部关闭
+- 非 `CHN` 允许后续 AI Pro、登录、订阅和 server API 判断
+- unknown / nil storefront 采用保守策略，默认关闭商业 AI 与 server API
+- 普通截图与长截图继续通过 `AppSettings.effectiveShowAIEntrances` 判断 AI 入口，内部已切换为区域策略优先
+
 ### Feature 53.2：AI 入口与历史隐藏配置隔离
 
 目标：

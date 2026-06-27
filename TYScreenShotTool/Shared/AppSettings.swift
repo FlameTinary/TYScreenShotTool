@@ -46,13 +46,13 @@ enum AppSettings {
     /// 显示 AI 功能入口默认值（默认关闭，出于合规考虑）
     static let showAIEntrancesDefaultValue = false
 
-    /// Release 模式下永远返回 false；Debug 模式下受 UserDefaults 开关控制
+    /// Release 模式下永远返回 false；Debug 模式下先经过区域策略，再读取 UserDefaults 开关。
     ///
     /// Release 构建时即使 UserDefaults 意外写入 true，此方法也返回 false，
-    /// 确保正式用户看不到 AI 入口。
+    /// Debug 构建时即使手动写入 true，也不能绕过区域策略显示商业 AI 入口。
     static var effectiveShowAIEntrances: Bool {
         #if DEBUG
-        return UserDefaults.standard.bool(forKey: showAIEntrancesKey)
+        return AIAvailabilityService().shouldShowCommercialAIEntry
         #else
         return false
         #endif
