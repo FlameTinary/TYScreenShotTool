@@ -1588,6 +1588,7 @@ final class CaptureOverlayView: NSView {
         undoButton.hoverToolTip = AppText.captureUndo
         longCaptureButton.hoverToolTip = AppText.captureLongCapture
         ocrButton.hoverToolTip = "OCR"
+        translateButton.hoverToolTip = AppText.captureTranslate
         aiButton.hoverToolTip = "AI"
         pinButton.hoverToolTip = AppText.capturePin
         copyButton.hoverToolTip = AppText.captureCopy
@@ -1744,6 +1745,7 @@ final class CaptureOverlayView: NSView {
             undoButton,
             longCaptureButton,
             ocrButton,
+            translateButton,
             aiButton,
             pinButton,
             copyButton,
