@@ -5,99 +5,75 @@
 //  Created by Ethan on 2026/6/27.
 //
 
-import AppKit
+import Foundation
 import Translation
 
-/// 纯本地翻译服务
+/// 纯本地翻译辅助函数
 ///
-/// 使用系统内置翻译能力，不依赖任何 AI 或网络服务。
-/// 需要 macOS 26.0+（可通过 TranslationSession 程序化 API 创建会话）。
+/// 注意：真正的翻译调用在 SwiftUI `.translationTask` 中完成，
+/// 本服务只提供中文检测和错误映射等工具方法。
 @MainActor
 final class LocalTranslationService {
-    /// 翻译结果
-    struct TranslationResult {
-        let sourceText: String
-        let translatedText: String
-        let targetLanguage: String
+    /// 判断文本是否看起来主要是中文
+    /// - Parameter text: 待判断的文本
+    /// - Returns: 如果包含足够多的中文字符，返回 true
+    static func seemsChineseText(_ text: String) -> Bool {
+        let chineseCharacters = text.unicodeScalars.filter {
+            $0.value >= 0x4E00 && $0.value <= 0x9FFF
+        }.count
+        return chineseCharacters > max(3, text.count / 4)
     }
 
-    enum TranslationError: LocalizedError {
-        case systemNotSupported
-        case translationFailed(String)
-        case cancelled
+    /// 将本地翻译框架的错误转换为用户友好的提示文案
+    /// - Parameter error: 翻译框架抛出的错误
+    /// - Returns: 用户友好的错误消息
+    static func userFriendlyMessage(for error: Error) -> String {
+        let nsError = error as NSError
 
-        var errorDescription: String? {
-            switch self {
-            case .systemNotSupported:
-                return AppLocalization.text("translate.system_not_supported")
-            case let .translationFailed(reason):
-                return "\(AppLocalization.text("translate.failed")): \(reason)"
-            case .cancelled:
-                return AppLocalization.text("translate.failed")
+        print("[LocalTranslation] error domain:", nsError.domain)
+        print("[LocalTranslation] error code:", nsError.code)
+        print("[LocalTranslation] error:", nsError)
+
+        // 尝试匹配 TranslationError 类型（使用模式匹配 ~=）
+        if let translationError = error as? TranslationError {
+            if #available(macOS 26.0, *) {
+                if case .notInstalled = translationError {
+                    return "需要下载本地翻译语言包后才能翻译，请按系统提示下载语言资源后重试。"
+                }
+                if case .alreadyCancelled = translationError {
+                    return AppLocalization.text("translate.failed")
+                }
+            }
+            switch translationError {
+            case .unsupportedSourceLanguage, .unsupportedTargetLanguage, .unsupportedLanguagePairing:
+                return "当前语言暂不支持本地翻译。"
+            case .unableToIdentifyLanguage:
+                return "无法识别截图中的语言，请尝试截取更清晰的文字。"
+            case .nothingToTranslate:
+                return AppLocalization.text("translate.empty_text")
+            case .internalError:
+                return "翻译失败，请稍后重试。"
+            default:
+                break
             }
         }
-    }
 
-    /// 执行本地翻译
-    ///
-    /// - Parameters:
-    ///   - text: 需要翻译的文本
-    ///   - targetLanguage: 目标语言代码（如 "zh-Hans", "en"）
-    /// - Returns: 翻译结果
-    /// - Throws: TranslationError
-    func translate(
-        text: String,
-        targetLanguage: String = "zh-Hans"
-    ) async throws -> TranslationResult {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw TranslationError.translationFailed("Input text is empty")
+        // 基于 NSError 信息兜底
+        let description = nsError.localizedDescription.lowercased()
+
+        if description.contains("download") || nsError.code == 16 {
+            return "需要下载本地翻译语言包后才能翻译，请按系统提示下载语言资源后重试。"
+        }
+        if description.contains("unsupported") {
+            return "当前语言暂不支持本地翻译。"
+        }
+        if description.contains("identify") {
+            return "无法识别截图中的语言，请尝试截取更清晰的文字。"
+        }
+        if description.contains("nothing") {
+            return AppLocalization.text("translate.empty_text")
         }
 
-        // TranslationSession 程序化 API 自 macOS 26.0+ 可用
-        if #available(macOS 26.0, *) {
-            return try await performSystemTranslation(text: text, targetLanguage: targetLanguage)
-        } else {
-            throw TranslationError.systemNotSupported
-        }
-    }
-
-    @available(macOS 26.0, *)
-    private func performSystemTranslation(
-        text: String,
-        targetLanguage: String
-    ) async throws -> TranslationResult {
-        let sourceLanguage = Locale.Language(identifier: textLanguageCode(for: text))
-        let target = Locale.Language(identifier: targetLanguage)
-
-        // 检查语言对是否支持
-        let availability = LanguageAvailability()
-        let status = await availability.status(from: sourceLanguage, to: target)
-        guard status == .installed || status == .supported else {
-            throw TranslationError.translationFailed("Language pair not supported")
-        }
-
-        let session = TranslationSession(
-            installedSource: sourceLanguage,
-            target: target
-        )
-
-        let response = try await session.translate(text)
-
-        return TranslationResult(
-            sourceText: response.sourceText,
-            translatedText: response.targetText,
-            targetLanguage: targetLanguage
-        )
-    }
-
-    /// 简单判断文本语言（用于选择源语言）
-    private func textLanguageCode(for text: String) -> String {
-        // 如果文本包含较多中文字符，源语言设为中文
-        let chineseChars = text.unicodeScalars.filter { $0.properties.isIdeographic }
-        if CGFloat(chineseChars.count) / CGFloat(max(text.count, 1)) > 0.3 {
-            return "zh-Hans"
-        }
-        // 默认使用英文（API 会自动检测，nil 也可以）
-        return "en"
+        return AppLocalization.text("translate.failed")
     }
 }

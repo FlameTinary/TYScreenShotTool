@@ -7,10 +7,15 @@
 
 import AppKit
 import SnapKit
+import SwiftUI
+import Translation
+
+// MARK: - AppKit Window Service
 
 /// 翻译结果浮动面板服务
 ///
-/// 展示 OCR 识别原文和本地翻译结果的浮动面板。
+/// 使用 AppKit NSPanel 承载 SwiftUI 翻译视图。
+/// 翻译在 SwiftUI `.translationTask` 中完成。
 @MainActor
 final class TranslationResultPanelService {
     private let panel = NSPanel(
@@ -20,7 +25,7 @@ final class TranslationResultPanelService {
         defer: false
     )
     private let containerView = NSVisualEffectView()
-    private let contentView = TranslationResultContentView()
+    private var hostingController: NSHostingController<TranslationResultSwiftUIView>?
 
     init() {
         panel.backgroundColor = .clear
@@ -39,10 +44,6 @@ final class TranslationResultPanelService {
         containerView.layer?.borderWidth = 1
 
         panel.contentView = containerView
-        containerView.addSubview(contentView)
-        contentView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
 
         AppThemeCoordinator.shared.registerRefreshHandler(for: self) { [weak self] in
             self?.applyAppearanceStyling()
@@ -57,21 +58,62 @@ final class TranslationResultPanelService {
         }
     }
 
-    /// 显示翻译结果
+    /// 打开翻译窗口，在 SwiftUI 内部执行翻译
     ///
     /// - Parameters:
-    ///   - sourceText: 原文
-    ///   - translatedText: 译文
+    ///   - sourceText: OCR 识别出的原文
     ///   - selectionRect: 选择区域
     ///   - onCopySource: 复制原文回调
     ///   - onCopyTarget: 复制译文回调
     ///   - onClose: 关闭回调
-    func present(
+    func presentTranslating(
+        sourceText: String,
+        selectionRect: CGRect,
+        onCopySource: @escaping (String) -> Void,
+        onCopyTarget: @escaping (String) -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        guard let screen = screenContaining(selectionRect) else {
+            dismiss()
+            return
+        }
+
+        let swiftUIView = TranslationResultSwiftUIView(
+            sourceText: sourceText,
+            onCopySource: onCopySource,
+            onCopyTarget: onCopyTarget,
+            onClose: { [weak self] in
+                self?.dismiss()
+                onClose()
+            }
+        )
+
+        let hostingController = NSHostingController(rootView: swiftUIView)
+        self.hostingController = hostingController
+        hostingController.view.wantsLayer = true
+
+        // 替换 containerView 中的所有子视图
+        containerView.subviews.forEach { $0.removeFromSuperview() }
+        containerView.addSubview(hostingController.view)
+        hostingController.view.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        let panelFrame = frame(for: selectionRect, on: screen)
+        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
+        panel.setFrame(panelFrame, display: true)
+        applyAppearanceStyling()
+        panel.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// 直接展示已翻译的文本（用于中文文本等无需翻译的场景）
+    func presentResult(
         sourceText: String,
         translatedText: String,
         selectionRect: CGRect,
-        onCopySource: @escaping () -> Void,
-        onCopyTarget: @escaping () -> Void,
+        onCopySource: @escaping (String) -> Void,
+        onCopyTarget: @escaping (String) -> Void,
         onClose: @escaping () -> Void
     ) {
         guard let screen = screenContaining(selectionRect) else {
@@ -79,79 +121,37 @@ final class TranslationResultPanelService {
             return
         }
 
-        contentView.configure(
+        let swiftUIView = TranslationResultSwiftUIView(
             sourceText: sourceText,
-            translatedText: translatedText,
+            preTranslatedText: translatedText,
             onCopySource: onCopySource,
             onCopyTarget: onCopyTarget,
-            onClose: onClose
+            onClose: { [weak self] in
+                self?.dismiss()
+                onClose()
+            }
         )
 
-        let panelFrame = frame(for: selectionRect, on: screen)
-        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
-        panel.setFrame(panelFrame, display: true)
-        applyAppearanceStyling()
-        panel.orderFrontRegardless()
-    }
+        let hostingController = NSHostingController(rootView: swiftUIView)
+        self.hostingController = hostingController
 
-    /// 显示空状态（OCR 结果为空）
-    ///
-    /// - Parameters:
-    ///   - message: 空状态提示信息
-    ///   - selectionRect: 选择区域
-    ///   - onClose: 关闭回调
-    func presentEmpty(
-        message: String,
-        selectionRect: CGRect,
-        onClose: @escaping () -> Void
-    ) {
-        guard let screen = screenContaining(selectionRect) else {
-            dismiss()
-            return
+        containerView.subviews.forEach { $0.removeFromSuperview() }
+        containerView.addSubview(hostingController.view)
+        hostingController.view.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
         }
 
-        contentView.configureEmpty(
-            message: message,
-            onClose: onClose
-        )
-
         let panelFrame = frame(for: selectionRect, on: screen)
         AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
         panel.setFrame(panelFrame, display: true)
         applyAppearanceStyling()
         panel.orderFrontRegardless()
-    }
-
-    /// 显示错误状态
-    ///
-    /// - Parameters:
-    ///   - message: 错误提示信息
-    ///   - selectionRect: 选择区域
-    ///   - onClose: 关闭回调
-    func presentError(
-        message: String,
-        selectionRect: CGRect,
-        onClose: @escaping () -> Void
-    ) {
-        guard let screen = screenContaining(selectionRect) else {
-            dismiss()
-            return
-        }
-
-        contentView.configureEmpty(
-            message: message,
-            onClose: onClose
-        )
-
-        let panelFrame = frame(for: selectionRect, on: screen)
-        AppThemeCoordinator.shared.applyCurrentAppearance(to: panel)
-        panel.setFrame(panelFrame, display: true)
-        applyAppearanceStyling()
-        panel.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func dismiss() {
         panel.orderOut(nil)
+        hostingController = nil
     }
 
     // MARK: - Private
@@ -161,10 +161,7 @@ final class TranslationResultPanelService {
         containerView.layer?.borderColor = NSColor.separatorColor.cgColor
     }
 
-    private func frame(
-        for selectionRect: CGRect,
-        on screen: NSScreen
-    ) -> CGRect {
+    private func frame(for selectionRect: CGRect, on screen: NSScreen) -> CGRect {
         let visibleFrame = screen.visibleFrame
         let outerMargin: CGFloat = 24
         let gap: CGFloat = 20
@@ -187,15 +184,9 @@ final class TranslationResultPanelService {
 
         let panelX: CGFloat
         if placeOnLeft {
-            panelX = max(
-                visibleFrame.minX + outerMargin,
-                selectionRect.minX - gap - panelWidth
-            )
+            panelX = max(visibleFrame.minX + outerMargin, selectionRect.minX - gap - panelWidth)
         } else {
-            panelX = min(
-                visibleFrame.maxX - outerMargin - panelWidth,
-                selectionRect.maxX + gap
-            )
+            panelX = min(visibleFrame.maxX - outerMargin - panelWidth, selectionRect.maxX + gap)
         }
 
         let panelY = min(
@@ -203,12 +194,7 @@ final class TranslationResultPanelService {
             visibleFrame.maxY - outerMargin - panelHeight
         )
 
-        return CGRect(
-            x: panelX,
-            y: panelY,
-            width: panelWidth,
-            height: panelHeight
-        )
+        return CGRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight)
     }
 
     private func screenContaining(_ rect: CGRect) -> NSScreen? {
@@ -218,238 +204,257 @@ final class TranslationResultPanelService {
     }
 }
 
-// MARK: - Translation Result Content View
+// MARK: - SwiftUI Translation View
 
-/// 翻译结果内容视图
-private final class TranslationResultContentView: NSView {
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let sourceLabel = NSTextField(labelWithString: "")
-    private let sourceScrollView = NSScrollView()
-    private let sourceTextView = NSTextView()
-    private let targetLabel = NSTextField(labelWithString: "")
-    private let targetScrollView = NSScrollView()
-    private let targetTextView = NSTextView()
-    private let copySourceButton = NSButton()
-    private let copyTargetButton = NSButton()
-    private let closeButton = NSButton()
+/// SwiftUI 翻译视图
+///
+/// 负责：
+/// 1. 展示原文
+/// 2. 使用 `.translationTask` 执行翻译
+/// 3. 展示译文/加载/错误状态
+/// 4. 复制原文/译文、关闭
+struct TranslationResultSwiftUIView: View {
+    let sourceText: String
+    let onCopySource: (String) -> Void
+    let onCopyTarget: (String) -> Void
+    let onClose: () -> Void
 
-    private var onCopySource: (() -> Void)?
-    private var onCopyTarget: (() -> Void)?
-    private var onClose: (() -> Void)?
+    /// 预置译文（用于中文文本等直接展示，不触发翻译流程）
+    private let preTranslatedText: String?
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        buildLayout()
-    }
+    @State private var configuration: TranslationSession.Configuration?
+    @State private var translatedText: String = ""
+    @State private var isTranslating: Bool = false
+    @State private var errorMessage: String?
+    @State private var hasStartedTranslation: Bool = false
+    @State private var copySourceFeedback: Bool = false
+    @State private var copyTargetFeedback: Bool = false
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func configure(
+    /// 创建翻译视图
+    /// - Parameters:
+    ///   - sourceText: OCR 原文
+    ///   - preTranslatedText: 预置译文（可选，不为 nil 时跳过翻译）
+    ///   - onCopySource: 复制原文
+    ///   - onCopyTarget: 复制译文
+    ///   - onClose: 关闭
+    init(
         sourceText: String,
-        translatedText: String,
-        onCopySource: @escaping () -> Void,
-        onCopyTarget: @escaping () -> Void,
+        preTranslatedText: String? = nil,
+        onCopySource: @escaping (String) -> Void,
+        onCopyTarget: @escaping (String) -> Void,
         onClose: @escaping () -> Void
     ) {
+        self.sourceText = sourceText
+        self.preTranslatedText = preTranslatedText
         self.onCopySource = onCopySource
         self.onCopyTarget = onCopyTarget
         self.onClose = onClose
-
-        titleLabel.stringValue = AppLocalization.text("translate.window.title")
-        sourceLabel.stringValue = AppLocalization.text("translate.source_text")
-        targetLabel.stringValue = AppLocalization.text("translate.target_text")
-        copySourceButton.title = AppLocalization.text("translate.copy_source")
-        copyTargetButton.title = AppLocalization.text("translate.copy_target")
-        closeButton.title = AppLocalization.text("translate.close")
-
-        sourceTextView.string = sourceText
-        targetTextView.string = translatedText
-
-        copySourceButton.isHidden = sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        copyTargetButton.isHidden = translatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    func configureEmpty(
-        message: String,
-        onClose: @escaping () -> Void
-    ) {
-        self.onCopySource = nil
-        self.onCopyTarget = nil
-        self.onClose = onClose
+    var body: some View {
+        VStack(spacing: 0) {
+            // 标题栏
+            titleBar
 
-        titleLabel.stringValue = AppLocalization.text("translate.window.title")
-        sourceLabel.stringValue = ""
-        targetLabel.stringValue = ""
-        copySourceButton.isHidden = true
-        copyTargetButton.isHidden = true
-        closeButton.title = AppLocalization.text("translate.close")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    // 原文区域
+                    sourceSection
 
-        // 在原文区域显示提示信息
-        sourceTextView.string = message
-        targetTextView.string = ""
-    }
+                    Divider()
 
-    // MARK: - Layout
+                    // 译文区域
+                    targetSection
+                }
+                .padding(.horizontal, 16)
+            }
 
-    private func buildLayout() {
-        let padding: CGFloat = 16
-        let spacing: CGFloat = 10
-        let labelHeight: CGFloat = 18
-        let buttonHeight: CGFloat = 28
+            Divider()
 
-        // Title
-        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
-        titleLabel.textColor = .labelColor
-        titleLabel.isEditable = false
-        titleLabel.isSelectable = false
-        titleLabel.isBezeled = false
-        titleLabel.drawsBackground = false
-        addSubview(titleLabel)
-
-        // Source label
-        sourceLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        sourceLabel.textColor = .secondaryLabelColor
-        sourceLabel.isEditable = false
-        sourceLabel.isSelectable = false
-        sourceLabel.isBezeled = false
-        sourceLabel.drawsBackground = false
-        addSubview(sourceLabel)
-
-        // Source text view
-        sourceTextView.isEditable = false
-        sourceTextView.isSelectable = true
-        sourceTextView.font = .systemFont(ofSize: 12)
-        sourceTextView.textColor = .labelColor
-        sourceTextView.drawsBackground = false
-        sourceTextView.backgroundColor = .clear
-        sourceTextView.textContainerInset = NSSize(width: 8, height: 6)
-        sourceScrollView.documentView = sourceTextView
-        sourceScrollView.hasVerticalScroller = true
-        sourceScrollView.hasHorizontalScroller = false
-        sourceScrollView.autohidesScrollers = true
-        sourceScrollView.borderType = .bezelBorder
-        sourceScrollView.wantsLayer = true
-        sourceScrollView.layer?.cornerRadius = 6
-        sourceScrollView.layer?.masksToBounds = true
-        addSubview(sourceScrollView)
-
-        // Target label
-        targetLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        targetLabel.textColor = .secondaryLabelColor
-        targetLabel.isEditable = false
-        targetLabel.isSelectable = false
-        targetLabel.isBezeled = false
-        targetLabel.drawsBackground = false
-        addSubview(targetLabel)
-
-        // Target text view
-        targetTextView.isEditable = false
-        targetTextView.isSelectable = true
-        targetTextView.font = .systemFont(ofSize: 12)
-        targetTextView.textColor = .labelColor
-        targetTextView.drawsBackground = false
-        targetTextView.backgroundColor = .clear
-        targetTextView.textContainerInset = NSSize(width: 8, height: 6)
-        targetScrollView.documentView = targetTextView
-        targetScrollView.hasVerticalScroller = true
-        targetScrollView.hasHorizontalScroller = false
-        targetScrollView.autohidesScrollers = true
-        targetScrollView.borderType = .bezelBorder
-        targetScrollView.wantsLayer = true
-        targetScrollView.layer?.cornerRadius = 6
-        targetScrollView.layer?.masksToBounds = true
-        addSubview(targetScrollView)
-
-        // Buttons
-        copySourceButton.bezelStyle = .rounded
-        copySourceButton.font = .systemFont(ofSize: 12)
-        copySourceButton.target = self
-        copySourceButton.action = #selector(handleCopySource)
-        addSubview(copySourceButton)
-
-        copyTargetButton.bezelStyle = .rounded
-        copyTargetButton.font = .systemFont(ofSize: 12)
-        copyTargetButton.target = self
-        copyTargetButton.action = #selector(handleCopyTarget)
-        addSubview(copyTargetButton)
-
-        closeButton.bezelStyle = .rounded
-        closeButton.font = .systemFont(ofSize: 12)
-        closeButton.target = self
-        closeButton.action = #selector(handleClose)
-        addSubview(closeButton)
-
-        // Layout constraints
-        titleLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(padding)
-            make.leading.equalToSuperview().offset(padding)
-            make.trailing.equalToSuperview().offset(-padding)
+            // 底部操作栏
+            bottomBar
         }
-
-        sourceLabel.snp.makeConstraints { make in
-            make.top.equalTo(titleLabel.snp.bottom).offset(spacing)
-            make.leading.equalToSuperview().offset(padding)
-            make.trailing.equalToSuperview().offset(-padding)
+        .translationTask(configuration) { session in
+            await performTranslation(session)
         }
+        .onAppear {
+            print("[LocalTranslation] translation view appeared")
+            print("[LocalTranslation] source text count:", sourceText.count)
+            print("[LocalTranslation] seems chinese:", LocalTranslationService.seemsChineseText(sourceText))
 
-        sourceScrollView.snp.makeConstraints { make in
-            make.top.equalTo(sourceLabel.snp.bottom).offset(4)
-            make.leading.equalToSuperview().offset(padding)
-            make.trailing.equalToSuperview().offset(-padding)
-            make.height.equalTo(100).priority(.medium)
-        }
+            // 如果已经有预置译文，不启动翻译
+            if preTranslatedText != nil {
+                translatedText = preTranslatedText!
+                return
+            }
 
-        targetLabel.snp.makeConstraints { make in
-            make.top.equalTo(sourceScrollView.snp.bottom).offset(spacing)
-            make.leading.equalToSuperview().offset(padding)
-            make.trailing.equalToSuperview().offset(-padding)
-        }
+            // 中文文本无需翻译
+            if LocalTranslationService.seemsChineseText(sourceText) {
+                translatedText = "识别内容已是中文，无需翻译。"
+                return
+            }
 
-        targetScrollView.snp.makeConstraints { make in
-            make.top.equalTo(targetLabel.snp.bottom).offset(4)
-            make.leading.equalToSuperview().offset(padding)
-            make.trailing.equalToSuperview().offset(-padding)
-            make.height.equalTo(100).priority(.medium)
-        }
-
-        copySourceButton.snp.makeConstraints { make in
-            make.top.equalTo(targetScrollView.snp.bottom).offset(spacing)
-            make.leading.equalToSuperview().offset(padding)
-            make.height.equalTo(buttonHeight)
-        }
-
-        copyTargetButton.snp.makeConstraints { make in
-            make.centerY.equalTo(copySourceButton)
-            make.leading.equalTo(copySourceButton.snp.trailing).offset(8)
-            make.height.equalTo(buttonHeight)
-        }
-
-        closeButton.snp.makeConstraints { make in
-            make.centerY.equalTo(copySourceButton)
-            make.trailing.equalToSuperview().offset(-padding)
-            make.height.equalTo(buttonHeight)
-        }
-
-        // Bottom constraint
-        copySourceButton.snp.makeConstraints { make in
-            make.bottom.lessThanOrEqualToSuperview().offset(-padding)
+            // 启动翻译
+            print("[LocalTranslation] configuration created")
+            configuration = TranslationSession.Configuration(
+                source: nil,
+                target: Locale.Language(identifier: "zh-Hans")
+            )
         }
     }
 
-    // MARK: - Actions
+    // MARK: - Translation
 
-    @objc private func handleCopySource() {
-        onCopySource?()
+    private func performTranslation(_ session: TranslationSession) async {
+        guard !hasStartedTranslation else { return }
+        hasStartedTranslation = true
+
+        print("[LocalTranslation] translationTask started")
+
+        let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            errorMessage = AppLocalization.text("translate.empty_text")
+            return
+        }
+
+        isTranslating = true
+        errorMessage = nil
+
+        do {
+            print("[LocalTranslation] prepareTranslation started")
+            try await session.prepareTranslation()
+            print("[LocalTranslation] prepareTranslation finished")
+
+            print("[LocalTranslation] translate started")
+            let response = try await session.translate(trimmedText)
+            print("[LocalTranslation] translate finished")
+            print("[LocalTranslation] translated text count:", response.targetText.count)
+
+            translatedText = response.targetText
+        } catch {
+            print("[LocalTranslation] failed:", error)
+            errorMessage = LocalTranslationService.userFriendlyMessage(for: error)
+        }
+
+        isTranslating = false
     }
 
-    @objc private func handleCopyTarget() {
-        onCopyTarget?()
+    // MARK: - UI Components
+
+    private var titleBar: some View {
+        HStack {
+            Text(AppLocalization.text("translate.window.title"))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
     }
 
-    @objc private func handleClose() {
-        onClose?()
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(AppLocalization.text("translate.source_text"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+            ScrollView([.vertical]) {
+                Text(sourceText)
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 120)
+            .padding(8)
+            .background(Color(.textBackgroundColor))
+            .cornerRadius(6)
+        }
+    }
+
+    @ViewBuilder
+    private var targetSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(AppLocalization.text("translate.target_text"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+            if isTranslating {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(AppLocalization.text("translate.loading"))
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(Color(.textBackgroundColor))
+                    .cornerRadius(6)
+            } else {
+                ScrollView([.vertical]) {
+                    Text(translatedText)
+                        .font(.system(size: 12))
+                        .foregroundColor(.primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 120)
+                .padding(8)
+                .background(Color(.textBackgroundColor))
+                .cornerRadius(6)
+            }
+        }
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: 8) {
+            // 复制原文
+            Button(action: {
+                onCopySource(sourceText)
+                copySourceFeedback = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    copySourceFeedback = false
+                }
+            }) {
+                Text(copySourceFeedback ? AppLocalization.text("translate.copied") : AppLocalization.text("translate.copy_source"))
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.bordered)
+
+            // 复制译文（仅在翻译完成且有译文时显示）
+            if !translatedText.isEmpty && !isTranslating && errorMessage == nil {
+                Button(action: {
+                    onCopyTarget(translatedText)
+                    copyTargetFeedback = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        copyTargetFeedback = false
+                    }
+                }) {
+                    Text(copyTargetFeedback ? AppLocalization.text("translate.copied") : AppLocalization.text("translate.copy_target"))
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Spacer()
+
+            // 关闭
+            Button(action: onClose) {
+                Text(AppLocalization.text("translate.close"))
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.bordered)
+            .keyboardShortcut(.escape)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }

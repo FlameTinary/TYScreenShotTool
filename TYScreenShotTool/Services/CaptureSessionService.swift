@@ -57,7 +57,6 @@ final class CaptureSessionService {
     private let scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
     private let ocrPreviewWindowService: OCRPreviewWindowService
     private let aiAnalysisPreviewWindowService: AIAnalysisPreviewWindowService
-    private let localTranslationService = LocalTranslationService()
     private let translationResultPanelService = TranslationResultPanelService()
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
@@ -336,7 +335,7 @@ final class CaptureSessionService {
             }
         }
     }
-    /// 对待截图进行本地翻译（OCR → 本地翻译 → 展示结果）
+    /// 对待截图进行本地翻译（OCR → SwiftUI translationTask 内调用 Translation.framework）
     ///
     /// - Parameters:
     ///   - style: 截图预览样式
@@ -356,10 +355,14 @@ final class CaptureSessionService {
                 let trimmedText = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
 
                 guard trimmedText.isEmpty == false else {
-                    await MainActor.run {
-                        translationResultPanelService.presentEmpty(
-                            message: AppLocalization.text("translate.empty_text"),
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        translationResultPanelService.presentResult(
+                            sourceText: "",
+                            translatedText: AppLocalization.text("translate.empty_text"),
                             selectionRect: selectionRect,
+                            onCopySource: { _ in },
+                            onCopyTarget: { _ in },
                             onClose: { [weak self] in
                                 self?.translationResultPanelService.dismiss()
                             }
@@ -368,37 +371,28 @@ final class CaptureSessionService {
                     return
                 }
 
-                // Step 2: Local translation
-                let result = try await localTranslationService.translate(text: trimmedText)
-
-                // Step 3: Show result
+                // Step 2: 打开翻译窗口，翻译在 SwiftUI translationTask 中完成
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    translationResultPanelService.present(
+                    translationResultPanelService.presentTranslating(
                         sourceText: trimmedText,
-                        translatedText: result.translatedText,
                         selectionRect: selectionRect,
-                        onCopySource: { [weak self] in
-                            self?.copyTranslationSourceText(trimmedText)
+                        onCopySource: { [weak self] text in
+                            self?.copyTranslationSourceText(text)
                         },
-                        onCopyTarget: { [weak self] in
-                            self?.copyTranslationTargetText(result.translatedText)
+                        onCopyTarget: { [weak self] text in
+                            self?.copyTranslationTargetText(text)
                         },
                         onClose: { [weak self] in
                             self?.translationResultPanelService.dismiss()
                         }
                     )
                 }
-            } catch let error as LocalTranslationService.TranslationError {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    toastService.showToast(message: error.localizedDescription)
-                }
             } catch {
-                print("Translation failed: \(error.localizedDescription)")
+                print("Translation OCR failed: \(error.localizedDescription)")
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    toastService.showToast(message: AppLocalization.text("translate.failed"))
+                    toastService.showToast(message: AppText.ocrFailedToast)
                 }
             }
         }
@@ -678,7 +672,7 @@ final class CaptureSessionService {
 
     /// 对长截图结果进行本地翻译
     ///
-    /// 对当前滚动截图结果进行 OCR 识别并本地翻译，展示翻译结果。
+    /// 对当前滚动截图结果进行 OCR 识别，在 SwiftUI translationTask 内翻译，展示结果。
     func translateScrollingCaptureResult() {
         guard isInScrollingCaptureMode,
               let image = scrollingCaptureResultImage,
@@ -695,9 +689,12 @@ final class CaptureSessionService {
                 guard trimmedText.isEmpty == false else {
                     await MainActor.run { [weak self] in
                         guard let self else { return }
-                        translationResultPanelService.presentEmpty(
-                            message: AppLocalization.text("translate.empty_text"),
+                        translationResultPanelService.presentResult(
+                            sourceText: "",
+                            translatedText: AppLocalization.text("translate.empty_text"),
                             selectionRect: selectionRect,
+                            onCopySource: { _ in },
+                            onCopyTarget: { _ in },
                             onClose: { [weak self] in
                                 self?.translationResultPanelService.dismiss()
                             }
@@ -706,37 +703,28 @@ final class CaptureSessionService {
                     return
                 }
 
-                // Step 2: Local translation
-                let result = try await localTranslationService.translate(text: trimmedText)
-
-                // Step 3: Show result
+                // Step 2: 打开翻译窗口，翻译在 SwiftUI translationTask 中完成
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    translationResultPanelService.present(
+                    translationResultPanelService.presentTranslating(
                         sourceText: trimmedText,
-                        translatedText: result.translatedText,
                         selectionRect: selectionRect,
-                        onCopySource: { [weak self] in
-                            self?.copyTranslationSourceText(trimmedText)
+                        onCopySource: { [weak self] text in
+                            self?.copyTranslationSourceText(text)
                         },
-                        onCopyTarget: { [weak self] in
-                            self?.copyTranslationTargetText(result.translatedText)
+                        onCopyTarget: { [weak self] text in
+                            self?.copyTranslationTargetText(text)
                         },
                         onClose: { [weak self] in
                             self?.translationResultPanelService.dismiss()
                         }
                     )
                 }
-            } catch let error as LocalTranslationService.TranslationError {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    toastService.showToast(message: error.localizedDescription)
-                }
             } catch {
-                print("Translation failed: \(error.localizedDescription)")
+                print("Translation OCR failed: \(error.localizedDescription)")
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    toastService.showToast(message: AppLocalization.text("translate.failed"))
+                    toastService.showToast(message: AppText.ocrFailedToast)
                 }
             }
         }
