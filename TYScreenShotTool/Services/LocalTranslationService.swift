@@ -48,7 +48,7 @@ final class LocalTranslationService {
             case .unsupportedSourceLanguage, .unsupportedTargetLanguage, .unsupportedLanguagePairing:
                 return "当前语言暂不支持本地翻译。"
             case .unableToIdentifyLanguage:
-                return "无法识别截图中的语言，请尝试截取更清晰的文字。"
+                return "无法识别截图中的语言，请尝试截取更完整、更清晰的文字。"
             case .nothingToTranslate:
                 return AppLocalization.text("translate.empty_text")
             case .internalError:

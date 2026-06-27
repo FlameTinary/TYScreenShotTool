@@ -223,6 +223,7 @@ struct TranslationResultSwiftUIView: View {
     private let preTranslatedText: String?
 
     @State private var configuration: TranslationSession.Configuration?
+    @State private var sourceLanguage: Locale.Language?
     @State private var translatedText: String = ""
     @State private var isTranslating: Bool = false
     @State private var errorMessage: String?
@@ -288,23 +289,38 @@ struct TranslationResultSwiftUIView: View {
                 return
             }
 
-            // 中文文本无需翻译
-            if LocalTranslationService.seemsChineseText(sourceText) {
+            let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedText.isEmpty else {
+                errorMessage = AppLocalization.text("translate.empty_text")
+                return
+            }
+
+            // 兜底检测源语言
+            let detectedSource = fallbackSourceLanguage(for: trimmedText)
+            let target = Locale.Language(identifier: "zh-Hans")
+            sourceLanguage = detectedSource
+
+            print("[LocalTranslation] source language:", detectedSource?.languageCode?.identifier ?? "nil")
+            print("[LocalTranslation] target language: zh-Hans")
+
+            // 中文无需翻译
+            if detectedSource?.languageCode?.identifier == "zh" {
                 translatedText = "识别内容已是中文，无需翻译。"
                 return
             }
 
             // 启动翻译
-            print("[LocalTranslation] configuration created")
             configuration = TranslationSession.Configuration(
-                source: nil,
-                target: Locale.Language(identifier: "zh-Hans")
+                source: detectedSource,
+                target: target
             )
+            print("[LocalTranslation] configuration created")
         }
     }
 
     // MARK: - Translation
 
+    @MainActor
     private func performTranslation(_ session: TranslationSession) async {
         guard !hasStartedTranslation else { return }
         hasStartedTranslation = true
@@ -321,9 +337,13 @@ struct TranslationResultSwiftUIView: View {
         errorMessage = nil
 
         do {
-            print("[LocalTranslation] prepareTranslation started")
-            try await session.prepareTranslation()
-            print("[LocalTranslation] prepareTranslation finished")
+            if sourceLanguage != nil {
+                print("[LocalTranslation] prepareTranslation started")
+                try await session.prepareTranslation()
+                print("[LocalTranslation] prepareTranslation finished")
+            } else {
+                print("[LocalTranslation] skip prepareTranslation because source language is nil")
+            }
 
             print("[LocalTranslation] translate started")
             let response = try await session.translate(trimmedText)
@@ -333,10 +353,45 @@ struct TranslationResultSwiftUIView: View {
             translatedText = response.targetText
         } catch {
             print("[LocalTranslation] failed:", error)
+            let nsError = error as NSError
+            print("[LocalTranslation] error domain:", nsError.domain)
+            print("[LocalTranslation] error code:", nsError.code)
+            print("[LocalTranslation] error:", nsError)
             errorMessage = LocalTranslationService.userFriendlyMessage(for: error)
         }
 
         isTranslating = false
+    }
+
+    // MARK: - Source Language Detection
+
+    /// 兜底检测源语言
+    ///
+    /// 当 Translation.framework 无法自动识别源语言时，
+    /// 通过字符统计兜底判断语言类型。
+    /// 这不是完美识别，只是给 TranslationSession 提供一个合理的 source hint。
+    private func fallbackSourceLanguage(for text: String) -> Locale.Language? {
+        let scalars = text.unicodeScalars
+
+        let chineseCharacters = scalars.filter {
+            $0.value >= 0x4E00 && $0.value <= 0x9FFF
+        }.count
+
+        let asciiLetters = scalars.filter {
+            CharacterSet.letters.contains($0) && $0.value < 128
+        }.count
+
+        // 中文字符占比 > 1/4 → 中文
+        if chineseCharacters > max(3, text.count / 4) {
+            return Locale.Language(identifier: "zh-Hans")
+        }
+
+        // ASCII 字母 > 10 个 → 英文
+        if asciiLetters > 10 {
+            return Locale.Language(identifier: "en")
+        }
+
+        return nil
     }
 
     // MARK: - UI Components
