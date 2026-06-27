@@ -18,6 +18,7 @@ final class SettingsViewController: NSViewController {
     private let languagePopUp = NSPopUpButton()
     private let appearancePopUp = NSPopUpButton()
     private let aiVisionCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let aiEntranceCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let saveDirectoryLabel = NSTextField(labelWithString: "")
 
     private var pendingHotKey: ScreenshotHotKey?
@@ -61,14 +62,15 @@ extension SettingsViewController {
         let languageSection = makeLanguageSection()
         let appearanceSection = makeAppearanceSection()
         let aiSection = makeAISection()
+        let aiEntranceSection = makeAIEntranceSection()
         let saveSection = makeSaveDirectorySection()
 
-        [titleLabel, descriptionLabel, hotKeySection, languageSection, appearanceSection, aiSection, saveSection]
+        [titleLabel, descriptionLabel, hotKeySection, languageSection, appearanceSection, aiSection, aiEntranceSection, saveSection]
             .forEach(contentStack.addArrangedSubview)
 
         // NSStackView .leading alignment does not stretch arranged subviews;
         // each section container fills the stack width explicitly.
-        for section in [hotKeySection, languageSection, appearanceSection, aiSection, saveSection] {
+        for section in [hotKeySection, languageSection, appearanceSection, aiSection, aiEntranceSection, saveSection] {
             section.snp.makeConstraints { make in
                 make.width.equalTo(contentStack.snp.width).offset(-48)
             }
@@ -87,6 +89,8 @@ extension SettingsViewController {
         appearancePopUp.action = #selector(appearanceChanged)
         aiVisionCheckbox.target = self
         aiVisionCheckbox.action = #selector(aiVisionChanged)
+        aiEntranceCheckbox.target = self
+        aiEntranceCheckbox.action = #selector(aiEntranceChanged)
     }
 
     func reloadValues() {
@@ -106,6 +110,7 @@ extension SettingsViewController {
         appearancePopUp.selectItem(at: AppAppearance.allCases.firstIndex(of: currentAppearance) ?? 0)
 
         aiVisionCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey) ? .on : .off
+        aiEntranceCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey) ? .on : .off
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
 
@@ -140,6 +145,7 @@ extension SettingsViewController {
 
         hotKeyField.placeholderString = AppLocalization.text("settings.hotkey.placeholder")
         aiVisionCheckbox.title = AppLocalization.text("settings.ai.use_vision")
+        aiEntranceCheckbox.title = AppLocalization.text("settings.ai.show_entrances")
 
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
@@ -324,6 +330,34 @@ private extension SettingsViewController {
         return container
     }
 
+    func makeAIEntranceSection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.ai_entrance.section"))
+
+        aiEntranceCheckbox.title = AppLocalization.text("settings.ai.show_entrances")
+
+        let helpLabel = makeSecondaryLabel(AppLocalization.text("settings.ai_entrance.help"))
+
+        container.addSubview(sectionTitle)
+        container.addSubview(aiEntranceCheckbox)
+        container.addSubview(helpLabel)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        aiEntranceCheckbox.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.equalToSuperview()
+        }
+        helpLabel.snp.makeConstraints { make in
+            make.top.equalTo(aiEntranceCheckbox.snp.bottom).offset(4)
+            make.leading.trailing.bottom.equalToSuperview()
+        }
+
+        return container
+    }
+
     func makeSaveDirectorySection() -> NSView {
         let container = NSView()
 
@@ -395,6 +429,13 @@ private extension SettingsViewController {
         UserDefaults.standard.set(
             aiVisionCheckbox.state == .on,
             forKey: AppSettings.aiUseVisionTextExtractionKey
+        )
+    }
+
+    @objc func aiEntranceChanged() {
+        UserDefaults.standard.set(
+            aiEntranceCheckbox.state == .on,
+            forKey: AppSettings.showAIEntrancesKey
         )
     }
 

@@ -95,6 +95,7 @@ enum AppText {
     static var captureSave: String { choose(zhHans: "保存", en: "Save", ja: "保存", ko: "저장", de: "Speichern", fr: "Enregistrer") }
     static var captureCancel: String { choose(zhHans: "取消", en: "Cancel", ja: "キャンセル", ko: "취소", de: "Abbrechen", fr: "Annuler") }
     static var captureOCR: String { choose(zhHans: "OCR", en: "OCR", ja: "OCR", ko: "OCR", de: "OCR", fr: "OCR") }
+    static var captureTranslate: String { choose(zhHans: "翻译", en: "Translate", ja: "翻訳", ko: "번역", de: "Übersetzen", fr: "Traduire") }
     static var captureAI: String { choose(zhHans: "AI", en: "AI", ja: "AI", ko: "AI", de: "KI", fr: "IA") }
     static var captureTextInputPlaceholder: String { choose(zhHans: "输入文字", en: "Enter text", ja: "文字を入力", ko: "텍스트 입력", de: "Text eingeben", fr: "Saisir du texte") }
 

@@ -20,6 +20,7 @@ final class ScrollingCaptureControlPanelContentView: NSView {
 
     private let cancelButton = ToolbarHoverButton()
     private let ocrButton = ToolbarHoverButton()
+    private let translateButton = ToolbarHoverButton()
     private let aiButton = ToolbarHoverButton()
     private let saveButton = ToolbarHoverButton()
     private let copyButton = ToolbarHoverButton()
@@ -28,6 +29,7 @@ final class ScrollingCaptureControlPanelContentView: NSView {
 
     var onCancel: (() -> Void)?
     var onOCR: (() -> Void)?
+    var onTranslate: (() -> Void)?
     var onAISelected: ((AIAnalysisMode) -> Void)?
     var onSave: (() -> Void)?
     var onCopy: (() -> Void)?
@@ -57,18 +59,21 @@ final class ScrollingCaptureControlPanelContentView: NSView {
 
     // MARK: - Public API
 
-    func configure(isOCREnabled: Bool, isAIEnabled: Bool) {
+    func configure(isOCREnabled: Bool, isTranslateEnabled: Bool, isAIEnabled: Bool) {
         ocrButton.isHidden = !isOCREnabled
+        translateButton.isHidden = !isTranslateEnabled
         aiButton.isHidden = !isAIEnabled
         ocrButton.isEnabled = isOCREnabled
+        translateButton.isEnabled = isTranslateEnabled
         aiButton.isEnabled = isAIEnabled
         applyButtonAppearance(ocrButton)
+        applyButtonAppearance(translateButton)
         applyButtonAppearance(aiButton)
     }
 
     /// 当前可见按钮数量（用于计算工具栏宽度）
     var visibleButtonCount: Int {
-        [cancelButton, ocrButton, aiButton, saveButton, copyButton].filter { !$0.isHidden }.count
+        [cancelButton, ocrButton, translateButton, aiButton, saveButton, copyButton].filter { !$0.isHidden }.count
     }
 }
 
@@ -77,6 +82,7 @@ final class ScrollingCaptureControlPanelContentView: NSView {
 private extension ScrollingCaptureControlPanelContentView {
     @objc func handleCancel() { onCancel?() }
     @objc func handleOCR() { onOCR?() }
+    @objc func handleTranslate() { onTranslate?() }
     @objc func handleAI() { presentAIMenu() }
     @objc func handleSave() { onSave?() }
     @objc func handleCopy() { onCopy?() }
@@ -103,6 +109,12 @@ private extension ScrollingCaptureControlPanelContentView {
             toolTip: "OCR",
             action: #selector(handleOCR)
         )
+        configureButton(
+            translateButton,
+            symbolName: "translate",
+            toolTip: AppText.captureTranslate,
+            action: #selector(handleTranslate)
+        )
         configureSVGButton(
             aiButton,
             resourceName: "icon-ai",
@@ -122,7 +134,7 @@ private extension ScrollingCaptureControlPanelContentView {
             action: #selector(handleCopy)
         )
 
-        let buttons = [cancelButton, ocrButton, aiButton, saveButton, copyButton]
+        let buttons = [cancelButton, ocrButton, translateButton, aiButton, saveButton, copyButton]
         stackView.setViews(buttons, in: .leading)
         addSubview(stackView)
 

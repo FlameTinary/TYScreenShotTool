@@ -77,6 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayService.onOCRRequested = { style, annotations in
             sessionService.ocrPendingCapture(style: style, annotations: annotations)
         }
+        overlayService.onTranslateRequested = { style, annotations in
+            sessionService.translatePendingCapture(style: style, annotations: annotations)
+        }
         overlayService.onAIRequested = { mode, style, annotations in
             sessionService.analyzePendingCapture(
                 mode: mode,
@@ -98,6 +101,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         scrollingCapturePanelService.onOCRRequested = {
             sessionService.ocrScrollingCaptureResult()
+        }
+        scrollingCapturePanelService.onTranslateRequested = {
+            sessionService.translateScrollingCaptureResult()
         }
         scrollingCapturePanelService.onAIRequested = { mode in
             sessionService.analyzeScrollingCaptureResult(mode: mode)

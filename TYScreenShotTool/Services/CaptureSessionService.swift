@@ -57,6 +57,8 @@ final class CaptureSessionService {
     private let scrollingCapturePreviewWindowService: ScrollingCapturePreviewWindowService
     private let ocrPreviewWindowService: OCRPreviewWindowService
     private let aiAnalysisPreviewWindowService: AIAnalysisPreviewWindowService
+    private let localTranslationService = LocalTranslationService()
+    private let translationResultPanelService = TranslationResultPanelService()
     private let ciContext = CIContext()
     private var state: CaptureState = .idle
     private var pendingCaptureSource: PendingCaptureSource?
@@ -334,6 +336,74 @@ final class CaptureSessionService {
             }
         }
     }
+    /// 对待截图进行本地翻译（OCR → 本地翻译 → 展示结果）
+    ///
+    /// - Parameters:
+    ///   - style: 截图预览样式
+    ///   - annotations: 截图注释
+    func translatePendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
+        guard state == .selectionCompleted, let pendingCaptureSource else {
+            return
+        }
+
+        Task {
+            do {
+                let selectionRect = pendingCaptureSource.selectionRect
+                let image = try await captureImageForPendingSource(pendingCaptureSource)
+
+                // Step 1: OCR
+                let ocrText = try ocrService.recognizeText(in: image)
+                let trimmedText = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard trimmedText.isEmpty == false else {
+                    await MainActor.run {
+                        translationResultPanelService.presentEmpty(
+                            message: AppLocalization.text("translate.empty_text"),
+                            selectionRect: selectionRect,
+                            onClose: { [weak self] in
+                                self?.translationResultPanelService.dismiss()
+                            }
+                        )
+                    }
+                    return
+                }
+
+                // Step 2: Local translation
+                let result = try await localTranslationService.translate(text: trimmedText)
+
+                // Step 3: Show result
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    translationResultPanelService.present(
+                        sourceText: trimmedText,
+                        translatedText: result.translatedText,
+                        selectionRect: selectionRect,
+                        onCopySource: { [weak self] in
+                            self?.copyTranslationSourceText(trimmedText)
+                        },
+                        onCopyTarget: { [weak self] in
+                            self?.copyTranslationTargetText(result.translatedText)
+                        },
+                        onClose: { [weak self] in
+                            self?.translationResultPanelService.dismiss()
+                        }
+                    )
+                }
+            } catch let error as LocalTranslationService.TranslationError {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    toastService.showToast(message: error.localizedDescription)
+                }
+            } catch {
+                print("Translation failed: \(error.localizedDescription)")
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    toastService.showToast(message: AppLocalization.text("translate.failed"))
+                }
+            }
+        }
+    }
+
     /// 对待截图进行 OCR 识别
     ///
     /// - Parameters:
@@ -606,6 +676,72 @@ final class CaptureSessionService {
         }
     }
 
+    /// 对长截图结果进行本地翻译
+    ///
+    /// 对当前滚动截图结果进行 OCR 识别并本地翻译，展示翻译结果。
+    func translateScrollingCaptureResult() {
+        guard isInScrollingCaptureMode,
+              let image = scrollingCaptureResultImage,
+              let selectionRect = pendingCaptureSource?.selectionRect else {
+            return
+        }
+
+        Task {
+            do {
+                // Step 1: OCR
+                let ocrText = try ocrService.recognizeText(in: image)
+                let trimmedText = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard trimmedText.isEmpty == false else {
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        translationResultPanelService.presentEmpty(
+                            message: AppLocalization.text("translate.empty_text"),
+                            selectionRect: selectionRect,
+                            onClose: { [weak self] in
+                                self?.translationResultPanelService.dismiss()
+                            }
+                        )
+                    }
+                    return
+                }
+
+                // Step 2: Local translation
+                let result = try await localTranslationService.translate(text: trimmedText)
+
+                // Step 3: Show result
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    translationResultPanelService.present(
+                        sourceText: trimmedText,
+                        translatedText: result.translatedText,
+                        selectionRect: selectionRect,
+                        onCopySource: { [weak self] in
+                            self?.copyTranslationSourceText(trimmedText)
+                        },
+                        onCopyTarget: { [weak self] in
+                            self?.copyTranslationTargetText(result.translatedText)
+                        },
+                        onClose: { [weak self] in
+                            self?.translationResultPanelService.dismiss()
+                        }
+                    )
+                }
+            } catch let error as LocalTranslationService.TranslationError {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    toastService.showToast(message: error.localizedDescription)
+                }
+            } catch {
+                print("Translation failed: \(error.localizedDescription)")
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    toastService.showToast(message: AppLocalization.text("translate.failed"))
+                }
+            }
+        }
+    }
+
     func analyzeScrollingCaptureResult(mode: AIAnalysisMode) {
         guard isInScrollingCaptureMode,
               let image = scrollingCaptureResultImage,
@@ -780,6 +916,28 @@ final class CaptureSessionService {
             ocrPreviewWindowService.dismiss()
         } catch {
             toastService.showToast(message: AppText.ocrCopyFailedToast)
+        }
+    }
+
+    @MainActor
+    private func copyTranslationSourceText(_ text: String) {
+        do {
+            try clipboardService.copyText(text)
+            toastService.showToast(message: AppLocalization.text("translate.copied"))
+            translationResultPanelService.dismiss()
+        } catch {
+            toastService.showToast(message: AppLocalization.text("translate.copy_failed"))
+        }
+    }
+
+    @MainActor
+    private func copyTranslationTargetText(_ text: String) {
+        do {
+            try clipboardService.copyText(text)
+            toastService.showToast(message: AppLocalization.text("translate.copied"))
+            translationResultPanelService.dismiss()
+        } catch {
+            toastService.showToast(message: AppLocalization.text("translate.copy_failed"))
         }
     }
 

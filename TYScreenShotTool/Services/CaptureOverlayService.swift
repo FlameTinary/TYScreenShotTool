@@ -29,6 +29,8 @@ final class CaptureOverlayService {
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     /// 请求 OCR 识别时的回调
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    /// 请求翻译时的回调
+    var onTranslateRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     /// 请求 AI 分析时的回调
     var onAIRequested: ((AIAnalysisMode, CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     /// 请求固定截图时的回调
@@ -125,6 +127,9 @@ final class CaptureOverlayService {
             }
             overlayView.onOCRRequested = { [weak self] in
                 self?.onOCRRequested?($0, $1)
+            }
+            overlayView.onTranslateRequested = { [weak self] in
+                self?.onTranslateRequested?($0, $1)
             }
             overlayView.onAIRequested = { [weak self] mode, style, annotations in
                 self?.onAIRequested?(mode, style, annotations)

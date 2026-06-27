@@ -41,4 +41,8 @@ enum AppSettings {
     static let aiAnalysisBaseURLDefaultValue = "https://api.openai.com"
     /// AI 分析模型默认值
     static let aiAnalysisModelDefaultValue = "gpt-5.4-mini"
+    /// 是否显示 AI 功能入口（控制工具栏中的 AI 按钮显示/隐藏）
+    static let showAIEntrancesKey = "settings.showAIEntrances"
+    /// 显示 AI 功能入口默认值（默认关闭，出于合规考虑）
+    static let showAIEntrancesDefaultValue = false
 }

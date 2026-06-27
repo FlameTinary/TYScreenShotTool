@@ -23,6 +23,7 @@ final class CaptureOverlayView: NSView {
     var onCopyRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onSaveRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onTranslateRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onAIRequested: ((AIAnalysisMode, CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
@@ -77,6 +78,7 @@ final class CaptureOverlayView: NSView {
     private let undoButton = ToolbarHoverButton(title: "", target: nil, action: nil)
     private let longCaptureButton = ToolbarHoverButton(title: "", target: nil, action: nil)
     private let ocrButton = ToolbarHoverButton(title: "OCR", target: nil, action: nil)
+    private let translateButton = ToolbarHoverButton(title: "", target: nil, action: nil)
     private let aiButton = ToolbarHoverButton(title: "AI", target: nil, action: nil)
     private let pinButton = ToolbarHoverButton(title: "", target: nil, action: nil)
     private let copyButton = ToolbarHoverButton(title: "", target: nil, action: nil)
@@ -1008,6 +1010,13 @@ final class CaptureOverlayView: NSView {
             toolTip: "OCR",
             action: #selector(requestOCR)
         )
+        configureToolbarButton(
+            translateButton,
+            symbolName: "translate",
+            accessibilityDescription: AppText.captureTranslate,
+            toolTip: AppText.captureTranslate,
+            action: #selector(requestTranslate)
+        )
         configureToolbarSVGButton(
             aiButton,
             resourceName: "icon-ai",
@@ -1047,6 +1056,7 @@ final class CaptureOverlayView: NSView {
         toolbarContainerView.addSubview(undoButton)
         toolbarContainerView.addSubview(longCaptureButton)
         toolbarContainerView.addSubview(ocrButton)
+        toolbarContainerView.addSubview(translateButton)
         toolbarContainerView.addSubview(aiButton)
         toolbarContainerView.addSubview(pinButton)
         toolbarContainerView.addSubview(copyButton)
@@ -1071,6 +1081,8 @@ final class CaptureOverlayView: NSView {
         longCaptureButton.setAccessibilityLabel(AppText.captureLongCapture)
         ocrButton.toolTip = "OCR"
         ocrButton.setAccessibilityLabel("OCR")
+        translateButton.toolTip = AppText.captureTranslate
+        translateButton.setAccessibilityLabel(AppText.captureTranslate)
         aiButton.toolTip = "AI"
         aiButton.setAccessibilityLabel("AI")
         pinButton.toolTip = AppText.capturePin
@@ -1157,24 +1169,33 @@ final class CaptureOverlayView: NSView {
             y: (topBarHeight - shadowToggle.frame.height) / 2
         )
 
+        let showAI = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey)
+        aiButton.isHidden = !showAI
+
         let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }
-        let toolbarButtons = annotationButtons + [
+        var toolbarButtons: [NSButton] = annotationButtons + [
             undoButton,
             longCaptureButton,
             ocrButton,
-            aiButton,
+            translateButton
+        ]
+        if showAI {
+            toolbarButtons.append(aiButton)
+        }
+        toolbarButtons += [
             pinButton,
             copyButton,
             saveButton,
             cancelButton
         ]
+
         annotationButtons.forEach { button in
             button.frame.size = toolbarButtonSize
         }
         [undoButton, pinButton, copyButton, saveButton, cancelButton].forEach { button in
             button.frame.size = toolbarButtonSize
         }
-        [longCaptureButton, ocrButton, aiButton].forEach { button in
+        [longCaptureButton, ocrButton, translateButton, aiButton].forEach { button in
             button.frame.size = toolbarButtonSize
         }
 
@@ -1280,6 +1301,12 @@ final class CaptureOverlayView: NSView {
     private func requestOCR() {
         annotationCanvasView.commitActiveTextIfNeeded()
         onOCRRequested?(previewStyle, annotationCanvasView.annotations)
+    }
+
+    @objc
+    private func requestTranslate() {
+        annotationCanvasView.commitActiveTextIfNeeded()
+        onTranslateRequested?(previewStyle, annotationCanvasView.annotations)
     }
 
     @objc

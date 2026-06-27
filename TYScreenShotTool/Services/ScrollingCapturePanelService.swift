@@ -15,6 +15,7 @@ final class ScrollingCapturePanelService {
     var onSaveRequested: (() -> Void)?
     var onCancelRequested: (() -> Void)?
     var onOCRRequested: (() -> Void)?
+    var onTranslateRequested: (() -> Void)?
     var onAIRequested: ((AIAnalysisMode) -> Void)?
 
     private var panel: ScrollingCapturePanel?
@@ -67,8 +68,10 @@ final class ScrollingCapturePanelService {
         containerView.layer?.cornerRadius = 12
         containerView.layer?.masksToBounds = true
 
+        let showAIEntrances = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey)
         contentView.onCancel = { [weak self] in self?.onCancelRequested?() }
         contentView.onOCR = { [weak self] in self?.onOCRRequested?() }
+        contentView.onTranslate = { [weak self] in self?.onTranslateRequested?() }
         contentView.onAISelected = { [weak self] mode in self?.onAIRequested?(mode) }
         contentView.onSave = { [weak self] in self?.onSaveRequested?() }
         contentView.onCopy = { [weak self] in self?.onCopyRequested?() }
@@ -80,7 +83,8 @@ final class ScrollingCapturePanelService {
         }
         contentView.configure(
             isOCREnabled: onOCRRequested != nil,
-            isAIEnabled: onAIRequested != nil
+            isTranslateEnabled: true,
+            isAIEnabled: showAIEntrances && onAIRequested != nil
         )
 
         setupTooltipPanel()
