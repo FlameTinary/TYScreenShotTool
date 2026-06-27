@@ -21,6 +21,11 @@ final class ScrollingCapturePanelService {
     private let containerView = NSVisualEffectView()
     private let contentView = ScrollingCaptureControlPanelContentView()
 
+    /// 工具栏面板在当前屏幕上的 frame（screen coordinates）
+    var toolbarScreenFrame: CGRect {
+        panel?.frame ?? .zero
+    }
+
     // MARK: - Tooltip
 
     private var tooltipPanel: NSPanel?

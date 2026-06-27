@@ -24,6 +24,15 @@ final class ScrollingCapturePreviewWindowService {
     private let contentView = ScrollingCapturePreviewContentView()
     private(set) var attachmentSide: PreviewPlacementSide?
 
+    // MARK: - 预览窗口尺寸常量
+
+    /// 预览窗口最小宽度
+    private let scrollingPreviewMinWidth: CGFloat = 160
+    /// 预览窗口最大宽度
+    private let scrollingPreviewMaxWidth: CGFloat = 280
+    /// 预览窗口与避让区域之间的间距
+    private let scrollingPreviewSpacing: CGFloat = 12
+
     init() {
         panel.backgroundColor = .clear
         panel.isOpaque = false
@@ -60,14 +69,14 @@ final class ScrollingCapturePreviewWindowService {
         }
     }
 
-    func presentPreparingPreview(selectionRect: CGRect) {
+    func presentPreparingPreview(selectionRect: CGRect, toolbarScreenRect: CGRect = .zero) {
         guard let screen = screenContaining(selectionRect) else {
             dismissPreview()
             return
         }
 
         let placeholderSize = CGSize(width: 240, height: 160)
-        guard let panelFrame = frame(for: selectionRect, on: screen, contentSize: placeholderSize) else {
+        guard let panelFrame = frame(for: selectionRect, on: screen, contentSize: placeholderSize, toolbarScreenRect: toolbarScreenRect) else {
             dismissPreview()
             return
         }
@@ -86,14 +95,14 @@ final class ScrollingCapturePreviewWindowService {
         panel.orderFrontRegardless()
     }
 
-    func presentOrUpdatePreview(image: CGImage, selectionRect: CGRect) {
+    func presentOrUpdatePreview(image: CGImage, selectionRect: CGRect, toolbarScreenRect: CGRect = .zero) {
         guard let screen = screenContaining(selectionRect) else {
             dismissPreview()
             return
         }
 
         let imageSize = CGSize(width: image.width, height: image.height)
-        guard let panelFrame = frame(for: selectionRect, on: screen, contentSize: imageSize) else {
+        guard let panelFrame = frame(for: selectionRect, on: screen, contentSize: imageSize, toolbarScreenRect: toolbarScreenRect) else {
             dismissPreview()
             return
         }
@@ -117,23 +126,68 @@ final class ScrollingCapturePreviewWindowService {
 
     // MARK: - Private
 
-    private func frame(for selectionRect: CGRect, on screen: NSScreen, contentSize: CGSize) -> CGRect? {
+    private func frame(
+        for selectionRect: CGRect,
+        on screen: NSScreen,
+        contentSize: CGSize,
+        toolbarScreenRect: CGRect
+    ) -> CGRect? {
         let visibleFrame = screen.visibleFrame
         let outerMargin: CGFloat = 24
-        let gap: CGFloat = 20
-        let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
-        let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
-        let placeOnLeft = leftAvailableWidth >= rightAvailableWidth
-        let chosenAvailableWidth = max(placeOnLeft ? leftAvailableWidth : rightAvailableWidth, 0)
-        let availableWidth = max(chosenAvailableWidth - outerMargin, 0)
+
+        // 计算避让区域：selectionRect 和工具栏的合并区域，加入安全间距
+        let occupiedRect = selectionRect.union(toolbarScreenRect)
+        let avoidRect = occupiedRect.insetBy(
+            dx: -scrollingPreviewSpacing,
+            dy: -scrollingPreviewSpacing
+        )
+
+        // 计算左右可用空间
+        let leftAvailableWidth = avoidRect.minX - visibleFrame.minX
+        let rightAvailableWidth = visibleFrame.maxX - avoidRect.maxX
+
+        let canPlaceLeft = leftAvailableWidth >= scrollingPreviewMinWidth
+        let canPlaceRight = rightAvailableWidth >= scrollingPreviewMinWidth
+
+        let placeOnRight: Bool
+        let selectedAvailableWidth: CGFloat
+
+        if canPlaceLeft && canPlaceRight {
+            // 两侧都能放，选择空间更大的一侧
+            placeOnRight = rightAvailableWidth >= leftAvailableWidth
+            selectedAvailableWidth = placeOnRight ? rightAvailableWidth : leftAvailableWidth
+        } else if canPlaceRight {
+            // 只有右侧能放
+            placeOnRight = true
+            selectedAvailableWidth = rightAvailableWidth
+        } else if canPlaceLeft {
+            // 只有左侧能放
+            placeOnRight = false
+            selectedAvailableWidth = leftAvailableWidth
+        } else {
+            // 左右都放不下最小宽度，选择空间更大的一侧，使用最小宽度
+            placeOnRight = rightAvailableWidth >= leftAvailableWidth
+            selectedAvailableWidth = max(leftAvailableWidth, rightAvailableWidth)
+        }
+
+        // 计算目标宽度
+        let targetWidth: CGFloat
+        if selectedAvailableWidth >= scrollingPreviewMinWidth {
+            targetWidth = min(scrollingPreviewMaxWidth, selectedAvailableWidth)
+        } else {
+            targetWidth = scrollingPreviewMinWidth
+        }
+
+        // 可用高度
         let availableHeight = max(visibleFrame.height - outerMargin * 2, 0)
 
-        guard availableWidth >= 140, availableHeight >= 140 else {
+        guard targetWidth >= 140, availableHeight >= 140 else {
             return nil
         }
 
+        // 等比例缩放内容以适应目标尺寸
         let scale = min(
-            availableWidth / max(contentSize.width, 1),
+            targetWidth / max(contentSize.width, 1),
             availableHeight / max(contentSize.height, 1),
             1
         )
@@ -142,19 +196,17 @@ final class ScrollingCapturePreviewWindowService {
             height: max(140, floor(contentSize.height * scale))
         )
 
+        // 计算 X 坐标
         let panelX: CGFloat
-        if placeOnLeft {
-            panelX = max(
-                visibleFrame.minX + outerMargin,
-                selectionRect.minX - gap - panelSize.width
-            )
+        if placeOnRight {
+            let desiredX = avoidRect.maxX + scrollingPreviewSpacing
+            panelX = min(desiredX, visibleFrame.maxX - outerMargin - panelSize.width)
         } else {
-            panelX = min(
-                visibleFrame.maxX - outerMargin - panelSize.width,
-                selectionRect.maxX + gap
-            )
+            let desiredX = avoidRect.minX - scrollingPreviewSpacing - panelSize.width
+            panelX = max(desiredX, visibleFrame.minX + outerMargin)
         }
 
+        // Y 坐标基于 selectionRect 垂直居中（沿用现有规则）
         let panelY = min(
             max(selectionRect.midY - panelSize.height / 2, visibleFrame.minY + outerMargin),
             visibleFrame.maxY - outerMargin - panelSize.height

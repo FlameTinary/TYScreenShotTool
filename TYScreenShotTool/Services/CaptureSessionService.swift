@@ -462,7 +462,10 @@ final class CaptureSessionService {
         } else if let screen = NSScreen.main ?? NSScreen.screens.first {
             scrollingCapturePanelService.presentCapturePanel(selectionRect: pendingSelectionRect, on: screen)
         }
-        scrollingCapturePreviewWindowService.presentPreparingPreview(selectionRect: pendingSelectionRect)
+        scrollingCapturePreviewWindowService.presentPreparingPreview(
+            selectionRect: pendingSelectionRect,
+            toolbarScreenRect: scrollingCapturePanelService.toolbarScreenFrame
+        )
         pendingScreenImages.removeAll()
         reactivateSourceApplicationForScrolling()
 
@@ -1498,7 +1501,11 @@ final class CaptureSessionService {
         scrollingCaptureResultRevision &+= 1
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.dismiss()
-        scrollingCapturePreviewWindowService.presentOrUpdatePreview(image: image, selectionRect: selectionRect)
+        scrollingCapturePreviewWindowService.presentOrUpdatePreview(
+            image: image,
+            selectionRect: selectionRect,
+            toolbarScreenRect: scrollingCapturePanelService.toolbarScreenFrame
+        )
     }
 
     private func exportedImage(
