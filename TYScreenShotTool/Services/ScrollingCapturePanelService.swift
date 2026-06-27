@@ -68,7 +68,7 @@ final class ScrollingCapturePanelService {
         containerView.layer?.cornerRadius = 12
         containerView.layer?.masksToBounds = true
 
-        let showAIEntrances = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey)
+        let showAIEntrances = AppSettings.effectiveShowAIEntrances
         contentView.onCancel = { [weak self] in self?.onCancelRequested?() }
         contentView.onOCR = { [weak self] in self?.onOCRRequested?() }
         contentView.onTranslate = { [weak self] in self?.onTranslateRequested?() }

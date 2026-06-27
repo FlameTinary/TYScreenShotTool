@@ -1169,7 +1169,7 @@ final class CaptureOverlayView: NSView {
             y: (topBarHeight - shadowToggle.frame.height) / 2
         )
 
-        let showAI = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey)
+        let showAI = AppSettings.effectiveShowAIEntrances
         aiButton.isHidden = !showAI
 
         let annotationButtons = AnnotationTool.allCases.compactMap { annotationToolButtons[$0] }

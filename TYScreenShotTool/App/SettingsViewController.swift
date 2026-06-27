@@ -18,7 +18,9 @@ final class SettingsViewController: NSViewController {
     private let languagePopUp = NSPopUpButton()
     private let appearancePopUp = NSPopUpButton()
     private let aiVisionCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    #if DEBUG
     private let aiEntranceCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    #endif
     private let saveDirectoryLabel = NSTextField(labelWithString: "")
 
     private var pendingHotKey: ScreenshotHotKey?
@@ -62,15 +64,31 @@ extension SettingsViewController {
         let languageSection = makeLanguageSection()
         let appearanceSection = makeAppearanceSection()
         let aiSection = makeAISection()
+        #if DEBUG
         let aiEntranceSection = makeAIEntranceSection()
+        #endif
         let saveSection = makeSaveDirectorySection()
 
-        [titleLabel, descriptionLabel, hotKeySection, languageSection, appearanceSection, aiSection, aiEntranceSection, saveSection]
-            .forEach(contentStack.addArrangedSubview)
+        var contentSections: [NSView] = [
+            titleLabel, descriptionLabel, hotKeySection, languageSection,
+            appearanceSection, aiSection
+        ]
+        #if DEBUG
+        contentSections.append(aiEntranceSection)
+        #endif
+        contentSections.append(saveSection)
+        contentSections.forEach(contentStack.addArrangedSubview)
 
         // NSStackView .leading alignment does not stretch arranged subviews;
         // each section container fills the stack width explicitly.
-        for section in [hotKeySection, languageSection, appearanceSection, aiSection, aiEntranceSection, saveSection] {
+        var widthSections: [NSView] = [
+            hotKeySection, languageSection, appearanceSection, aiSection
+        ]
+        #if DEBUG
+        widthSections.append(aiEntranceSection)
+        #endif
+        widthSections.append(saveSection)
+        for section in widthSections {
             section.snp.makeConstraints { make in
                 make.width.equalTo(contentStack.snp.width).offset(-48)
             }
@@ -89,8 +107,10 @@ extension SettingsViewController {
         appearancePopUp.action = #selector(appearanceChanged)
         aiVisionCheckbox.target = self
         aiVisionCheckbox.action = #selector(aiVisionChanged)
+        #if DEBUG
         aiEntranceCheckbox.target = self
         aiEntranceCheckbox.action = #selector(aiEntranceChanged)
+        #endif
     }
 
     func reloadValues() {
@@ -110,7 +130,9 @@ extension SettingsViewController {
         appearancePopUp.selectItem(at: AppAppearance.allCases.firstIndex(of: currentAppearance) ?? 0)
 
         aiVisionCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey) ? .on : .off
+        #if DEBUG
         aiEntranceCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey) ? .on : .off
+        #endif
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
 
@@ -145,7 +167,9 @@ extension SettingsViewController {
 
         hotKeyField.placeholderString = AppLocalization.text("settings.hotkey.placeholder")
         aiVisionCheckbox.title = AppLocalization.text("settings.ai.use_vision")
+        #if DEBUG
         aiEntranceCheckbox.title = AppLocalization.text("settings.ai.show_entrances")
+        #endif
 
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
@@ -330,6 +354,7 @@ private extension SettingsViewController {
         return container
     }
 
+    #if DEBUG
     func makeAIEntranceSection() -> NSView {
         let container = NSView()
 
@@ -357,6 +382,7 @@ private extension SettingsViewController {
 
         return container
     }
+    #endif
 
     func makeSaveDirectorySection() -> NSView {
         let container = NSView()
@@ -432,12 +458,14 @@ private extension SettingsViewController {
         )
     }
 
+    #if DEBUG
     @objc func aiEntranceChanged() {
         UserDefaults.standard.set(
             aiEntranceCheckbox.state == .on,
             forKey: AppSettings.showAIEntrancesKey
         )
     }
+    #endif
 
     @objc func handleChooseSaveDirectory() { chooseSaveDirectory() }
     @objc func handleClearSaveDirectory() { clearSaveDirectory() }
