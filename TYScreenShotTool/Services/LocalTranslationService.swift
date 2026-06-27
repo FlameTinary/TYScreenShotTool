@@ -24,6 +24,37 @@ final class LocalTranslationService {
         return chineseCharacters > max(3, text.count / 4)
     }
 
+    /// 兜底检测源语言
+    ///
+    /// 当 Translation.framework 无法自动识别源语言时，
+    /// 通过字符统计兜底判断语言类型。
+    /// 这不是完美识别，只是给 TranslationSession 提供一个合理的 source hint。
+    /// - Parameter text: 待翻译的文本
+    /// - Returns: 检测到的语言，无法判断时返回 nil
+    static func fallbackSourceLanguage(for text: String) -> Locale.Language? {
+        let scalars = text.unicodeScalars
+
+        let chineseCharacters = scalars.filter {
+            $0.value >= 0x4E00 && $0.value <= 0x9FFF
+        }.count
+
+        let asciiLetters = scalars.filter {
+            CharacterSet.letters.contains($0) && $0.value < 128
+        }.count
+
+        // 中文字符占比 > 1/4 → 中文
+        if chineseCharacters > max(3, text.count / 4) {
+            return Locale.Language(identifier: "zh-Hans")
+        }
+
+        // ASCII 字母 > 10 个 → 英文
+        if asciiLetters > 10 {
+            return Locale.Language(identifier: "en")
+        }
+
+        return nil
+    }
+
     /// 将本地翻译框架的错误转换为用户友好的提示文案
     /// - Parameter error: 翻译框架抛出的错误
     /// - Returns: 用户友好的错误消息
