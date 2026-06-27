@@ -17,7 +17,9 @@ final class SettingsViewController: NSViewController {
     private let hotKeyErrorLabel = NSTextField(labelWithString: "")
     private let languagePopUp = NSPopUpButton()
     private let appearancePopUp = NSPopUpButton()
+    #if DEBUG
     private let aiVisionCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    #endif
     #if DEBUG
     private let aiEntranceCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     #endif
@@ -63,7 +65,9 @@ extension SettingsViewController {
         let hotKeySection = makeHotKeySection()
         let languageSection = makeLanguageSection()
         let appearanceSection = makeAppearanceSection()
+        #if DEBUG
         let aiSection = makeAISection()
+        #endif
         #if DEBUG
         let aiEntranceSection = makeAIEntranceSection()
         #endif
@@ -71,9 +75,10 @@ extension SettingsViewController {
 
         var contentSections: [NSView] = [
             titleLabel, descriptionLabel, hotKeySection, languageSection,
-            appearanceSection, aiSection
+            appearanceSection
         ]
         #if DEBUG
+        contentSections.append(aiSection)
         contentSections.append(aiEntranceSection)
         #endif
         contentSections.append(saveSection)
@@ -82,9 +87,10 @@ extension SettingsViewController {
         // NSStackView .leading alignment does not stretch arranged subviews;
         // each section container fills the stack width explicitly.
         var widthSections: [NSView] = [
-            hotKeySection, languageSection, appearanceSection, aiSection
+            hotKeySection, languageSection, appearanceSection
         ]
         #if DEBUG
+        widthSections.append(aiSection)
         widthSections.append(aiEntranceSection)
         #endif
         widthSections.append(saveSection)
@@ -105,8 +111,10 @@ extension SettingsViewController {
         languagePopUp.action = #selector(languageChanged)
         appearancePopUp.target = self
         appearancePopUp.action = #selector(appearanceChanged)
+        #if DEBUG
         aiVisionCheckbox.target = self
         aiVisionCheckbox.action = #selector(aiVisionChanged)
+        #endif
         #if DEBUG
         aiEntranceCheckbox.target = self
         aiEntranceCheckbox.action = #selector(aiEntranceChanged)
@@ -129,7 +137,9 @@ extension SettingsViewController {
             ?? AppSettings.appAppearanceDefaultValue) ?? .system
         appearancePopUp.selectItem(at: AppAppearance.allCases.firstIndex(of: currentAppearance) ?? 0)
 
+        #if DEBUG
         aiVisionCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey) ? .on : .off
+        #endif
         #if DEBUG
         aiEntranceCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey) ? .on : .off
         #endif
@@ -166,7 +176,9 @@ extension SettingsViewController {
         appearancePopUp.selectItem(at: AppAppearance.allCases.firstIndex(of: currentAppearance) ?? 0)
 
         hotKeyField.placeholderString = AppLocalization.text("settings.hotkey.placeholder")
+        #if DEBUG
         aiVisionCheckbox.title = AppLocalization.text("settings.ai.use_vision")
+        #endif
         #if DEBUG
         aiEntranceCheckbox.title = AppLocalization.text("settings.ai.show_entrances")
         #endif
@@ -326,6 +338,7 @@ private extension SettingsViewController {
         return container
     }
 
+    #if DEBUG
     func makeAISection() -> NSView {
         let container = NSView()
 
@@ -353,6 +366,7 @@ private extension SettingsViewController {
 
         return container
     }
+    #endif
 
     #if DEBUG
     func makeAIEntranceSection() -> NSView {
@@ -451,12 +465,14 @@ private extension SettingsViewController {
         AppThemeCoordinator.shared.applyCurrentAppearance()
     }
 
+    #if DEBUG
     @objc func aiVisionChanged() {
         UserDefaults.standard.set(
             aiVisionCheckbox.state == .on,
             forKey: AppSettings.aiUseVisionTextExtractionKey
         )
     }
+    #endif
 
     #if DEBUG
     @objc func aiEntranceChanged() {
