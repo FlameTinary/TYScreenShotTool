@@ -150,8 +150,10 @@ final class TranslationResultPanelService {
     }
 
     func dismiss() {
-        panel.orderOut(nil)
+        print("[LocalTranslation] translation window will close")
+        panel.close()
         hostingController = nil
+        print("[LocalTranslation] translation window closed")
     }
 
     // MARK: - Private
@@ -315,6 +317,9 @@ struct TranslationResultSwiftUIView: View {
                 target: target
             )
             print("[LocalTranslation] configuration created")
+        }
+        .onDisappear {
+            print("[LocalTranslation] translation view disappeared")
         }
     }
 

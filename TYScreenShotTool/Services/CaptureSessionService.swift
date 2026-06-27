@@ -841,6 +841,8 @@ final class CaptureSessionService {
     }
 
     private func clearPendingCapture() {
+        print("[CaptureSession] closing translation window because screenshot session ended")
+        translationResultPanelService.dismiss()
         pendingCaptureSource = nil
         pendingAIAnalysisMode = nil
         pendingScreenImages.removeAll()
