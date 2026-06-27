@@ -186,8 +186,10 @@ AI解释错误
 * Swift 6
 * AppKit
 * SnapKit
+* SwiftUI
 * ScreenCaptureKit
 * Vision
+* Translation
 * UserNotifications
 
 ---
@@ -242,12 +244,7 @@ ARCHIVE_PATH=/your/path/TShot.xcarchive ./scripts/archive.sh
 自动测试：
 
 ```bash
-xcodebuild \
-  -project TYScreenShotTool.xcodeproj \
-  -scheme TYScreenShotTool \
-  -configuration Debug \
-  -derivedDataPath DerivedDataTests \
-  test
+./scripts/test.sh
 ```
 
 测试说明见：
@@ -290,14 +287,19 @@ v1.0.0 后续迭代中，Sprint 46「测试补齐」已完成
 
 - 悬停窗口 -> 点击确认
 - 或直接拖拽自由框选
-- 进入截图编辑态后执行复制 / 保存 / OCR / AI / Pin / 长截图 / 取消
+- 进入截图编辑态后执行复制 / 保存 / OCR / 翻译 / AI / Pin / 长截图 / 取消
 - 普通截图与长截图共用 OCR / AI 结果窗口能力
+- 普通截图与长截图都支持独立「翻译」入口，使用本地 OCR + Apple Translation 框架，不调用 AI 服务
+- AI 入口默认隐藏，可在 Settings 中打开
 - 当前主要业务 UI 现状以 AppKit 实现，布局常用 SnapKit
 - 后续开发默认推荐 AppKit + SnapKit，但不限制只能使用这一组合；若评估 SwiftUI 或手动 frame 更合适，也可按场景选用
 - 普通截图编辑态已支持矩形、圆形、直线、箭头、画笔、文字、马赛克
-- 圆形、直线、箭头、画笔、马赛克已支持属性面板、选中回显与继续修改
+- 圆形、直线、箭头、画笔、马赛克已支持属性面板、选中回显、控制节点与继续修改
+- 文字标注支持悬停、选中移动、编辑输入与动态边框
+- 普通截图与长截图工具栏已切换为图标按钮并支持 Hover Tooltip
+- 长截图预览窗口会同时避让截图选区与工具栏区域
 - 标注预览与复制 / 保存结果保持一致
-- 项目已具备 `XCTest` 单元测试基座，首批 `96` 个自动测试已接入
+- 项目已具备 `XCTest` 单元测试基座，并已接入本地翻译等纯逻辑测试
 
 流程：
 
@@ -325,7 +327,7 @@ v1.0.0 后续迭代中，Sprint 46「测试补齐」已完成
 
 ↓
 
-用户主动选择复制 / 保存 / OCR / AI / Pin / 长截图 / 取消
+用户主动选择复制 / 保存 / OCR / 翻译 / AI / Pin / 长截图 / 取消
 
 ↓
 
@@ -335,8 +337,11 @@ v1.0.0 后续迭代中，Sprint 46「测试补齐」已完成
 
 ## 隐藏 AI 配置
 
-当前版本的 `AI 分析` 不提供设置页入口，
-而是通过本地隐藏配置读取 `API Key`、`Base URL` 与模型名。
+当前版本默认隐藏 `AI` 入口，可在 Settings 中打开显示。
+
+`AI 分析` 的请求参数仍通过本地隐藏配置读取 `API Key`、`Base URL` 与模型名。
+
+普通「翻译」按钮不属于 AI 链路。它默认显示，复用 OCR 识别截图文字，并使用 Apple Translation 框架执行本地翻译。
 
 可选配置 `Base URL`：
 

@@ -11,6 +11,7 @@ Sprint 46 起，仓库内已具备正式的单元测试 target：
 - 优先覆盖纯逻辑
 - 优先覆盖配置解析
 - 优先覆盖枚举映射
+- 优先覆盖不依赖系统权限、窗口交互或网络请求的辅助逻辑
 - 不依赖窗口交互、系统权限、截图设备或 AI 网络环境
 
 ---
@@ -20,12 +21,7 @@ Sprint 46 起，仓库内已具备正式的单元测试 target：
 运行全部单元测试：
 
 ```bash
-xcodebuild \
-  -project TYScreenShotTool.xcodeproj \
-  -scheme TYScreenShotTool \
-  -configuration Debug \
-  -derivedDataPath DerivedDataTests \
-  test
+./scripts/test.sh
 ```
 
 如需先清理测试构建产物，可执行：
@@ -35,13 +31,15 @@ rm -rf DerivedDataTests
 ```
 
 当前项目保留 `./scripts/build.sh` 作为构建命令；
-自动测试暂未单独封装为脚本，默认直接使用上面的 `xcodebuild test` 命令。
+自动测试默认使用 `./scripts/test.sh`。
 
 ---
 
 ## 当前覆盖范围
 
-Sprint 46 首批自动测试覆盖：
+自动测试覆盖范围从 Sprint 46 的首批测试基座持续扩展。
+
+当前主要覆盖：
 
 - `ScreenshotHotKey`
   - 默认值
@@ -74,10 +72,12 @@ Sprint 46 首批自动测试覆盖：
   - `storageValue`
   - `nsAppearance`
   - 枚举集合
+- `LocalTranslationService`
+  - 中文文本启发式判断
+  - 翻译源语言兜底判断
+  - 本地翻译错误提示映射
 
-当前测试总数：
-
-- `96` 个测试用例
+测试用例总数会随分支持续增长，以 `./scripts/test.sh` 实际输出为准。
 
 ---
 
@@ -88,6 +88,7 @@ Sprint 46 首批自动测试覆盖：
 - `ScreenCaptureKit` 截图链路
 - `Vision` OCR 真识别结果
 - AI 请求链路与网络错误语义
+- Apple Translation 框架真实翻译结果与语言包下载流程
 - 菜单栏交互
 - Settings 页面 AppKit 控件交互
 - Overlay / 标注画布交互

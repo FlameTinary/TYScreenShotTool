@@ -28,7 +28,7 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 1. 这是一个菜单栏常驻的 macOS 截图工具。
 2. 截图不是终点，目标是把“截图后处理”收拢到一条连续工作流里。
 3. 当前主要 UI 基线默认推荐 `AppKit + SnapKit`，但后续开发不强制限定为这一组合。
-4. 项目已有正式自动测试基座，但自动测试仍以纯逻辑和配置解析为主。
+4. 当前普通截图与长截图都已有独立「翻译」入口，默认优先走本地 OCR + 系统本地翻译链路。
 5. 文档很多，真正的当前权威入口是 `AGENTS.md`、`PROJECT_CONTEXT.md`、`README.md`、`docs/ROADMAP.md` 和当前 Sprint 文档。
 
 ---
@@ -65,8 +65,10 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 - `Swift 6`
 - `AppKit`
 - `SnapKit`
+- `SwiftUI`
 - `ScreenCaptureKit`
 - `Vision`
+- `Translation`
 - `UserNotifications`
 - `XCTest`
 
@@ -78,6 +80,7 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 - App 以 `NSApplication.setActivationPolicy(.accessory)` 方式运行
 - 菜单栏入口由 `NSStatusItem` 驱动
 - Settings、OCR/AI 结果窗、长截图控制面板、长截图预览窗均为 AppKit 实现
+- 本地翻译结果面板使用 AppKit `NSPanel` 承载 SwiftUI 翻译视图
 
 后续开发默认推荐继续使用 `AppKit + SnapKit`，但这不是强限制。
 如果评估后 `SwiftUI` 或手动 `frame` 更适合具体场景，也可以按场景选择。
@@ -129,7 +132,7 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 
 ↓
 
-复制 / 保存 / OCR / AI / Pin / 长截图 / 取消
+复制 / 保存 / OCR / 翻译 / AI / Pin / 长截图 / 取消
 
 ### 长截图流程
 
@@ -153,7 +156,7 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 
 ↓
 
-复制 / 保存 / OCR / AI / 取消
+复制 / 保存 / OCR / 翻译 / AI / 取消
 
 ---
 
@@ -168,16 +171,20 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 - 截图开始即冻结屏幕内容
 - 截图完成后进入编辑态，而不是立刻结束
 - 编辑态支持复制、保存、取消
-- 编辑态支持 OCR、AI、Pin、长截图入口
+- 编辑态支持 OCR、翻译、AI、Pin、长截图入口
 - 支持截图区域拖动与缩放微调
 - 支持圆角、阴影等预览样式
 - 支持矩形、圆形、直线、箭头、画笔、文字、马赛克标注
-- 多类标注支持属性面板、选中回显和继续修改
+- 多类标注支持属性面板、选中回显、控制节点和继续修改
+- 文字标注支持悬停、选中移动、编辑输入与动态边框
 - 标注预览与最终复制/保存导出结果保持一致
 - 支持 OCR 结果预览
+- 支持本地翻译结果预览，支持复制原文与译文
 - 支持 AI 结果预览
 - 支持 Pin 悬浮截图窗口
-- 支持滚动长截图，以及长截图后的复制、保存、OCR、AI
+- 支持滚动长截图，以及长截图后的复制、保存、OCR、翻译、AI
+- 普通截图与长截图工具栏已使用图标按钮与 Hover Tooltip
+- 长截图预览窗口会同时避让选区与工具栏区域
 - 支持多语言本地化
 - 支持应用外观切换
 - 已建立最小 `XCTest` 单元测试基座
@@ -188,7 +195,9 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 
 ### 1. AI 能力属于隐藏配置能力
 
-当前 `AI 分析` 没有公开的 Settings 配置入口。
+当前 `AI` 入口默认隐藏，可在 Settings 中通过开关控制显示。
+
+AI 请求配置仍然不提供完整的公开设置页入口。
 
 它依赖本地 `defaults write` 写入隐藏配置：
 
@@ -204,17 +213,29 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 - AI 行为依赖本地开发/使用者自行配置
 - AI 链路要特别注意失败回退、无结果语义和人工验证
 
-### 2. 命名历史存在 `TShot / SmartShot` 并存记录
+### 2. 本地翻译不属于 AI 链路
+
+当前「翻译」按钮是独立工具栏入口，默认显示。
+
+本地翻译链路：
+
+- 复用已有 OCR 服务识别截图文字
+- 使用 Apple `Translation` 框架执行本地翻译
+- 使用独立翻译结果面板展示原文与译文
+- 支持复制原文和复制译文
+- 不调用 AI 服务，不依赖隐藏 AI 配置
+
+### 3. 命名历史存在 `TShot / SmartShot` 并存记录
 
 历史文档中，Sprint 19 曾将面向用户名称调整为 `SmartShot`。
 但当前工程配置、Scheme、`PRODUCT_NAME`、`CFBundleDisplayName`、`PRODUCT_BUNDLE_IDENTIFIER`、`Localizable.xcstrings`、README 和 App Store 文案都仍以 `TShot` / `com.sheldon.TShot` 为当前事实。
 
 因此后续协作时应以“当前工程实际配置”为准，而不是只参考单个 Sprint 历史记录。
 
-### 3. 隐私文档与实验性 AI 能力要分开理解
+### 4. 隐私文档、AI 能力与本地翻译要分开理解
 
 `docs/privacy-policy.md` 主要描述当前上架与默认能力下的隐私声明。
-而 `README.md` 同时记录了实验性隐藏 AI 配置。
+而 `README.md` 同时记录了实验性隐藏 AI 配置与本地翻译能力。
 
 如果后续继续增强 AI 能力，必须同步重新审视：
 
@@ -243,10 +264,16 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
   - 长截图控制面板
 - `TYScreenShotTool/Services/OCRService.swift`
   - OCR 链路
+- `TYScreenShotTool/Services/LocalTranslationService.swift`
+  - 本地翻译辅助能力，包括语言兜底判断与错误提示映射
+- `TYScreenShotTool/Services/TranslationResultPanelService.swift`
+  - 本地翻译结果窗口，使用 AppKit 面板承载 SwiftUI 翻译视图
 - `TYScreenShotTool/Services/AIAnalysisService.swift`
   - AI 文本分析链路
 - `TYScreenShotTool/Services/AIImageTextExtractionService.swift`
   - AI 视觉取字链路
+- `TYScreenShotTool/Features/CaptureOverlay/ToolbarHoverButton.swift`
+  - 普通截图与长截图工具栏 hover 反馈按钮
 - `TYScreenShotTool/Shared/AppLocalization.swift`
   - 当前语言解析与本地化入口
 - `TYScreenShotTool/Shared/AppThemeCoordinator.swift`
@@ -273,6 +300,7 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 - 本地化语言解析
 - 设置常量
 - 外观模型
+- 本地翻译辅助逻辑与错误提示映射
 - 部分共享模型与纯逻辑视图行为
 
 当前自动测试不应被误解为已经覆盖完整产品主链路。
@@ -280,6 +308,7 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 
 - ScreenCaptureKit 截图链路
 - OCR 真识别结果
+- Apple Translation 框架真实翻译结果与语言包下载行为
 - AI 请求与错误语义
 - 菜单栏交互
 - Settings AppKit 控件交互
