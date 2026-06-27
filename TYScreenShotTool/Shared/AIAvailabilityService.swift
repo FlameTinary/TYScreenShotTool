@@ -21,4 +21,8 @@ struct AIAvailabilityService {
     var isServerAIAllowed: Bool {
         regionPolicy.isServerAPIAllowed
     }
+
+    var isDeveloperLocalAIConfigAllowed: Bool {
+        regionPolicy.isCommercialAIAllowed && regionPolicy.isServerAPIAllowed
+    }
 }

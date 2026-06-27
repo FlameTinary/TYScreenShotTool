@@ -462,6 +462,14 @@ created_at
 - 开发者隐藏配置不改变商业 AI 可用性
 - README 与 PROJECT_CONTEXT 对 AI 能力边界说明一致
 
+实现记录：
+
+- `local.aiAnalysis.*` 已明确为 Debug / 开发者 / 内部验证能力
+- `AIAnalysisService` 与 `AIImageTextExtractionService` 在读取 API Key、构造请求和发起网络前先经过 `AIAvailabilityService`
+- `CHN` 与 unknown / nil storefront 下，即使存在本地 API Key，也会本地拦截，不触发商业 AI 网络请求
+- 非 `CHN` 策略下允许进入现有开发者 API Key 校验，但仍不代表正式 AI Pro 订阅链路
+- Settings Debug 文案、README 与 PROJECT_CONTEXT 已同步区域策略边界
+
 ### Feature 53.3：海外 AI Pro 壳层
 
 目标：

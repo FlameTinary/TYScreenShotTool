@@ -55,12 +55,18 @@ struct AIAnalysisResult {
 final class AIAnalysisService {
     private let session: URLSession
     private let userDefaults: UserDefaults
+    private let aiAvailabilityService: AIAvailabilityService
 
     init(
         session: URLSession = .shared,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        aiAvailabilityService: AIAvailabilityService = AIAvailabilityService()
     ) {
         self.session = session
+        self.userDefaults = userDefaults
+        self.aiAvailabilityService = aiAvailabilityService
+    }
+
     /// 分析文本内容
     ///
     /// - Parameters:
@@ -68,15 +74,13 @@ final class AIAnalysisService {
     ///   - mode: 分析模式
     /// - Returns: 分析结果
     /// - Throws: 分析失败时抛出错误
-        self.userDefaults = userDefaults
-    }
-
     func analyze(text: String, mode: AIAnalysisMode) async throws -> AIAnalysisResult {
         let normalized = normalizeOCRText(text)
         guard normalized.isEmpty == false else {
             throw AIAnalysisError.emptyInput
         }
 
+        try ensureDeveloperLocalAIConfigAllowed()
         let apiKey = try resolvedAPIKey()
         let prompt = buildPrompt(for: mode, text: normalized)
         let request = try makeRequest(apiKey: apiKey, prompt: prompt, mode: mode)
@@ -132,6 +136,12 @@ final class AIAnalysisService {
         return cleanedLines
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func ensureDeveloperLocalAIConfigAllowed() throws {
+        guard aiAvailabilityService.isDeveloperLocalAIConfigAllowed else {
+            throw AIAnalysisError.requestFailed(AppText.aiRegionPolicyBlocked)
+        }
     }
 
     private func resolvedAPIKey() throws -> String {

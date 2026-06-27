@@ -130,37 +130,37 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wenn aktiviert, werden KI-Funktionen wie KI-Analyse usw. in der Screenshot-Symbolleiste angezeigt. Bei Deaktivierung werden nur lokale Funktionen angezeigt."
+            "value" : "Debug-only: shows developer AI entries when the region policy allows it. Local hidden config cannot bypass region policy."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When enabled, AI analysis and other AI features will be shown in the screenshot toolbar. When disabled, only local features are shown."
+            "value" : "Debug-only: shows developer AI entries when the region policy allows it. Local hidden config cannot bypass region policy."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lorsqu’elle est activée, les fonctions IA (analyse IA, etc.) apparaissent dans la barre d’outils de capture. Lorsqu’elle est désactivée, seules les fonctions locales sont affichées."
+            "value" : "Debug-only: shows developer AI entries when the region policy allows it. Local hidden config cannot bypass region policy."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "オンにすると、スクリーンショットツールバーに AI 分析などの AI 機能が表示されます。オフにすると、ローカル機能のみが表示されます。"
+            "value" : "Debug-only: shows developer AI entries when the region policy allows it. Local hidden config cannot bypass region policy."
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "켜면 스크린샷 도구 모음에 AI 분석 등 AI 기능이 표시됩니다. 끄면 로컬 기능만 표시됩니다."
+            "value" : "Debug-only: shows developer AI entries when the region policy allows it. Local hidden config cannot bypass region policy."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开启后，会在截图工具栏中显示 AI 分析等入口。关闭后，仅显示本地功能。"
+            "value" : "仅 Debug：区域策略允许时显示开发者 AI 入口。本地隐藏配置不能绕过区域策略。"
           }
         }
       }
@@ -171,37 +171,37 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "KI-Eingang"
+            "value" : "Developer AI Entry"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI Entry"
+            "value" : "Developer AI Entry"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Entrée IA"
+            "value" : "Developer AI Entry"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI エントリ"
+            "value" : "Developer AI Entry"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 진입"
+            "value" : "Developer AI Entry"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 入口"
+            "value" : "开发者 AI 入口"
           }
         }
       }
@@ -212,37 +212,37 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aus: lokales OCR. Ein: AI erkennt zuerst Text aus dem Screenshot und analysiert ihn dann."
+            "value" : "Debug-only developer validation. When off, local OCR is used. When on, AI vision extraction still requires region policy permission."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "When off, local OCR is used. When on, AI extracts text from the screenshot before analysis."
+            "value" : "Debug-only developer validation. When off, local OCR is used. When on, AI vision extraction still requires region policy permission."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Désactivé : OCR local. Activé : l’IA extrait d’abord le texte de la capture avant l’analyse."
+            "value" : "Debug-only developer validation. When off, local OCR is used. When on, AI vision extraction still requires region policy permission."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "オフ時はローカル OCR を使用し、オン時は AI が先に画像内の文字を抽出してから分析します。"
+            "value" : "Debug-only developer validation. When off, local OCR is used. When on, AI vision extraction still requires region policy permission."
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "끄면 로컬 OCR을 사용하고, 켜면 AI가 먼저 스크린샷의 문자를 추출한 뒤 분석합니다."
+            "value" : "Debug-only developer validation. When off, local OCR is used. When on, AI vision extraction still requires region policy permission."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭时使用本地 OCR，开启时使用 AI 先识别截图文字再分析。"
+            "value" : "仅 Debug 开发者验证。关闭时使用本地 OCR；开启 AI 视觉取字仍需区域策略允许。"
           }
         }
       }
@@ -253,37 +253,37 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI-Analyse"
+            "value" : "Developer AI Analysis"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI Analysis"
+            "value" : "Developer AI Analysis"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Analyse IA"
+            "value" : "Developer AI Analysis"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 分析設定"
+            "value" : "Developer AI Analysis"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 분석 설정"
+            "value" : "Developer AI Analysis"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 分析配置"
+            "value" : "开发者 AI 分析配置"
           }
         }
       }
@@ -294,37 +294,37 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "KI-Funktionseingänge anzeigen"
+            "value" : "Show developer AI entries"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show AI Feature Entries"
+            "value" : "Show developer AI entries"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Afficher les entrées IA"
+            "value" : "Show developer AI entries"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 機能エントリを表示"
+            "value" : "Show developer AI entries"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AI 기능 진입 표시"
+            "value" : "Show developer AI entries"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示 AI 功能入口"
+            "value" : "显示开发者 AI 入口"
           }
         }
       }

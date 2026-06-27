@@ -44,13 +44,16 @@ enum AIImageTextExtractionError: LocalizedError {
 final class AIImageTextExtractionService {
     private let session: URLSession
     private let userDefaults: UserDefaults
+    private let aiAvailabilityService: AIAvailabilityService
 
     init(
         session: URLSession = .shared,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        aiAvailabilityService: AIAvailabilityService = AIAvailabilityService()
     ) {
         self.session = session
         self.userDefaults = userDefaults
+        self.aiAvailabilityService = aiAvailabilityService
     }
 }
 
@@ -61,6 +64,7 @@ extension AIImageTextExtractionService {
     /// - Returns: 提取结果，包含标准化文本和原始文本
     /// - Throws: 提取失败时抛出错误
     func extractText(from image: CGImage) async throws -> AIExtractedTextResult {
+        try ensureDeveloperLocalAIConfigAllowed()
         let apiKey = try resolvedAPIKey()
         let dataURL = try makeImageDataURL(from: image)
         let model = resolvedModel()
@@ -105,6 +109,12 @@ extension AIImageTextExtractionService {
 }
 
 private extension AIImageTextExtractionService {
+    func ensureDeveloperLocalAIConfigAllowed() throws {
+        guard aiAvailabilityService.isDeveloperLocalAIConfigAllowed else {
+            throw AIImageTextExtractionError.requestFailed(AppText.aiRegionPolicyBlocked)
+        }
+    }
+
     func resolvedAPIKey() throws -> String {
         let key = userDefaults.string(forKey: AppSettings.aiAnalysisAPIKeyKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
