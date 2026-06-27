@@ -167,10 +167,10 @@ final class TranslationResultPanelService {
         let visibleFrame = screen.visibleFrame
         let outerMargin: CGFloat = 24
         let gap: CGFloat = 20
-        let minWidth: CGFloat = 280
-        let maxWidth: CGFloat = 400
-        let minHeight: CGFloat = 280
-        let maxHeight: CGFloat = 460
+        let minWidth: CGFloat = 300
+        let maxWidth: CGFloat = 440
+        let minHeight: CGFloat = 340
+        let maxHeight: CGFloat = 520
 
         let leftAvailableWidth = selectionRect.minX - visibleFrame.minX - gap
         let rightAvailableWidth = visibleFrame.maxX - selectionRect.maxX - gap
@@ -206,6 +206,43 @@ final class TranslationResultPanelService {
     }
 }
 
+// MARK: - Translation Target Language
+
+/// 支持的翻译目标语言
+enum TranslationTargetLanguage: String, CaseIterable, Identifiable {
+    case simplifiedChinese
+    case english
+    case japanese
+    case korean
+    case traditionalChinese
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .simplifiedChinese: return "简体中文"
+        case .english: return "English"
+        case .japanese: return "日本語"
+        case .korean: return "한국어"
+        case .traditionalChinese: return "繁體中文"
+        }
+    }
+
+    var languageIdentifier: String {
+        switch self {
+        case .simplifiedChinese: return "zh-Hans"
+        case .english: return "en"
+        case .japanese: return "ja"
+        case .korean: return "ko"
+        case .traditionalChinese: return "zh-Hant"
+        }
+    }
+
+    var localeLanguage: Locale.Language {
+        Locale.Language(identifier: languageIdentifier)
+    }
+}
+
 // MARK: - SwiftUI Translation View
 
 /// SwiftUI 翻译视图
@@ -224,12 +261,13 @@ struct TranslationResultSwiftUIView: View {
     /// 预置译文（用于中文文本等直接展示，不触发翻译流程）
     private let preTranslatedText: String?
 
+    @State private var selectedTargetLanguage: TranslationTargetLanguage = .simplifiedChinese
     @State private var configuration: TranslationSession.Configuration?
     @State private var sourceLanguage: Locale.Language?
     @State private var translatedText: String = ""
     @State private var isTranslating: Bool = false
     @State private var errorMessage: String?
-    @State private var hasStartedTranslation: Bool = false
+    @State private var currentRequestID = UUID()
     @State private var copySourceFeedback: Bool = false
     @State private var copyTargetFeedback: Bool = false
 
@@ -266,6 +304,11 @@ struct TranslationResultSwiftUIView: View {
 
                     Divider()
 
+                    // 目标语言选择器
+                    languagePickerSection
+
+                    Divider()
+
                     // 译文区域
                     targetSection
                 }
@@ -281,60 +324,101 @@ struct TranslationResultSwiftUIView: View {
             await performTranslation(session)
         }
         .onAppear {
-            print("[LocalTranslation] translation view appeared")
-            print("[LocalTranslation] source text count:", sourceText.count)
-            print("[LocalTranslation] seems chinese:", LocalTranslationService.seemsChineseText(sourceText))
-
-            // 如果已经有预置译文，不启动翻译
-            if preTranslatedText != nil {
-                translatedText = preTranslatedText!
-                return
-            }
-
-            let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedText.isEmpty else {
-                errorMessage = AppLocalization.text("translate.empty_text")
-                return
-            }
-
-            // 兜底检测源语言
-            let detectedSource = LocalTranslationService.fallbackSourceLanguage(for: trimmedText)
-            let target = Locale.Language(identifier: "zh-Hans")
-            sourceLanguage = detectedSource
-
-            print("[LocalTranslation] source language:", detectedSource?.languageCode?.identifier ?? "nil")
-            print("[LocalTranslation] target language: zh-Hans")
-
-            // 中文无需翻译
-            if detectedSource?.languageCode?.identifier == "zh" {
-                translatedText = "识别内容已是中文，无需翻译。"
-                return
-            }
-
-            // 启动翻译
-            configuration = TranslationSession.Configuration(
-                source: detectedSource,
-                target: target
-            )
-            print("[LocalTranslation] configuration created")
+            setupInitialTranslation()
+        }
+        .onChange(of: selectedTargetLanguage) { _, _ in
+            rebuildTranslationConfiguration()
         }
         .onDisappear {
             print("[LocalTranslation] translation view disappeared")
         }
     }
 
+    // MARK: - Translation Setup
+
+    private func setupInitialTranslation() {
+        print("[LocalTranslation] translation view appeared")
+        print("[LocalTranslation] source text count:", sourceText.count)
+
+        // 如果已经有预置译文，不启动翻译
+        if preTranslatedText != nil {
+            translatedText = preTranslatedText!
+            return
+        }
+
+        rebuildTranslationConfiguration()
+    }
+
+    private func rebuildTranslationConfiguration() {
+        let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            errorMessage = AppLocalization.text("translate.empty_text")
+            translatedText = ""
+            isTranslating = false
+            configuration = nil
+            return
+        }
+
+        print("[LocalTranslation] rebuild configuration")
+        print("[LocalTranslation] selected target language:", selectedTargetLanguage.languageIdentifier)
+
+        // Reset state for new translation
+        translatedText = ""
+        errorMessage = nil
+        isTranslating = true
+        currentRequestID = UUID()
+
+        let detectedSource = LocalTranslationService.fallbackSourceLanguage(for: trimmedText)
+        sourceLanguage = detectedSource
+
+        print("[LocalTranslation] source language:", detectedSource?.languageCode?.identifier ?? "nil")
+        print("[LocalTranslation] target language:", selectedTargetLanguage.languageIdentifier)
+
+        // 同语言无需翻译
+        if isSameLanguage(source: detectedSource, target: selectedTargetLanguage) {
+            isTranslating = false
+            translatedText = "识别内容已是目标语言，无需翻译。"
+            configuration = nil
+            return
+        }
+
+        // 启动翻译
+        configuration = TranslationSession.Configuration(
+            source: detectedSource,
+            target: selectedTargetLanguage.localeLanguage
+        )
+        print("[LocalTranslation] configuration created, requestID:", currentRequestID)
+    }
+
+    /// 判断源语言和目标语言是否相同（避免无意义翻译）
+    private func isSameLanguage(source: Locale.Language?, target: TranslationTargetLanguage) -> Bool {
+        guard let source else { return false }
+        let sourceCode = source.languageCode?.identifier
+        let targetCode = target.localeLanguage.languageCode?.identifier
+        guard let sourceCode, let targetCode else { return false }
+
+        guard sourceCode == targetCode else { return false }
+
+        // 中文变体处理：fallback 返回 zh-Hans
+        // zh-Hans → zh-Hant 应允许翻译
+        if sourceCode == "zh" {
+            return target.languageIdentifier == "zh-Hans"
+        }
+
+        return true
+    }
+
     // MARK: - Translation
 
     @MainActor
     private func performTranslation(_ session: TranslationSession) async {
-        guard !hasStartedTranslation else { return }
-        hasStartedTranslation = true
-
-        print("[LocalTranslation] translationTask started")
+        let requestID = currentRequestID
+        print("[LocalTranslation] translationTask started, requestID:", requestID)
 
         let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             errorMessage = AppLocalization.text("translate.empty_text")
+            isTranslating = false
             return
         }
 
@@ -355,6 +439,12 @@ struct TranslationResultSwiftUIView: View {
             print("[LocalTranslation] translate finished")
             print("[LocalTranslation] translated text count:", response.targetText.count)
 
+            // 防止旧任务覆盖新结果
+            guard requestID == currentRequestID else {
+                print("[LocalTranslation] ignore stale translation result")
+                return
+            }
+
             translatedText = response.targetText
         } catch {
             print("[LocalTranslation] failed:", error)
@@ -362,6 +452,13 @@ struct TranslationResultSwiftUIView: View {
             print("[LocalTranslation] error domain:", nsError.domain)
             print("[LocalTranslation] error code:", nsError.code)
             print("[LocalTranslation] error:", nsError)
+
+            // 防止旧任务覆盖新结果
+            guard requestID == currentRequestID else {
+                print("[LocalTranslation] ignore stale translation error")
+                return
+            }
+
             errorMessage = LocalTranslationService.userFriendlyMessage(for: error)
         }
 
@@ -399,6 +496,22 @@ struct TranslationResultSwiftUIView: View {
             .padding(8)
             .background(Color(.textBackgroundColor))
             .cornerRadius(6)
+        }
+    }
+
+    private var languagePickerSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("目标语言")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary)
+
+            Picker("目标语言", selection: $selectedTargetLanguage) {
+                ForEach(TranslationTargetLanguage.allCases) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -458,20 +571,19 @@ struct TranslationResultSwiftUIView: View {
             }
             .buttonStyle(.bordered)
 
-            // 复制译文（仅在翻译完成且有译文时显示）
-            if !translatedText.isEmpty && !isTranslating && errorMessage == nil {
-                Button(action: {
-                    onCopyTarget(translatedText)
-                    copyTargetFeedback = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        copyTargetFeedback = false
-                    }
-                }) {
-                    Text(copyTargetFeedback ? AppLocalization.text("translate.copied") : AppLocalization.text("translate.copy_target"))
-                        .font(.system(size: 12))
+            // 复制译文（翻译完成且有译文时启用）
+            Button(action: {
+                onCopyTarget(translatedText)
+                copyTargetFeedback = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    copyTargetFeedback = false
                 }
-                .buttonStyle(.bordered)
+            }) {
+                Text(copyTargetFeedback ? AppLocalization.text("translate.copied") : AppLocalization.text("translate.copy_target"))
+                    .font(.system(size: 12))
             }
+            .buttonStyle(.bordered)
+            .disabled(translatedText.isEmpty || isTranslating || errorMessage != nil)
 
             Spacer()
 
