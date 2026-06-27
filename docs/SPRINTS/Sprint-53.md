@@ -1,0 +1,642 @@
+# Sprint 53 - AI 订阅服务区域化底座
+
+## Status
+
+🚧 In Progress
+
+## Goal
+
+将“截图工具 AI 订阅服务区域化方案”整理为可落地的产品与技术需求，并为后续海外 AI Pro 商业化建立第一层区域化底座。
+
+本 Sprint 的核心目标不是一次性完成登录、订阅、后端和 AI 转发，而是先明确产品边界、合规边界、工程切分和验收标准，确保后续每个 Feature 都能独立开发、验证和回滚。
+
+---
+
+## Background
+
+当前 TShot 已具备截图、标注、OCR、本地翻译、隐藏 AI 入口和实验性 AI 分析能力。
+
+现有 AI 能力特点：
+
+- `AI` 入口默认隐藏，可在 Settings 中手动显示
+- AI 请求依赖本地隐藏配置 `defaults write`
+- AI API Key 当前可写入本机配置，仅适合开发者或实验性使用
+- 本地「翻译」入口与 AI 链路解耦，不调用后端，不调用 AI 服务
+
+后续如果面向真实用户提供 AI 分析订阅服务，需要避免将中国大陆地区卷入账号、联网、订阅、AI 服务合规和截图上传风险。
+
+因此本 Sprint 采用区域化产品策略：
+
+```text
+中国大陆：
+纯本地截图工具
+不显示 AI 商业入口
+不显示登录
+不显示订阅
+不请求后端
+不上传截图
+
+中国大陆以外：
+基础能力免费
+AI Pro 作为订阅能力
+使用 Sign in with Apple
+使用 Apple 自动续期订阅
+使用 serverless 后端校验订阅、地区、额度和风控
+```
+
+---
+
+## Product Requirements
+
+### 1. 中国大陆区产品要求
+
+中国大陆区定位为纯本地截图工具。
+
+必须保留：
+
+- 普通截图
+- 长截图
+- 标注编辑
+- 复制
+- 保存
+- Pin
+- 本地 OCR
+- 本地翻译
+- 多语言
+- 外观切换
+- 现有基础设置项
+
+必须关闭或隐藏：
+
+- AI 分析入口
+- AI 总结入口
+- AI 翻译入口
+- AI Pro 入口
+- 登录入口
+- 注册入口
+- 订阅入口
+- 后端配置入口
+- AI API Key 配置入口
+- 商业 AI 请求链路
+- 远程配置请求
+
+必须满足：
+
+- 大陆模式下不请求海外后端
+- 大陆模式下不请求 AI 服务商接口
+- 大陆模式下不上传截图内容
+- 大陆 App Store 文案、截图、关键词不宣传 AI 能力
+- 大陆用户即使手动打开历史 `showAIEntrances` 设置，也不能绕过区域策略使用商业 AI
+
+### 2. 海外区产品要求
+
+海外区采用基础免费 + AI Pro 订阅模式。
+
+免费用户：
+
+- 可继续使用基础截图能力
+- 可看到 AI Pro 能力介绍入口
+- 可进入订阅页
+- 未订阅时不能调用 AI 后端
+- 未订阅时不能产生 AI API 成本
+
+订阅用户：
+
+- 可使用 AI 分析
+- 可使用 AI 总结
+- 可使用 AI 翻译
+- 可使用图片理解类能力
+- 每月拥有固定 AI 使用额度
+- 超额后展示明确提示，不继续调用 AI API
+
+第一版海外 AI Pro 只支持：
+
+- 一个登录方式：Sign in with Apple
+- 一个订阅商品：AI Pro Monthly
+- 一个 AI 服务后端：Cloudflare Workers
+- 一个数据存储：Supabase
+- 一个固定月额度策略
+- 一个模型供应商
+
+暂不支持：
+
+- 中国大陆 AI 服务
+- 中国大陆账号系统
+- 中国大陆订阅
+- 团队订阅
+- 企业版
+- 无限 AI 分析
+- 多模型路由
+- 自建模型
+- 复杂后台管理系统
+
+---
+
+## Technical Requirements
+
+### 1. App 端区域策略
+
+App 端需要新增统一区域策略层，后续代码统一从这里判断 AI、登录、订阅和后端能力是否可用。
+
+建议模块：
+
+```text
+RegionPolicy
+- isChinaMainlandMode
+- effectiveStorefront
+- isNetworkFeatureAllowed
+- isAICommercialFeatureAllowed
+
+FeatureFlags
+- showAIEntrances
+- isLoginEnabled
+- isSubscriptionEnabled
+- isServerAPIEnabled
+- isDeveloperLocalAIConfigEnabled
+
+AIAvailabilityService
+- currentAvailability()
+- refreshStorefrontIfAllowed()
+- shouldShowAIEntryPoint()
+```
+
+判断优先级：
+
+```text
+区域策略
+>
+订阅状态
+>
+用户设置
+>
+开发者隐藏配置
+```
+
+关键规则：
+
+- `storefront == CHN` 时进入中国大陆模式
+- 中国大陆模式下不初始化商业 AI 后端请求
+- 中国大陆模式下不读取远程配置作为功能开关来源
+- 中国大陆模式下 AI 商业能力硬关闭
+- 海外模式下才允许展示 AI Pro、登录和订阅入口
+- 客户端区域判断只负责 UI 和本地保护，最终权限以后端为准
+
+### 2. 历史 AI 隐藏配置隔离
+
+现有本地隐藏配置：
+
+```text
+local.aiAnalysis.baseURL
+local.aiAnalysis.openAIAPIKey
+local.aiAnalysis.model
+```
+
+后续定位调整为：
+
+```text
+开发者 / Debug / 内部验证能力
+```
+
+正式商业化路径必须满足：
+
+- 不要求普通用户写入本地 AI API Key
+- 不把 AI API Key 放入 App 包
+- 不通过远程配置下发 AI API Key
+- 不让本地隐藏配置绕过地区策略和订阅策略
+- 商业 AI 请求必须走后端
+
+### 3. StoreKit 订阅
+
+后续 StoreKit 2 接入要求：
+
+```text
+Product ID:
+tshot.pro.monthly
+
+Type:
+Auto-Renewable Subscription
+
+Availability:
+Exclude China Mainland
+```
+
+App 端负责：
+
+- 加载订阅商品
+- 展示价格、周期和自动续期说明
+- 发起购买
+- 恢复购买
+- 监听交易更新
+- 将已验证交易发送后端
+
+后端负责：
+
+- 使用 App Store Server API 校验交易
+- 保存订阅状态
+- 处理订阅过期、取消、退款、宽限期和账单重试
+- AI 请求时以后端订阅状态为准
+
+第一版应尽早支持 App Store Server Notifications V2，用于同步退款、取消、续费失败和宽限期状态。
+
+### 4. 登录与账号
+
+第一版只支持 Sign in with Apple。
+
+用户绑定模型：
+
+```text
+Apple Identity
+↓
+Supabase Auth User
+↓
+App User Profile
+↓
+Subscription
+↓
+Usage Quota
+```
+
+要求：
+
+- 不使用 email 作为唯一身份
+- 使用稳定用户 ID 绑定订阅与额度
+- 使用 `appAccountToken` 绑定 App 用户与 Apple 交易
+- 支持跨设备恢复权益
+- 支持后端封禁异常账号
+
+### 5. Serverless 后端
+
+推荐组合：
+
+```text
+Cloudflare Workers + Supabase
+```
+
+Cloudflare Workers 负责：
+
+- API 网关
+- 用户鉴权
+- 地区校验
+- 订阅校验
+- AI 请求转发
+- 限流
+- 防刷
+- 隐藏 AI API Key
+
+Supabase 负责：
+
+- 用户资料
+- 订阅状态
+- 调用额度
+- 请求日志
+- 滥用事件
+
+MVP API：
+
+```text
+POST /v1/auth/apple
+POST /v1/subscriptions/verify
+GET  /v1/subscriptions/status
+GET  /v1/usage/current
+POST /v1/ai/analyze-screenshot
+POST /v1/apple/notifications
+```
+
+### 6. AI 请求安全链路
+
+`POST /v1/ai/analyze-screenshot` 必须按顺序执行：
+
+```text
+1. 校验 Authorization
+2. 校验用户存在
+3. 校验地区允许
+4. 校验订阅 active
+5. 校验月额度
+6. 校验日额度
+7. 校验单 IP 限流
+8. 校验图片大小
+9. 校验 request_id 幂等
+10. 调用 AI API
+11. 记录 usage_records
+12. 扣减 monthly_quotas
+13. 返回 AI 结果
+```
+
+限制建议：
+
+```text
+图片最大 2MB
+图片最长边 1600px
+单次请求超时 30 秒
+单日最多 20 次
+月度最多 100 次
+输出 token 上限 1200
+```
+
+禁止：
+
+- 未登录用户调用 AI
+- 未订阅用户调用 AI
+- 订阅用户无限调用 AI
+- 前端判断订阅，后端不判断
+- AI API Key 放在 App 本地
+- 不记录调用次数
+- 不限制图片大小
+- 不限制 token
+- 不限制单日调用次数
+
+---
+
+## Data Model Draft
+
+### users
+
+```text
+id
+apple_user_id
+email
+display_name
+country_code
+storefront
+created_at
+updated_at
+```
+
+### subscriptions
+
+```text
+id
+user_id
+product_id
+original_transaction_id
+latest_transaction_id
+status
+expires_at
+environment
+created_at
+updated_at
+```
+
+### usage_records
+
+```text
+id
+user_id
+request_id
+request_type
+model
+image_bytes
+image_count
+input_token_count
+output_token_count
+estimated_cost
+billable
+status
+created_at
+```
+
+### monthly_quotas
+
+```text
+id
+user_id
+month
+used_count
+limit_count
+used_tokens
+limit_tokens
+used_cost
+limit_cost
+created_at
+updated_at
+```
+
+### abuse_events
+
+```text
+id
+user_id
+ip
+reason
+detail
+created_at
+```
+
+---
+
+## Feature Breakdown
+
+### Feature 53.1：App 区域策略底座
+
+目标：
+
+- 新增区域策略与 AI 可用性判断
+- 中国大陆模式下强制隐藏商业 AI、登录、订阅和后端请求能力
+- 海外模式下允许后续展示 AI Pro 入口
+
+验收：
+
+- 能通过单元测试验证 `CHN` 与非 `CHN` 策略差异
+- 大陆模式下 `showAIEntrances = true` 也不能展示商业 AI
+- 本地 OCR、本地翻译、复制、保存、Pin 不受影响
+
+### Feature 53.2：AI 入口与历史隐藏配置隔离
+
+目标：
+
+- 将当前隐藏 AI 配置明确隔离为开发者能力
+- 商业 AI 可用性统一走 `AIAvailabilityService`
+- 防止本地隐藏配置绕过区域策略
+
+验收：
+
+- 中国大陆模式下不出现 AI 商业入口
+- 开发者隐藏配置不改变商业 AI 可用性
+- README 与 PROJECT_CONTEXT 对 AI 能力边界说明一致
+
+### Feature 53.3：海外 AI Pro 壳层
+
+目标：
+
+- 海外区显示 AI Pro 入口
+- 未登录时提示 Sign in with Apple
+- 未订阅时展示订阅说明
+- 本阶段不真实调用 AI 后端
+
+验收：
+
+- 海外模式下可以看到 AI Pro 入口
+- 未订阅点击 AI 时不会产生 AI 请求
+- 大陆模式下完全看不到该入口
+
+### Feature 53.4：StoreKit 2 订阅接入
+
+目标：
+
+- 接入 AI Pro Monthly 自动续期订阅
+- 支持购买、恢复购买、交易监听
+- 将交易信息发送后端校验
+
+验收：
+
+- Sandbox 环境可完成购买
+- 恢复购买可恢复订阅状态
+- 本地 UI 不作为最终权限来源
+
+### Feature 53.5：Serverless 后端 MVP
+
+目标：
+
+- 建立 Cloudflare Workers + Supabase 后端
+- 完成用户、订阅、额度、日志基础表
+- 完成订阅校验与用量查询 API
+
+验收：
+
+- API Key 只存放在后端环境变量
+- 后端能校验登录态、地区和订阅状态
+- 未订阅用户无法调用 AI API
+
+### Feature 53.6：AI 分析闭环与额度控制
+
+目标：
+
+- 订阅用户可使用 AI 分析截图
+- 后端限制图片大小、token、日额度、月额度
+- 记录 usage_records 并扣减 monthly_quotas
+
+验收：
+
+- 订阅用户可获得 AI 结果
+- 未订阅或超额用户不会触发 AI API 调用
+- AI 失败、超时、超额都有明确提示
+
+### Feature 53.7：隐私、审核与上架材料
+
+目标：
+
+- 更新海外 AI 功能所需隐私说明
+- 更新 App Store 文案策略
+- 增加首次使用 AI 上传提示
+
+验收：
+
+- 隐私政策说明 AI 上传边界
+- 中国大陆 App Store 文案不宣传 AI
+- 海外 AI 功能说明包含订阅、上传、第三方模型处理提示
+
+---
+
+## Sprint Scope
+
+### Included
+
+本 Sprint 包含：
+
+- 明确区域化产品需求
+- 明确 App 端区域策略技术方案
+- 明确历史 AI 隐藏配置与商业 AI 路径边界
+- 明确 StoreKit、登录、后端、额度、隐私的后续 Feature 拆分
+- 更新当前项目文档入口
+- 将后续执行范围纳入 Roadmap
+
+### Out of Scope
+
+本 Sprint 不直接实现：
+
+- StoreKit 2 购买代码
+- Sign in with Apple 真实登录
+- Cloudflare Workers 项目
+- Supabase 项目
+- AI 后端转发
+- App Store Connect 商品配置
+- 真实 AI 订阅购买
+- 中国大陆 AI 服务
+
+---
+
+## System Design
+
+### 实现思路
+
+第一阶段先在 App 内建立本地可测试的区域策略和功能开关，避免商业 AI 能力直接散落在 UI、Settings 和业务编排中。
+
+后续所有 AI 商业能力都通过统一入口判断：
+
+```text
+RegionPolicy
+↓
+FeatureFlags
+↓
+AIAvailabilityService
+↓
+UI Entry / Login / Subscription / Server API
+```
+
+### 涉及模块
+
+后续实现预计涉及：
+
+- `TYScreenShotTool/Shared/`
+  - 区域策略、功能开关、AI 可用性模型
+- `TYScreenShotTool/App/`
+  - Settings、菜单栏、应用装配
+- `TYScreenShotTool/Services/`
+  - AI 分析服务、截图业务编排、订阅状态服务
+- `TYScreenShotTool/Features/`
+  - 普通截图工具栏、长截图控制面板、AI Pro 入口
+- `TYScreenShotToolTests/`
+  - 区域策略、功能开关、额度模型纯逻辑测试
+- Serverless 后端仓库或目录
+  - Cloudflare Workers、Supabase schema、API 合约
+
+### 验证方式
+
+- 优先通过单元测试验证区域策略、功能开关和状态组合
+- 通过人工测试验证中国大陆模式无 AI 商业入口、无登录、无订阅
+- 通过人工测试验证海外模式可进入 AI Pro 壳层
+- 后续 StoreKit 与 AI 后端接入使用 Sandbox 和测试账号验证
+
+---
+
+## Validation Plan
+
+### 文档验收
+
+1. `docs/SPRINTS/Sprint-53.md` 明确 Sprint 目标、范围、需求、技术方案和 Feature 拆分
+2. `docs/ROADMAP.md` 将 Sprint 53 标记为当前 Sprint
+3. `PROJECT_CONTEXT.md` 同步当前 Sprint、AI 区域化边界和文档地图
+4. 不创建 `PLAN.md`、`DESIGN.md`、`IMPLEMENTATION_PLAN.md`、`REVIEW.md`、`REPORT.md`、`TODO.md`
+
+### 后续功能验收基线
+
+1. 中国大陆模式下：
+   - 不显示 AI 商业入口
+   - 不显示登录入口
+   - 不显示订阅入口
+   - 不请求后端
+   - 本地截图、OCR、本地翻译正常
+
+2. 海外模式下：
+   - 可看到 AI Pro 入口
+   - 未登录先提示登录
+   - 未订阅先提示订阅
+   - 未订阅不调用 AI API
+
+3. 后端模式下：
+   - 后端最终校验地区、登录、订阅和额度
+   - AI API Key 只在后端
+   - 超额和未订阅请求不产生 AI 成本
+
+---
+
+## Result
+
+本 Sprint 当前处于需求与方案对齐阶段。
+
+完成标准：
+
+- 当前 Sprint 文档完成
+- Roadmap 与 Project Context 对齐
+- 后续 Feature 切分清晰
+- 下一步可以进入 Feature 53.1 的代码实现

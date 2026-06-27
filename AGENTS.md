@@ -240,6 +240,13 @@ Feature
 
 只有明确属于 Task 或 Sprint 时才切换。
 
+边界规则：
+
+* Feature 是用户可见功能切片
+* Sprint 是产品级阶段、跨模块协作、架构调整或重要里程碑
+* 不要因为 Feature 开发过程较长，就把 Feature 自动记录为 Sprint
+* 如果历史上已将 Feature 当作 Sprint 记录，保留历史事实，但后续必须补齐对应 Sprint 文档并避免继续扩大误差
+
 ---
 
 # Feature 控制原则
@@ -404,6 +411,14 @@ Feature
 * 已完成内容
 * 当前方向
 * 后续规划
+
+规则：
+
+* Sprint 按数字倒序排列，最新 Sprint 显示在最上方
+* Roadmap 只记录 Sprint 级里程碑
+* Feature 不单独占用 Sprint 编号
+* Feature 应记录在所属 Sprint 文档的范围、拆分或成果中
+* 每个 Roadmap 中出现的 Sprint 都应有对应 `docs/SPRINTS/Sprint-XX.md`
 
 ---
 
