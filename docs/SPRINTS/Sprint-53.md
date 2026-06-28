@@ -303,24 +303,190 @@ POST /v1/ai/analyze-text
 POST /v1/apple/notifications
 ```
 
-### 6. AI 请求安全链路
+#### API 请求流程图
 
-`POST /v1/ai/analyze-screenshot` 必须按顺序执行：
+**Apple Sign In 登录**
 
 ```text
-1. 校验 Authorization
-2. 校验用户存在
-3. 校验地区允许
-4. 校验订阅 active
-5. 校验月额度
-6. 校验日额度
-7. 校验单 IP 限流
-8. 校验图片大小
-9. 校验 request_id 幂等
-10. 调用 AI API
-11. 记录 usage_records
-12. 扣减 monthly_quotas
-13. 返回 AI 结果
+Client (iOS)                                        Backend
+  │                                                    │
+  │  POST /v1/auth/apple                               │
+  │  { "identity_token": "<Apple JWT>" }               │
+  │ ───────────────────────────────────────────────>    │
+  │                                                     │
+  │   ① 解析 JWT → header / payload / signature        │
+  │   ② 从 https://appleid.apple.com/auth/keys 获取公钥  │
+  │   ③ 匹配 kid → 导入公钥（RS256）                     │
+  │   ④ 验证 JWT 签名                                   │
+  │   ⑤ 验证 claims: iss / aud / exp                   │
+  │   ⑥ 提取 sub（Apple User ID）                       │
+  │   ⑦ findOrCreateUser(appleUserId, email)            │
+  │   ⑧ createSession(userId) → 生成 Bearer Token      │
+  │                                                     │
+  │  { "token": "<bearer_token>",                       │
+  │    "user_id": "<uuid>" }                            │
+  │ <───────────────────────────────────────────────    │
+```
+
+**StoreKit 订阅收据验证**
+
+```text
+Client (iOS)                                        Backend
+  │                                                    │
+  │  POST /v1/subscriptions/verify                     │
+  │  Authorization: Bearer <token>                     │
+  │  { "signed_transaction": "<StoreKit JWT>" }        │
+  │ ───────────────────────────────────────────────>    │
+  │                                                     │
+  │   ① 校验 Bearer Token → 查找用户                    │
+  │   ② 解析 StoreKit JWT → header / payload           │
+  │   ③ 用 Apple 公钥验证 RS256 签名                    │
+  │   ④ 验证 claims: iss / aud / bundleId              │
+  │   ⑤ 提取: transactionId / originalTransactionId    │
+  │      productId / expiresDate / environment          │
+  │   ⑥ createOrUpdateSubscription(userId, txn)        │
+  │      → 按 originalTransactionId UPSERT              │
+  │                                                     │
+  │  { "status": "active",                              │
+  │    "product_id": "tshot.pro.monthly",               │
+  │    "expires_at": "2026-07-28T...",                  │
+  │    "environment": "Sandbox" }                       │
+  │ <───────────────────────────────────────────────    │
+```
+
+**App Store Server 通知 webhook**
+
+```text
+Apple Server                                     Backend
+  │                                                 │
+  │  POST /v1/apple/notifications                   │
+  │  { "signedPayload": "<通知 JWT>" }               │
+  │ ─────────────────────────────────────────────>   │
+  │                                                  │
+  │   ① 验证通知 JWT 签名（复用 Apple 公钥）           │
+  │   ② 提取 notificationType                        │
+  │   ③ 提取 data.signedTransactionInfo (JWT)        │
+  │   ④ 验证 transactionInfo JWT 签名                 │
+  │   ⑤ 根据通知类型映射订阅状态：                     │
+  │      SUBSCRIBED / DID_RENEW         → active     │
+  │      EXPIRED / DID_FAIL_TO_RENEW    → expired    │
+  │      REFUND / REVOKE                → refunded   │
+  │   ⑥ 从 transactionInfo.appAccountToken 获取用户   │
+  │   ⑦ createOrUpdateSubscription(userId, txn)      │
+  │                                                  │
+  │  200 OK（始终返回，错误记日志不重试）               │
+  │ <─────────────────────────────────────────────── │
+```
+
+### 6. AI 请求安全链路
+
+**订阅状态查询**
+
+```text
+Client (iOS)                                        Backend
+  │                                                    │
+  │  GET /v1/subscriptions/status                      │
+  │  Authorization: Bearer <token>                     │
+  │ ───────────────────────────────────────────────>    │
+  │                                                     │
+  │   ① 校验 Bearer Token → 查找用户                    │
+  │   ② 校验 storefront allowlist                      │
+  │   ③ 查询 subscriptions 表（最新记录）                 │
+  │                                                     │
+  │  { "user_id": "<uuid>",                             │
+  │    "status": "active",                              │
+  │    "product_id": "tshot.pro.monthly",               │
+  │    "expires_at": "2026-07-28T..." }                 │
+  │ <───────────────────────────────────────────────    │
+```
+
+**当前用量查询**
+
+```text
+Client (iOS)                                        Backend
+  │                                                    │
+  │  GET /v1/usage/current                             │
+  │  Authorization: Bearer <token>                     │
+  │ ───────────────────────────────────────────────>    │
+  │                                                     │
+  │   ① 校验 Bearer Token → 查找用户                    │
+  │   ② 校验 storefront allowlist                      │
+  │   ③ 查询 usage_current 视图                         │
+  │                                                     │
+  │  { "user_id": "<uuid>",                             │
+  │    "monthly_used_count": 3,                         │
+  │    "monthly_limit_count": 100,                      │
+  │    "daily_used_count": 1,                           │
+  │    "daily_limit_count": 20 }                        │
+  │ <───────────────────────────────────────────────    │
+```
+
+**截图分析请求**
+
+```text
+Client (iOS)                                        Backend
+  │                                                    │
+  │  POST /v1/ai/analyze-screenshot                    │
+  │  Authorization: Bearer <token>                     │
+  │  { "request_id": "uuid",                           │
+  │    "image_base64": "<base64>",                     │
+  │    "prompt": "分析这个截图" }                        │
+  │ ───────────────────────────────────────────────>    │
+  │                                                     │
+  │   ① 校验 Bearer Token → 查找用户                    │
+  │   ② 校验 storefront allowlist                      │
+  │   ③ 校验 subscription active / grace_period        │
+  │   ④ 校验月额度 / 日额度                              │
+  │   ⑤ 校验 request_id 幂等（409 重复）                 │
+  │   ⑥ 校验 image_base64 大小 ≤ 2MB                   │
+  │   ⑦ 调用 AI Provider（Response / Chat API）          │
+  │   ⑧ 记录 usage_records（succeeded）                  │
+  │   ⑨ increment_monthly_quota                         │
+  │                                                     │
+  │  { "request_id": "uuid",                            │
+  │    "analysis": "<AI 返回内容>",                       │
+  │    "model": "deepseek-v4-flash",                    │
+  │    "usage": { "input_tokens": 80,                   │
+  │               "output_tokens": 24 } }               │
+  │ <───────────────────────────────────────────────    │
+```
+
+失败路径：
+- `401` → 无 Authorization 或用户不存在
+- `403` → storefront 不在白名单（含 CHN）
+- `402` → 无有效订阅
+- `429` → 月额度或日额度用尽
+- `409` → request_id 已存在
+- `413` → 图片超过 2MB
+- `422` → provider 不支持图片输入（DeepSeek 模式）
+- `502` → AI provider 调用失败
+
+**文字分析请求**
+
+```text
+Client (iOS)                                        Backend
+  │                                                    │
+  │  POST /v1/ai/analyze-text                          │
+  │  Authorization: Bearer <token>                     │
+  │  { "request_id": "uuid",                           │
+  │    "prompt": "解释什么是 REST API" }                  │
+  │ ───────────────────────────────────────────────>    │
+  │                                                     │
+  │   ① 校验 Bearer Token → 查找用户                    │
+  │   ② 校验 storefront allowlist                      │
+  │   ③ 校验 subscription active / grace_period        │
+  │   ④ 校验月额度 / 日额度                              │
+  │   ⑤ 校验 request_id 幂等（409 重复）                 │
+  │   ⑥ 调用 AI Provider（纯文本，不传图片）               │
+  │   ⑦ 记录 usage_records（imageBytes=0）              │
+  │   ⑧ increment_monthly_quota                         │
+  │                                                     │
+  │  { "request_id": "uuid",                            │
+  │    "analysis": "<AI 返回内容>",                       │
+  │    "model": "deepseek-v4-flash",                    │
+  │    "usage": { "input_tokens": 10,                   │
+  │               "output_tokens": 121 } }              │
+  │ <───────────────────────────────────────────────    │
 ```
 
 限制建议：
