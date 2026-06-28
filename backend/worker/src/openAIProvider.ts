@@ -163,7 +163,8 @@ export class OpenAIResponsesProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI Responses API failed: ${response.status}`);
+      const diagnostic = await safeErrorText(response);
+      throw new Error(`OpenAI Responses API failed: ${response.status}${diagnostic}`);
     }
 
     const body = (await response.json()) as ResponsesAPIResponse;

@@ -142,4 +142,35 @@ describe("AI provider selection", () => {
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect(result.text).toBe("A tiny test image.");
   });
+
+  it("includes truncated OpenAI responses error details for diagnostics", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(
+      JSON.stringify({
+        error: {
+          message: "Unsupported parameter: max_output_tokens",
+          type: "invalid_request_error",
+          code: "unsupported_parameter"
+        }
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      }
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = createAIProvider({
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "test-key"
+    });
+
+    await expect(provider.analyzeScreenshot({
+      requestId: "req_error",
+      userId: "user_1",
+      imageBase64: "aGVsbG8=",
+      prompt: "Describe image",
+      model: "gpt-5.3",
+      maxOutputTokens: 1200
+    })).rejects.toThrow(/OpenAI Responses API failed: 400.*unsupported_parameter/s);
+  });
 });

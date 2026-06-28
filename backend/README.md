@@ -37,8 +37,8 @@ npx wrangler deploy
 - `DAILY_REQUEST_LIMIT`：默认每日 AI 请求上限。
 - `MAX_IMAGE_BYTES`：允许的最大图片载荷大小。
 - `AI_PROVIDER`：AI Provider 类型，默认 `openai`；`deepseek` / `openai-compatible` 走 Chat Completions API。
-- `AI_MODEL`：AI 模型名称；DeepSeek 当前配置为 `deepseek-v4-flash`。
-- `OPENAI_BASE_URL`：AI Provider API 根地址；DeepSeek 当前配置为 `https://api.deepseek.com`。
+- `AI_MODEL`：AI 模型名称；当前默认配置为 `gpt-4.1-mini`。
+- `OPENAI_BASE_URL`：AI Provider API 根地址；当前默认配置为 `https://api.openai.com`。
 - `AI_MAX_OUTPUT_TOKENS`：每次请求的最大输出 token 数。
 
 密钥必须通过 Wrangler 设置，不可提交：
