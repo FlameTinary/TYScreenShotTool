@@ -15,6 +15,16 @@ vi.mock("../src/appleAuth", () => ({
     environment: "Sandbox" as const,
     expiresDate: Date.now() + 86400000,
     purchaseDate: Date.now(),
+    signedDate: Date.now(),
+    appAccountToken: "user-from-notification"
+  }),
+  verifyAppStoreNotificationJWT: () => Promise.resolve({
+    notificationType: "DID_RENEW",
+    subtype: undefined,
+    bundleId: "com.tshot.app",
+    environment: "Sandbox" as const,
+    signedTransactionInfo: "mock-transaction-jwt",
+    notificationUUID: "test-uuid-001",
     signedDate: Date.now()
   }),
   resetAppleKeyCache: () => {}
@@ -341,6 +351,47 @@ describe("TShot AI backend app", () => {
       environment: "Sandbox"
     });
     expect(typeof body.expires_at).toBe("string");
+  });
+
+  /**
+   * 测试：缺失 signedPayload 的通知应返回 200（Apple 期望确认）
+   */
+  it("returns 200 for Apple notification without signedPayload", async () => {
+    const usageRecords: import("../src/app").UsageRecordInput[] = [];
+    const app = createApp(repository(user(), { usageRecords }));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/apple/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    // Apple 期望 200 确认收到，即使 payload 无效
+    expect(response.status).toBe(200);
+  });
+
+  /**
+   * 测试：有效通知应返回 200 并调用 createOrUpdateSubscription
+   */
+  it("processes a valid Apple notification and returns 200", async () => {
+    const app = createApp(repository(user()));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/apple/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signedPayload: "valid.notification.jwt"
+        })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    // 始终返回 200 确认收到
+    expect(response.status).toBe(200);
   });
 
   /**

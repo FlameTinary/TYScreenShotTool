@@ -72,6 +72,27 @@ export interface StoreKitTransactionPayload {
   appAccountToken?: string;
 }
 
+/**
+ * App Store Server 通知 payload 结构
+ * Apple 服务器推送的通知中包含的字段
+ */
+export interface AppStoreNotificationPayload {
+  /** 通知类型 */
+  notificationType: string;
+  /** 通知子类型（可选） */
+  subtype?: string | undefined;
+  /** 应用的 Bundle Identifier */
+  bundleId: string;
+  /** 交易环境 */
+  environment: "Sandbox" | "Production";
+  /** 经过签名的交易信息 JWT */
+  signedTransactionInfo: string;
+  /** 通知唯一标识符 */
+  notificationUUID: string;
+  /** 通知签名时间（Unix 毫秒时间戳） */
+  signedDate: number;
+}
+
 /** 公钥缓存 */
 let cachedKeys: { keys: AppleJWK[]; expiresAt: number } | null = null;
 const CACHE_TTL_MS = 3_600_000; // 1 小时
@@ -167,6 +188,52 @@ export async function verifyStoreKitTransactionJWT(
     purchaseDate: (payload.purchaseDate as number) ?? 0,
     signedDate: (payload.signedDate as number) ?? 0,
     ...(payload.appAccountToken !== undefined ? { appAccountToken: payload.appAccountToken as string } : {})
+  };
+}
+
+/**
+ * 验证 App Store Server 通知 JWT（signedPayload）
+ *
+ * Apple 服务器在订阅状态变更时推送通知，通知中包含 signedPayload JWT，
+ * 验证签名后提取通知类型和交易信息
+ *
+ * @param signedPayload Apple 推送的 JWT 字符串
+ * @param bundleId 应用的 Bundle Identifier
+ * @returns 通知信息
+ * @throws 如果 JWT 格式/签名/claims 不合法则抛出 Error
+ */
+export async function verifyAppStoreNotificationJWT(
+  signedPayload: string,
+  bundleId: string
+): Promise<AppStoreNotificationPayload> {
+  const { payload } = await verifyJWTSignature(signedPayload);
+
+  const notificationType = payload.notificationType as string | undefined;
+  if (!notificationType) {
+    throw new Error("App Store notification missing notificationType");
+  }
+
+  const data = payload.data as Record<string, unknown> | undefined;
+  if (!data || !data.signedTransactionInfo) {
+    throw new Error("App Store notification missing data.signedTransactionInfo");
+  }
+
+  const notificationBundleId = data.bundleId as string | undefined;
+  if (!notificationBundleId || notificationBundleId !== bundleId) {
+    throw new Error(`App Store notification bundleId mismatch: ${notificationBundleId}`);
+  }
+
+  const environment = data.environment as string | undefined;
+  const normalizedEnv = environment === "Sandbox" ? "Sandbox" : "Production";
+
+  return {
+    notificationType,
+    ...(payload.subtype !== undefined ? { subtype: payload.subtype as string } : {}),
+    bundleId,
+    environment: normalizedEnv,
+    signedTransactionInfo: data.signedTransactionInfo as string,
+    notificationUUID: (payload.notificationUUID as string) ?? "",
+    signedDate: (payload.signedDate as number) ?? 0
   };
 }
 

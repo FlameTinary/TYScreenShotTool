@@ -1,4 +1,4 @@
-import { verifyAppleJWT, verifyStoreKitTransactionJWT, type StoreKitTransactionPayload } from "./appleAuth";
+import { verifyAppleJWT, verifyAppStoreNotificationJWT, verifyStoreKitTransactionJWT, type AppStoreNotificationPayload, type StoreKitTransactionPayload } from "./appleAuth";
 
 /**
  * 用户订阅状态枚举
@@ -356,7 +356,7 @@ async function handleRequest(context: RequestContext): Promise<Response> {
     "GET /v1/usage/current": withAuthenticatedUser(handleUsageCurrent),
     "POST /v1/ai/analyze-screenshot": withAuthenticatedUser(handleAnalyzeScreenshot),
     "POST /v1/ai/analyze-text": withAuthenticatedUser(handleAnalyzeText),
-    "POST /v1/apple/notifications": async () => json({ accepted: true }, 202)
+    "POST /v1/apple/notifications": handleAppleNotification
   };
 
   const handler = routes[routeKey];
@@ -547,6 +547,113 @@ async function handleVerifySubscription(context: AuthenticatedContext): Promise<
     expires_at: transaction.expiresDate ? new Date(transaction.expiresDate).toISOString() : null,
     environment: transaction.environment
   });
+}
+
+/**
+ * 处理 App Store Server 通知回调（webhook）
+ *
+ * Apple 服务器在订阅状态变更时主动推送通知到这个端点。
+ * 不需要 Bearer Token 认证，Apple 用 JWT 签名保证真实性。
+ * 无论处理是否成功，始终返回 200 以确认收到通知。
+ * @param context 请求上下文
+ * @returns 确认响应
+ */
+async function handleAppleNotification(context: RequestContext): Promise<Response> {
+  // 解析请求体
+  const body = await parseJsonBody(context.request);
+  const signedPayload = typeof body?.signedPayload === "string" ? body.signedPayload.trim() : "";
+  if (!signedPayload) {
+    console.error(JSON.stringify({ event: "apple_notification_missing_signed_payload" }));
+    return json({}, 200);
+  }
+
+  // 验证通知 JWT 签名
+  let notification: AppStoreNotificationPayload;
+  try {
+    notification = await verifyAppStoreNotificationJWT(signedPayload, context.env.APPLE_BUNDLE_ID);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "apple_notification_verification_failed",
+        error: error instanceof Error ? error.message : "unknown"
+      })
+    );
+    return json({}, 200);
+  }
+
+  // 验证交易信息 JWT 并提取交易数据
+  let transaction: StoreKitTransactionPayload;
+  try {
+    transaction = await verifyStoreKitTransactionJWT(notification.signedTransactionInfo, context.env.APPLE_BUNDLE_ID);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "apple_notification_transaction_verification_failed",
+        error: error instanceof Error ? error.message : "unknown"
+      })
+    );
+    return json({}, 200);
+  }
+
+  // 通知类型 → 订阅状态映射
+  const status = notificationTypeToStatus(notification.notificationType, notification.subtype);
+
+  // 写入数据库（若无 appAccountToken 则无法关联用户，跳过）
+  if (transaction.appAccountToken) {
+    try {
+      await context.repository.createOrUpdateSubscription(transaction.appAccountToken, {
+        originalTransactionId: transaction.originalTransactionId,
+        latestTransactionId: transaction.transactionId,
+        productId: transaction.productId,
+        environment: transaction.environment,
+        expiresAt: transaction.expiresDate ? new Date(transaction.expiresDate).toISOString() : null
+      });
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "apple_notification_update_subscription_failed",
+          user_id: transaction.appAccountToken,
+          error: error instanceof Error ? error.message : "unknown"
+        })
+      );
+    }
+  } else {
+    console.error(
+      JSON.stringify({
+        event: "apple_notification_missing_app_account_token",
+        notification_type: notification.notificationType,
+        transaction_id: transaction.transactionId
+      })
+    );
+  }
+
+  // 始终返回 200
+  return json({}, 200);
+}
+
+/**
+ * App Store Server 通知类型 → subscription status 映射
+ */
+function notificationTypeToStatus(notificationType: string, _subtype?: string): SubscriptionStatus {
+  switch (notificationType) {
+    case "SUBSCRIBED":
+    case "DID_RENEW":
+    case "DID_CHANGE_RENEWAL_PREF":
+    case "DID_CHANGE_RENEWAL_STATUS":
+    case "INITIAL_BUY":
+    case "INTERACTIVE_RENEWAL":
+      return "active";
+    case "DID_FAIL_TO_RENEW":
+    case "EXPIRED":
+      return "expired";
+    case "REFUND":
+    case "REVOKE":
+      return "refunded";
+    case "GRACE_PERIOD_EXPIRED":
+    case "RENEWAL_EXTENDED":
+    default:
+      return "grace_period";
+  }
 }
 
 /**
