@@ -8,6 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         AppThemeCoordinator.shared.applyCurrentAppearance()
+#if DEBUG
+        if runStoreKitDebugVerificationIfRequested() {
+            return
+        }
+#endif
         if AIAvailabilityService().isSubscriptionAllowed {
             AIProSubscriptionService.shared.startTransactionListener()
         }
@@ -142,4 +147,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ?? AppSettings.screenshotHotKeyDefaultValue
         return ScreenshotHotKey(storageValue: storageValue) ?? .screenshot
     }
+
+#if DEBUG
+    private func runStoreKitDebugVerificationIfRequested() -> Bool {
+        let defaults = UserDefaults.standard
+        guard
+            let rawMode = defaults.string(forKey: AppSettings.debugStoreKitVerificationModeKey),
+            let mode = AIProStoreKitDebugVerifier.Mode(rawValue: rawMode)
+        else {
+            return false
+        }
+
+        defaults.removeObject(forKey: AppSettings.debugStoreKitVerificationModeKey)
+        Task { @MainActor in
+            await AIProStoreKitDebugVerifier.run(mode: mode)
+            NSApplication.shared.terminate(nil)
+        }
+        return true
+    }
+#endif
 }

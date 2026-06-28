@@ -1,4 +1,5 @@
 import XCTest
+import StoreKitTest
 @testable import TShot
 
 final class AIProSubscriptionTests: XCTestCase {
@@ -66,5 +67,27 @@ final class AIProSubscriptionTests: XCTestCase {
         XCTAssertEqual(content.primaryAction, .dismiss)
         XCTAssertNil(content.secondaryAction)
         XCTAssertNil(content.cancelButtonTitle)
+    }
+
+    @MainActor
+    func test_storeKitConfigurationCanPurchaseMonthlyProduct() async throws {
+        let isEnabledByEnvironment = ProcessInfo.processInfo.environment["TSHOT_RUN_STOREKIT_SANDBOX_TESTS"] == "1"
+        let isEnabledByDefaults = UserDefaults.standard.bool(forKey: AppSettings.debugRunStoreKitSandboxTestsKey)
+        guard isEnabledByEnvironment || isEnabledByDefaults else {
+            throw XCTSkip("Set debug.runStoreKitSandboxTests=true and run with code signing enabled for local StoreKit purchase verification.")
+        }
+
+        let session = try SKTestSession(configurationFileNamed: "TShot")
+        session.disableDialogs = true
+        session.askToBuyEnabled = false
+        session.clearTransactions()
+
+        try await session.buyProduct(identifier: AIProSubscriptionProductID.monthly)
+
+        let transactions = session.allTransactions()
+        XCTAssertTrue(
+            transactions.contains { $0.productIdentifier == AIProSubscriptionProductID.monthly },
+            "Expected local StoreKit purchase to create a monthly subscription transaction"
+        )
     }
 }

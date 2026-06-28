@@ -230,7 +230,7 @@ Sprint 53 起，AI 商业化方向采用区域化策略：
 - 中国大陆区不请求海外后端，不上传截图内容
 - 中国大陆区不依赖远程配置打开 AI 商业能力
 - 中国大陆以外地区可以规划 AI Pro 订阅能力
-- 海外 AI Pro 壳层已可通过 Debug storefront 覆盖和本地 `TYScreenShotTool/TShot.storekit` 验证订阅入口；后端已具备 AI 分析闭环，但尚未接入 App、真实登录或真实订阅校验
+- 海外 AI Pro 壳层已可通过 Debug storefront 覆盖和本地 `TYScreenShotTool/TShot.storekit` 验证订阅入口；StoreKit 本地购买交易可通过显式 opt-in 的签名测试验证；后端已具备 AI 分析闭环，但尚未接入 App、真实登录或真实订阅校验
 - 本地订阅状态只用于 UI 展示，不作为最终 AI 请求权限
 - 海外 AI Pro 必须通过后端校验登录、订阅、地区、额度和风控
 - 现有本地隐藏 AI 配置后续应收口为开发者 / Debug / 内部验证能力，不能作为正式商业化路径

@@ -514,9 +514,14 @@ created_at
 - 新增 `AIProSubscriptionService`，封装 StoreKit 2 商品加载、购买、恢复购买和交易更新监听
 - 当前只支持 `tshot.pro.monthly` / AI Pro Monthly 自动续期订阅
 - 新增 `TYScreenShotTool/TShot.storekit` 本地 StoreKit 配置，并关联默认 Debug 运行 scheme
+- 默认测试 scheme 也关联 `TYScreenShotTool/TShot.storekit`，便于 StoreKitTest 读取同一份本地商品配置
 - AI Pro 壳层在海外策略允许时加载订阅商品，提供订阅与恢复入口；中国大陆和 unknown 模式不启动 StoreKit 监听、不加载商品
+- 新增 Debug-only StoreKit 验证入口：写入 `debug.storeKitVerificationMode=load|purchase|restore` 后通过 Xcode Debug scheme 启动 App，可在控制台输出加载、购买或恢复状态，并在验证结束后自动清理该 mode
+- 新增显式 opt-in 的 StoreKitTest 购买验证：`test_storeKitConfigurationCanPurchaseMonthlyProduct` 默认跳过；本机签名环境写入 `debug.runStoreKitSandboxTests=true` 后可验证 `tshot.pro.monthly` 能产生本地购买交易
+- 已在本机签名环境执行 StoreKit 购买验证，结果通过；默认 `./scripts/test.sh` 会禁用签名，因此该购买验证不作为默认测试门禁
+- Xcode Debug scheme 下的 Product API `load` 验证当前返回 `unavailable`，已记录为本地 StoreKit runtime 注入限制；可重复的购买交易验证以后续显式签名测试为准
 - 本地订阅状态当前只用于 UI 展示，不作为最终 AI 请求权限；AI 后端、登录和额度校验仍留给后续 Feature
-- 单元测试覆盖商品 ID、订阅状态、弹窗动作和订阅区域策略判断
+- 单元测试覆盖商品 ID、订阅状态、弹窗动作、订阅区域策略判断和 opt-in StoreKit 本地购买交易验证
 
 ### Feature 53.5：Serverless 后端 MVP
 
@@ -689,11 +694,11 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 当前处于 AI Pro 区域化商业化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3、Feature 53.4 的第一阶段 StoreKit 2 本地订阅壳层、Feature 53.5 的 Serverless 后端 MVP 骨架，以及 Feature 53.6 的后端 AI 分析闭环与额度控制。
+本 Sprint 当前处于 AI Pro 区域化商业化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3、Feature 53.4 的 StoreKit 2 本地订阅壳层与显式 opt-in 购买验证、Feature 53.5 的 Serverless 后端 MVP 骨架，以及 Feature 53.6 的后端 AI 分析闭环与额度控制。
 
 完成标准：
 
 - 当前 Sprint 文档完成
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
-- 下一步可以进入 Feature 53.7 的隐私、审核与上架材料，或继续补齐 Feature 53.4 的 Sandbox 人工购买验证
+- 下一步可以进入 Feature 53.7 的隐私、审核与上架材料

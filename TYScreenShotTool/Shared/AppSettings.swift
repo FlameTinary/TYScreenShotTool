@@ -47,6 +47,10 @@ enum AppSettings {
     static let showAIEntrancesDefaultValue = false
     /// Debug 区域策略 storefront 覆盖值，用于本地验证 CHN / USA / unknown。
     static let debugStorefrontCodeOverrideKey = "debug.regionPolicy.storefrontCode"
+    /// Debug StoreKit 验证模式，仅用于本地验证 AI Pro 商品加载 / 购买 / 恢复。
+    static let debugStoreKitVerificationModeKey = "debug.storeKitVerificationMode"
+    /// Debug StoreKit 测试开关，仅用于本机签名环境下的购买验证。
+    static let debugRunStoreKitSandboxTestsKey = "debug.runStoreKitSandboxTests"
 
     /// Release 模式下永远返回 false；Debug 模式下先经过区域策略，再读取 UserDefaults 开关。
     ///

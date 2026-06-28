@@ -377,7 +377,23 @@ StoreKit 本地验证：
 
 - 本地 StoreKit 配置文件为 `TYScreenShotTool/TShot.storekit`
 - 当前只配置一个自动续期订阅商品：`tshot.pro.monthly`
-- 默认与 Debug scheme 已关联该配置，海外 Debug 策略下可从 AI Pro 壳层进入订阅 / 恢复入口
+- 默认与 Debug scheme 已关联该配置，默认测试 scheme 也已关联该配置
+- 海外 Debug 策略下可从 AI Pro 壳层进入订阅 / 恢复入口
+- StoreKit 购买验证默认跳过；如需本机签名环境验证本地购买交易，可执行：
+
+```bash
+defaults write com.sheldon.TShot debug.runStoreKitSandboxTests -bool true
+xcodebuild test \
+  -project TYScreenShotTool.xcodeproj \
+  -scheme TYScreenShotTool \
+  -configuration Debug \
+  -destination platform=macOS \
+  -derivedDataPath DerivedDataStoreKit \
+  -only-testing:TYScreenShotToolTests/AIProSubscriptionTests/test_storeKitConfigurationCanPurchaseMonthlyProduct
+defaults delete com.sheldon.TShot debug.runStoreKitSandboxTests
+```
+
+- 项目脚本 `./scripts/test.sh` 会禁用签名，因此该购买验证只作为显式人工 / Sandbox 验证步骤，不作为默认测试门禁
 - 当前本地订阅状态只用于展示，不作为最终 AI 请求权限；后续仍必须由后端校验地区、登录、订阅和额度
 
 后端 MVP：
