@@ -299,6 +299,7 @@ POST /v1/subscriptions/verify
 GET  /v1/subscriptions/status
 GET  /v1/usage/current
 POST /v1/ai/analyze-screenshot
+POST /v1/ai/analyze-text
 POST /v1/apple/notifications
 ```
 
@@ -540,13 +541,19 @@ created_at
 实现记录：
 
 - 新增 `backend/worker` Cloudflare Workers TypeScript MVP，使用 `wrangler.jsonc`、Vitest 和 TypeScript 类型检查
-- Worker 当前提供 `GET /health`、`GET /v1/subscriptions/status`、`GET /v1/usage/current`、`POST /v1/ai/analyze-screenshot` 等 API 骨架
-- `POST /v1/ai/analyze-screenshot` 已按登录态、地区、订阅、日/月额度、图片大小顺序进行前置拦截；通过前置校验后仍返回 `501 ai_forwarding_not_implemented`，避免本 Feature 提前产生 AI 成本
+- Worker 当前提供 `GET /health`、`POST /v1/auth/apple`、`POST /v1/subscriptions/verify`、`GET /v1/subscriptions/status`、`GET /v1/usage/current`、`POST /v1/ai/analyze-screenshot`、`POST /v1/ai/analyze-text`、`POST /v1/apple/notifications` 共 8 个 API 端点
+- `POST /v1/ai/analyze-screenshot` 与 `POST /v1/ai/analyze-text` 已按登录态、地区、订阅、日/月额度顺序进行前置拦截，通过后调用 AI provider 并记录用量
 - `CHN`、unknown / nil storefront 和非 allowlist storefront 在后端侧默认返回 `region_unavailable`
 - 新增 Supabase migration，包含 `users`、`app_sessions`、`subscriptions`、`usage_records`、`monthly_quotas`、`abuse_events`、`usage_current` 和 `user_ai_access`
 - 所有 Supabase 基础表已启用 RLS；Worker 使用 Cloudflare secret 中的 Supabase service role key 访问，普通客户端不直接访问这些表
-- 当前 `POST /v1/auth/apple`、`POST /v1/subscriptions/verify` 与 `POST /v1/apple/notifications` 仍为占位接口，真实 Apple 登录、App Store Server API 校验和通知处理留给后续 Feature
-- 单元测试覆盖无 Authorization、大陆地区、unknown storefront、海外未订阅和海外用量查询路径
+- `POST /v1/auth/apple` 已从占位推进为完整 Apple Sign In 登录：新建 `appleAuth.ts` 模块验证 Apple JWT（RS256），支持公钥缓存（TTL 1h）和 claims 验证；`BackendRepository` 新增 `findOrCreateUser` / `createSession`；`SupabaseRepository` 实现用户创建与随机 Token 会话生成
+- `POST /v1/subscriptions/verify` 已从占位推进为 StoreKit 订阅收据验证：新增 `verifyStoreKitTransactionJWT` 验证 signedTransaction JWT；`createOrUpdateSubscription` 按 `originalTransactionId` UPSERT 订阅记录；支持 Sandbox / Production 自动识别
+- `POST /v1/apple/notifications` 已从占位推进为 App Store Server 通知 webhook：新增 `verifyAppStoreNotificationJWT` 验证通知 JWT；`notificationTypeToStatus` 映射通知类型到订阅状态；`appAccountToken` 关联用户；始终返回 200 确认收到
+- `POST /v1/ai/analyze-text` 新增纯文字分析端点，`AIProvider` 接口新增 `analyzeText()` 方法；`OpenAIResponsesProvider` 与 `OpenAICompatibleChatProvider` 分别用纯文本格式调用后端 API；文字请求不计图片字节
+- 新增数据库迁移 `202606280002_add_analyze_text_request_type.sql`，扩展 `usage_records.request_type` 约束支持 `analyze_text`
+- 新增 `APPLE_BUNDLE_ID` 环境变量，用于 JWT audience 验证
+- 单元测试覆盖 Apple 登录缺失 token、JWT 验证失败、成功获取 token 和已存在用户登录；订阅验证无认证、缺少 signed_transaction、无效 JWT 和成功验证；通知缺失 payload、有效通知和多种通知类型映射
+- 单元测试已扩展至 40 个用例（覆盖 3 个测试文件）
 
 ### Feature 53.6：AI 分析闭环与额度控制
 
@@ -571,7 +578,6 @@ created_at
 - AI provider 失败时返回 `502 ai_provider_failed`，写入非 billable 失败记录，不扣减额度
 - 重复 `request_id` 返回 `409 duplicate_request`，不会重复调用 AI provider
 - 单元测试覆盖订阅海外用户成功获得 AI 结果、重复 request_id、月额度耗尽、AI provider 失败、未订阅和地区拦截路径
-- 当前仍未接入 App 端正式登录 token、App Store Server API 交易校验和 Apple Server Notifications V2
 
 ### Feature 53.7：隐私、审核与上架材料
 
@@ -606,13 +612,7 @@ created_at
 
 本 Sprint 不直接实现：
 
-- Sign in with Apple 真实登录
-- App Store Server API 真实交易校验
-- Cloudflare Workers 生产部署
-- Supabase 生产项目配置
-- AI 后端转发
-- App Store Connect 商品配置
-- 真实 AI 订阅购买
+- App Store Connect 商品配置（需手动在 Apple Developer Console 配置）
 - 中国大陆 AI 服务
 
 ---
@@ -694,7 +694,17 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 当前处于 AI Pro 区域化商业化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3、Feature 53.4 的 StoreKit 2 本地订阅壳层与显式 opt-in 购买验证、Feature 53.5 的 Serverless 后端 MVP 骨架，以及 Feature 53.6 的后端 AI 分析闭环与额度控制。
+本 Sprint 已完成全部 7 个 Feature 的开发实现：
+
+- Feature 53.1：App 区域策略底座 ✅
+- Feature 53.2：AI 入口与历史隐藏配置隔离 ✅
+- Feature 53.3：海外 AI Pro 壳层 ✅
+- Feature 53.4：StoreKit 2 订阅接入 ✅
+- Feature 53.5：Serverless 后端 MVP ✅（含 Apple Sign In 登录、订阅收据验证、通知 webhook、文字分析）
+- Feature 53.6：AI 分析闭环与额度控制 ✅
+- Feature 53.7：隐私、审核与上架材料（待开始）
+
+后端共实现 8 个 API 端点，40 个单元测试全部通过。
 
 完成标准：
 
