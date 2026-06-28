@@ -7,6 +7,7 @@ import type {
   BackendRepository,
   SubscriptionSnapshot,
   SubscriptionStatus,
+  SubscriptionTransactionInput,
   UsageRecordInput,
   UsageRecordSnapshot,
   UsageSnapshot,
@@ -193,6 +194,45 @@ export class SupabaseRepository implements BackendRepository {
   }
 
   /**
+   * 创建或更新用户订阅记录
+   * 按 originalTransactionId 查询，已存在则更新订阅状态，否则创建新记录
+   * @param userId 用户唯一标识符
+   * @param transaction 交易信息
+   */
+  async createOrUpdateSubscription(userId: string, transaction: SubscriptionTransactionInput): Promise<void> {
+    // 查询是否已有该原始交易的订阅记录
+    const existing = await this.query<{ id: number }>("subscriptions", {
+      original_transaction_id: `eq.${transaction.originalTransactionId}`,
+      select: "id",
+      limit: "1"
+    });
+
+    const status = transaction.expiresAt && new Date(transaction.expiresAt) > new Date() ? "active" : "expired";
+    const now = new Date().toISOString();
+
+    if (existing.length > 0) {
+      // 已有记录 → 更新
+      await this.update("subscriptions", { id: `eq.${existing[0]!.id}` }, {
+        latest_transaction_id: transaction.latestTransactionId,
+        status,
+        expires_at: transaction.expiresAt,
+        updated_at: now
+      });
+    } else {
+      // 新记录 → 插入
+      await this.insert("subscriptions", {
+        user_id: userId,
+        product_id: transaction.productId,
+        original_transaction_id: transaction.originalTransactionId,
+        latest_transaction_id: transaction.latestTransactionId,
+        status,
+        expires_at: transaction.expiresAt,
+        environment: transaction.environment
+      });
+    }
+  }
+
+  /**
    * 获取用户当前用量
    * @param userId 用户唯一标识符
    * @returns 用量快照
@@ -345,6 +385,32 @@ export class SupabaseRepository implements BackendRepository {
 
     if (!response.ok) {
       throw new Error(`Supabase insert failed: ${response.status}`);
+    }
+  }
+
+  /**
+   * 执行 Supabase REST API 更新操作（PATCH）
+   * @param table 表名
+   * @param params URL 查询参数（用于匹配要更新的行）
+   * @param body 更新数据
+   */
+  private async update(table: string, params: Record<string, string>, body: Record<string, unknown>): Promise<void> {
+    const url = new URL(`/rest/v1/${table}`, this.env.SUPABASE_URL);
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: this.headers({
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      }),
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase update failed: ${response.status}`);
     }
   }
 

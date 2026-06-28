@@ -1,4 +1,4 @@
-import { verifyAppleJWT } from "./appleAuth";
+import { verifyAppleJWT, verifyStoreKitTransactionJWT, type StoreKitTransactionPayload } from "./appleAuth";
 
 /**
  * 用户订阅状态枚举
@@ -110,6 +110,22 @@ export interface SubscriptionSnapshot {
 }
 
 /**
+ * 订阅交易输入接口，用于 createOrUpdateSubscription
+ */
+export interface SubscriptionTransactionInput {
+  /** 原始交易 ID */
+  originalTransactionId: string;
+  /** 最新交易 ID */
+  latestTransactionId: string;
+  /** 产品 ID */
+  productId: string;
+  /** 交易环境 */
+  environment: string;
+  /** 订阅到期时间（ISO 格式） */
+  expiresAt?: string | null;
+}
+
+/**
  * 后端数据访问层接口，定义数据持久化操作
  */
 export interface BackendRepository {
@@ -164,6 +180,13 @@ export interface BackendRepository {
    * @returns Bearer Token 字符串
    */
   createSession(userId: string): Promise<string>;
+  /**
+   * 创建或更新用户订阅记录
+   * 按 originalTransactionId 查询，已存在则更新，否则创建新记录
+   * @param userId 用户唯一标识符
+   * @param transaction 交易信息
+   */
+  createOrUpdateSubscription(userId: string, transaction: SubscriptionTransactionInput): Promise<void>;
 }
 
 /**
@@ -328,7 +351,7 @@ async function handleRequest(context: RequestContext): Promise<Response> {
   const routes: Record<string, Handler> = {
     "GET /health": async () => json({ status: "ok" }),
     "POST /v1/auth/apple": handleAuthApple,
-    "POST /v1/subscriptions/verify": notImplemented("subscription_verify_not_implemented"),
+    "POST /v1/subscriptions/verify": withAuthenticatedUser(handleVerifySubscription),
     "GET /v1/subscriptions/status": withAuthenticatedUser(handleSubscriptionStatus),
     "GET /v1/usage/current": withAuthenticatedUser(handleUsageCurrent),
     "POST /v1/ai/analyze-screenshot": withAuthenticatedUser(handleAnalyzeScreenshot),
@@ -470,6 +493,59 @@ async function handleAuthApple(context: RequestContext): Promise<Response> {
   return json({
     token,
     user_id: user.id
+  });
+}
+
+/**
+ * 处理 App Store 订阅收据验证请求
+ * 客户端调用 StoreKit 购买成功后，传入 signedTransaction（Apple 签名的 JWT），
+ * 后端验证签名并提取交易信息写入 subscriptions 表
+ * @param context 已认证请求上下文
+ * @returns 订阅验证结果响应
+ */
+async function handleVerifySubscription(context: AuthenticatedContext): Promise<Response> {
+  // 解析请求体
+  const body = await parseJsonBody(context.request);
+  if (!body || typeof body.signed_transaction !== "string" || !body.signed_transaction.trim()) {
+    return json({ error: "invalid_request" }, 400);
+  }
+
+  const signedTransaction = body.signed_transaction.trim();
+
+  // 验证 StoreKit JWT 签名并提取交易信息
+  let transaction: StoreKitTransactionPayload;
+  try {
+    transaction = await verifyStoreKitTransactionJWT(signedTransaction, context.env.APPLE_BUNDLE_ID);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "storekit_jwt_verification_failed",
+        error: error instanceof Error ? error.message : "unknown"
+      })
+    );
+    return json({ error: "verification_failed" }, 401);
+  }
+
+  // 判断订阅状态：根据 expiresDate 判断是否有效
+  const now = Date.now();
+  const status = transaction.expiresDate && transaction.expiresDate > now ? "active" : "expired";
+
+  // 写入数据库
+  await context.repository.createOrUpdateSubscription(context.user.id, {
+    originalTransactionId: transaction.originalTransactionId,
+    latestTransactionId: transaction.transactionId,
+    productId: transaction.productId,
+    environment: transaction.environment,
+    expiresAt: transaction.expiresDate ? new Date(transaction.expiresDate).toISOString() : null
+  });
+
+  // 返回响应
+  return json({
+    status,
+    product_id: transaction.productId,
+    transaction_id: transaction.transactionId,
+    expires_at: transaction.expiresDate ? new Date(transaction.expiresDate).toISOString() : null,
+    environment: transaction.environment
   });
 }
 

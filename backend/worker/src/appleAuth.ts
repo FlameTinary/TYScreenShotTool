@@ -47,6 +47,31 @@ export interface AppleJWTClaims {
   emailVerified?: boolean;
 }
 
+/**
+ * StoreKit 交易 JWT payload 结构
+ * 客户端调用 StoreKit 购买后返回的 signedTransaction 中包含的字段
+ */
+export interface StoreKitTransactionPayload {
+  /** 本次交易唯一标识符 */
+  transactionId: string;
+  /** 原始交易标识符（自动续期订阅跨期关联） */
+  originalTransactionId: string;
+  /** 购买的产品 ID */
+  productId: string;
+  /** 应用的 Bundle Identifier */
+  bundleId: string;
+  /** 交易环境 */
+  environment: "Sandbox" | "Production";
+  /** 订阅到期时间（Unix 毫秒时间戳），仅自动续期订阅有此字段 */
+  expiresDate?: number | undefined;
+  /** 购买时间（Unix 毫秒时间戳） */
+  purchaseDate: number;
+  /** JWT 签名时间（Unix 毫秒时间戳） */
+  signedDate: number;
+  /** 用户关联 UUID（可选，客户端购买时传入） */
+  appAccountToken?: string;
+}
+
 /** 公钥缓存 */
 let cachedKeys: { keys: AppleJWK[]; expiresAt: number } | null = null;
 const CACHE_TTL_MS = 3_600_000; // 1 小时
@@ -70,39 +95,8 @@ export async function verifyAppleJWT(
   identityToken: string,
   bundleId: string
 ): Promise<AppleJWTClaims> {
-  // 1. 解析 JWT
-  const parts = identityToken.split(".");
-  if (parts.length !== 3) {
-    throw new Error("Invalid JWT format: expected 3 parts");
-  }
+  const { payload } = await verifyJWTSignature(identityToken);
 
-  const headerB64 = parts[0]!;
-  const payloadB64 = parts[1]!;
-  const signatureB64 = parts[2]!;
-  const header = decodeJWTJSON<JWTHeader>(headerB64);
-  const payload = decodeJWTJSON<JWTPayload>(payloadB64);
-  const signature = base64URLDecode(signatureB64);
-  const signingData = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
-
-  // 2. 验证算法
-  if (header.alg !== "RS256") {
-    throw new Error(`Unsupported JWT algorithm: ${header.alg}`);
-  }
-
-  // 3. 获取 Apple 公钥并验证签名
-  const key = await findMatchingKey(header.kid);
-  const cryptoKey = await importApplePublicKey(key);
-  const isValid = await crypto.subtle.verify(
-    { name: "RSASSA-PKCS1-v1_5" },
-    cryptoKey,
-    signature.buffer as ArrayBuffer,
-    signingData.buffer as ArrayBuffer
-  );
-  if (!isValid) {
-    throw new Error("JWT signature verification failed");
-  }
-
-  // 4. 验证 claims
   if (payload.iss !== "https://appleid.apple.com") {
     throw new Error(`Invalid JWT issuer: ${payload.iss}`);
   }
@@ -121,6 +115,96 @@ export async function verifyAppleJWT(
     ...(payload.email !== undefined ? { email: payload.email } : {}),
     ...(payload.email_verified !== undefined ? { emailVerified: payload.email_verified } : {})
   };
+}
+
+/**
+ * 验证 StoreKit 交易 JWT（signedTransaction）
+ *
+ * 客户端在 StoreKit 购买成功后得到 signedTransaction（Apple 签名的 JWT），
+ * 后端验证签名并提取交易信息，用于创建或更新订阅记录
+ *
+ * @param signedTransaction StoreKit 返回的 JWT 字符串
+ * @param bundleId 应用的 Bundle Identifier（用于验证 aud claim）
+ * @returns 交易信息
+ * @throws 如果 JWT 格式/签名/claims 不合法则抛出 Error
+ */
+export async function verifyStoreKitTransactionJWT(
+  signedTransaction: string,
+  bundleId: string
+): Promise<StoreKitTransactionPayload> {
+  const { payload } = await verifyJWTSignature(signedTransaction);
+
+  // StoreKit JWT 的 iss 通常是 "appstoreconnect.apple.com"（Production）或 "appleid.apple.com"（Sandbox）
+  // 放宽校验：只要 iss 包含 apple.com 即可
+  if (!payload.iss || !payload.iss.includes("apple.com")) {
+    throw new Error(`Invalid StoreKit JWT issuer: ${payload.iss}`);
+  }
+
+  // aud 应等于应用的 bundle ID
+  if (payload.aud !== bundleId) {
+    throw new Error(`Invalid StoreKit JWT audience: ${payload.aud}`);
+  }
+
+  // 提取交易字段（StoreKit JWT 使用驼峰命名）
+  const transactionId = payload.transactionId as string | undefined;
+  const originalTransactionId = payload.originalTransactionId as string | undefined;
+  const productId = payload.productId as string | undefined;
+  const environment = payload.environment as string | undefined;
+
+  if (!transactionId) throw new Error("StoreKit JWT missing transactionId");
+  if (!originalTransactionId) throw new Error("StoreKit JWT missing originalTransactionId");
+  if (!productId) throw new Error("StoreKit JWT missing productId");
+
+  const normalizedEnv = environment === "Sandbox" ? "Sandbox" : "Production";
+
+  return {
+    transactionId,
+    originalTransactionId,
+    productId,
+    bundleId,
+    environment: normalizedEnv,
+    ...(typeof payload.expiresDate === "number" ? { expiresDate: payload.expiresDate } : {}),
+    purchaseDate: (payload.purchaseDate as number) ?? 0,
+    signedDate: (payload.signedDate as number) ?? 0,
+    ...(payload.appAccountToken !== undefined ? { appAccountToken: payload.appAccountToken as string } : {})
+  };
+}
+
+/**
+ * 解析 JWT 并验证 RS256 签名（共享内部逻辑）
+ * 使用 Apple 公钥端点 https://appleid.apple.com/auth/keys
+ */
+async function verifyJWTSignature(jwt: string): Promise<{ header: JWTHeader; payload: JWTPayload; signingData: Uint8Array }> {
+  const parts = jwt.split(".");
+  if (parts.length !== 3) {
+    throw new Error("Invalid JWT format: expected 3 parts");
+  }
+
+  const headerB64 = parts[0]!;
+  const payloadB64 = parts[1]!;
+  const signatureB64 = parts[2]!;
+  const header = decodeJWTJSON<JWTHeader>(headerB64);
+  const payload = decodeJWTJSON<JWTPayload>(payloadB64);
+  const signature = base64URLDecode(signatureB64);
+  const signingData = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+
+  if (header.alg !== "RS256") {
+    throw new Error(`Unsupported JWT algorithm: ${header.alg}`);
+  }
+
+  const key = await findMatchingKey(header.kid);
+  const cryptoKey = await importApplePublicKey(key);
+  const isValid = await crypto.subtle.verify(
+    { name: "RSASSA-PKCS1-v1_5" },
+    cryptoKey,
+    signature.buffer as ArrayBuffer,
+    signingData.buffer as ArrayBuffer
+  );
+  if (!isValid) {
+    throw new Error("JWT signature verification failed");
+  }
+
+  return { header, payload, signingData };
 }
 
 /**

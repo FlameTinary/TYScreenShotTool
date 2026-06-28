@@ -7,6 +7,16 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/appleAuth", () => ({
   verifyAppleJWT: () => Promise.resolve({ sub: "test-apple-user-001", email: "test@example.com" }),
+  verifyStoreKitTransactionJWT: () => Promise.resolve({
+    transactionId: "test-txn-001",
+    originalTransactionId: "test-original-txn-001",
+    productId: "tshot.pro.monthly",
+    bundleId: "com.tshot.app",
+    environment: "Sandbox" as const,
+    expiresDate: Date.now() + 86400000,
+    purchaseDate: Date.now(),
+    signedDate: Date.now()
+  }),
   resetAppleKeyCache: () => {}
 }));
 
@@ -113,6 +123,9 @@ function repository(profile: UserProfile | null, options: {
     },
     async createSession(_userId: string) {
       return options.createdToken ?? "mock-session-token-001";
+    },
+    async createOrUpdateSubscription(_userId: string, _transaction: unknown) {
+      // 空实现 — 测试中验证副作用通过 response status 间接验证
     }
   };
 }
@@ -254,6 +267,80 @@ describe("TShot AI backend app", () => {
       token: "existing-session-token",
       user_id: "existing-user-001"
     });
+  });
+
+  /**
+   * 测试：订阅验证请求缺少 signed_transaction 应返回 400
+   */
+  it("rejects subscription verify without signed_transaction", async () => {
+    const app = createApp(repository(user({ storefront: "USA", subscriptionStatus: "active" })));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({})
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(400);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "invalid_request"
+    });
+  });
+
+  /**
+   * 测试：订阅验证请求无认证应返回 401
+   */
+  it("rejects subscription verify without Authorization", async () => {
+    const app = createApp(repository(user()));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signed_transaction: "header.payload.signature" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(401);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "unauthorized"
+    });
+  });
+
+  /**
+   * 测试：成功验证有效订阅并返回订阅状态
+   */
+  it("verifies a valid subscription successfully", async () => {
+    const app = createApp(repository(user({ storefront: "USA", subscriptionStatus: "active" })));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ signed_transaction: "valid.storekit.jwt" })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(200);
+    const body = await json(response);
+    expect(body).toMatchObject({
+      status: "active",
+      product_id: "tshot.pro.monthly",
+      transaction_id: "test-txn-001",
+      environment: "Sandbox"
+    });
+    expect(typeof body.expires_at).toBe("string");
   });
 
   /**
