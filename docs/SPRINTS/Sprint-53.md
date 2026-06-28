@@ -557,6 +557,17 @@ created_at
 - 未订阅或超额用户不会触发 AI API 调用
 - AI 失败、超时、超额都有明确提示
 
+实现记录：
+
+- `POST /v1/ai/analyze-screenshot` 已从占位 `501` 推进为后端 AI 分析闭环
+- 请求会先经过 Bearer 登录态、地区 allowlist、订阅 active / grace_period、日/月额度、`request_id` 幂等和图片大小校验
+- 通过校验后由 `OpenAIResponsesProvider` 调用 OpenAI Responses API；`OPENAI_API_KEY` 只通过 Cloudflare secret 注入，不进入 App 包或仓库配置
+- 成功结果会写入 `usage_records`，并通过 Supabase RPC `increment_monthly_quota` 扣减本月次数、token 和成本
+- AI provider 失败时返回 `502 ai_provider_failed`，写入非 billable 失败记录，不扣减额度
+- 重复 `request_id` 返回 `409 duplicate_request`，不会重复调用 AI provider
+- 单元测试覆盖订阅海外用户成功获得 AI 结果、重复 request_id、月额度耗尽、AI provider 失败、未订阅和地区拦截路径
+- 当前仍未接入 App 端正式登录 token、App Store Server API 交易校验和 Apple Server Notifications V2
+
 ### Feature 53.7：隐私、审核与上架材料
 
 目标：
@@ -678,11 +689,11 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 当前处于 AI Pro 区域化商业化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3、Feature 53.4 的第一阶段 StoreKit 2 本地订阅壳层，以及 Feature 53.5 的 Serverless 后端 MVP 骨架。
+本 Sprint 当前处于 AI Pro 区域化商业化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3、Feature 53.4 的第一阶段 StoreKit 2 本地订阅壳层、Feature 53.5 的 Serverless 后端 MVP 骨架，以及 Feature 53.6 的后端 AI 分析闭环与额度控制。
 
 完成标准：
 
 - 当前 Sprint 文档完成
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
-- 下一步可以进入 Feature 53.6 的 AI 分析闭环与额度控制，或继续补齐 Feature 53.4 的 Sandbox 人工购买验证
+- 下一步可以进入 Feature 53.7 的隐私、审核与上架材料，或继续补齐 Feature 53.4 的 Sandbox 人工购买验证

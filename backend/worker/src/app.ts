@@ -17,6 +17,28 @@ export interface UsageSnapshot {
   dailyLimitCount: number;
 }
 
+export type UsageRecordStatus = "accepted" | "blocked" | "succeeded" | "failed";
+
+export interface UsageRecordSnapshot {
+  requestId: string;
+  status: UsageRecordStatus;
+}
+
+export interface UsageRecordInput {
+  userId: string;
+  requestId: string;
+  requestType: "analyze_screenshot";
+  model: string | null;
+  imageBytes: number;
+  imageCount: number;
+  inputTokenCount: number;
+  outputTokenCount: number;
+  estimatedCost: number;
+  billable: boolean;
+  status: UsageRecordStatus;
+  outputText?: string;
+}
+
 export interface SubscriptionSnapshot {
   userId: string;
   status: SubscriptionStatus;
@@ -26,8 +48,11 @@ export interface SubscriptionSnapshot {
 
 export interface BackendRepository {
   findUserByBearerToken(token: string): Promise<UserProfile | null>;
+  findUsageRecordByRequestId(userId: string, requestId: string): Promise<UsageRecordSnapshot | null>;
   getUsage(userId: string): Promise<UsageSnapshot>;
   getSubscriptionStatus(userId: string): Promise<SubscriptionSnapshot>;
+  recordUsage(record: UsageRecordInput): Promise<void>;
+  incrementMonthlyQuota(userId: string, requestCount: number, tokenCount: number, cost: number): Promise<void>;
 }
 
 export interface BackendEnv {
@@ -35,6 +60,29 @@ export interface BackendEnv {
   MONTHLY_REQUEST_LIMIT: string;
   DAILY_REQUEST_LIMIT: string;
   MAX_IMAGE_BYTES: string;
+  AI_MODEL: string;
+  AI_MAX_OUTPUT_TOKENS: string;
+}
+
+export interface AIProviderRequest {
+  requestId: string;
+  userId: string;
+  imageBase64: string;
+  prompt: string;
+  model: string;
+  maxOutputTokens: number;
+}
+
+export interface AIProviderResult {
+  text: string;
+  model: string;
+  inputTokenCount: number;
+  outputTokenCount: number;
+  estimatedCost: number;
+}
+
+export interface AIProvider {
+  analyzeScreenshot(request: AIProviderRequest): Promise<AIProviderResult>;
 }
 
 export interface BackendApp {
@@ -45,6 +93,7 @@ interface RequestContext {
   request: Request;
   env: BackendEnv;
   repository: BackendRepository;
+  aiProvider: AIProvider;
 }
 
 type Handler = (context: RequestContext) => Promise<Response>;
@@ -57,10 +106,10 @@ const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8"
 };
 
-export function createApp(repository: BackendRepository): BackendApp {
+export function createApp(repository: BackendRepository, aiProvider: AIProvider = unavailableAIProvider): BackendApp {
   return {
     async fetch(request, env) {
-      return handleRequest({ request, env, repository });
+      return handleRequest({ request, env, repository, aiProvider });
     }
   };
 }
@@ -170,12 +219,80 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
     return json({ error: "invalid_request" }, 400);
   }
 
+  const requestId = body.request_id.trim();
+  if (!requestId) {
+    return json({ error: "invalid_request" }, 400);
+  }
+
+  const existingRecord = await context.repository.findUsageRecordByRequestId(context.user.id, requestId);
+  if (existingRecord) {
+    return json({ error: "duplicate_request", status: existingRecord.status }, 409);
+  }
+
   const imageBytes = estimateBase64Bytes(body.image_base64);
   if (imageBytes > numberFromEnv(context.env.MAX_IMAGE_BYTES, 2_097_152)) {
     return json({ error: "image_too_large" }, 413);
   }
 
-  return json({ error: "ai_forwarding_not_implemented" }, 501);
+  const model = context.env.AI_MODEL || "gpt-5.4-mini";
+  const prompt = typeof body.prompt === "string" && body.prompt.trim()
+    ? body.prompt.trim()
+    : "Analyze this screenshot. Explain the likely context, key text, and actionable next steps.";
+
+  let result: AIProviderResult;
+  try {
+    result = await context.aiProvider.analyzeScreenshot({
+      requestId,
+      userId: context.user.id,
+      imageBase64: body.image_base64,
+      prompt,
+      model,
+      maxOutputTokens: numberFromEnv(context.env.AI_MAX_OUTPUT_TOKENS, 1200)
+    });
+  } catch (error) {
+    await context.repository.recordUsage({
+      userId: context.user.id,
+      requestId,
+      requestType: "analyze_screenshot",
+      model,
+      imageBytes,
+      imageCount: 1,
+      inputTokenCount: 0,
+      outputTokenCount: 0,
+      estimatedCost: 0,
+      billable: false,
+      status: "failed",
+      outputText: error instanceof Error ? error.message : "AI provider failed"
+    });
+    return json({ error: "ai_provider_failed" }, 502);
+  }
+
+  const tokenCount = result.inputTokenCount + result.outputTokenCount;
+  await context.repository.recordUsage({
+    userId: context.user.id,
+    requestId,
+    requestType: "analyze_screenshot",
+    model: result.model,
+    imageBytes,
+    imageCount: 1,
+    inputTokenCount: result.inputTokenCount,
+    outputTokenCount: result.outputTokenCount,
+    estimatedCost: result.estimatedCost,
+    billable: true,
+    status: "succeeded",
+    outputText: result.text
+  });
+  await context.repository.incrementMonthlyQuota(context.user.id, 1, tokenCount, result.estimatedCost);
+
+  return json({
+    request_id: requestId,
+    analysis: result.text,
+    model: result.model,
+    usage: {
+      input_tokens: result.inputTokenCount,
+      output_tokens: result.outputTokenCount
+    }
+  });
 }
 
 function validateRegion(user: UserProfile, env: BackendEnv): Response | null {
@@ -240,3 +357,9 @@ function json(body: Record<string, unknown>, status = 200): Response {
     headers: jsonHeaders
   });
 }
+
+const unavailableAIProvider: AIProvider = {
+  async analyzeScreenshot() {
+    throw new Error("AI provider is not configured");
+  }
+};

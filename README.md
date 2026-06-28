@@ -354,7 +354,7 @@ v1.0.0 后续迭代中，当前 Sprint 为 Sprint 53「AI 订阅服务区域化�
 * 当前隐藏 AI 配置仅适合作为开发者 / Debug / 内部验证能力。
 * `local.aiAnalysis.*` 不能绕过区域策略；中国大陆模式和 unknown / nil storefront 下，即使写入本地 API Key，也不会发起商业 AI 请求。
 * 海外模式下当前 AI Pro 壳层可加载 StoreKit 2 订阅商品并提供购买 / 恢复入口；点击 AI 入口不会上传截图，也不会调用 AI 后端。
-* `backend/` 已提供 Cloudflare Workers + Supabase 后端 MVP 骨架，用于验证登录态、地区、订阅和额度拦截顺序；当前仍不会真实转发 AI 请求。
+* `backend/` 已提供 Cloudflare Workers + Supabase 后端 MVP，可在登录态、地区、订阅、额度、幂等和图片大小校验通过后转发 AI 请求，并记录 usage 与扣减月额度。
 * 正式面向用户的 AI Pro 订阅能力将按区域化策略规划：中国大陆区保持纯本地工具定位，海外区后续通过登录、Apple 订阅和后端校验提供 AI 服务。
 * 商业 AI 请求不应依赖用户在本机写入 API Key，后续应统一走后端鉴权、订阅校验、地区校验、额度控制和风控。
 
@@ -384,8 +384,9 @@ StoreKit 本地验证：
 
 - Worker 目录：`backend/worker`
 - Supabase migration：`backend/supabase/migrations/202606280001_ai_backend_mvp.sql`
-- 当前 API 可校验 Bearer 登录态、地区 allowlist、订阅状态、日/月额度和图片大小
-- `POST /v1/ai/analyze-screenshot` 在通过前置校验后仍返回 `501 ai_forwarding_not_implemented`，真实 AI 转发留给后续 Feature
+- 当前 API 可校验 Bearer 登录态、地区 allowlist、订阅状态、日/月额度、`request_id` 幂等和图片大小
+- `POST /v1/ai/analyze-screenshot` 在通过前置校验后会调用后端配置的 OpenAI Responses API，并写入 `usage_records`、扣减 `monthly_quotas`
+- 真实 Sign in with Apple、App Store Server API 订阅校验、Apple Server Notifications V2 和 App 端正式接入仍未完成
 
 后端本地验证：
 

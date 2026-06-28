@@ -2,6 +2,8 @@ import type {
   BackendRepository,
   SubscriptionSnapshot,
   SubscriptionStatus,
+  UsageRecordInput,
+  UsageRecordSnapshot,
   UsageSnapshot,
   UserProfile
 } from "./app";
@@ -33,6 +35,11 @@ interface SupabaseUsageRow {
   monthly_limit_count: number | null;
   daily_used_count: number | null;
   daily_limit_count: number | null;
+}
+
+interface SupabaseUsageRecordRow {
+  request_id: string;
+  status: UsageRecordSnapshot["status"];
 }
 
 export class SupabaseRepository implements BackendRepository {
@@ -76,6 +83,24 @@ export class SupabaseRepository implements BackendRepository {
     };
   }
 
+  async findUsageRecordByRequestId(userId: string, requestId: string): Promise<UsageRecordSnapshot | null> {
+    const rows = await this.query<SupabaseUsageRecordRow>("usage_records", {
+      user_id: `eq.${userId}`,
+      request_id: `eq.${requestId}`,
+      select: "request_id,status",
+      limit: "1"
+    });
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      requestId: row.request_id,
+      status: row.status
+    };
+  }
+
   async getSubscriptionStatus(userId: string): Promise<SubscriptionSnapshot> {
     const rows = await this.query<SupabaseSubscriptionRow>("subscriptions", {
       user_id: `eq.${userId}`,
@@ -92,25 +117,77 @@ export class SupabaseRepository implements BackendRepository {
     };
   }
 
+  async recordUsage(record: UsageRecordInput): Promise<void> {
+    await this.insert("usage_records", {
+      user_id: record.userId,
+      request_id: record.requestId,
+      request_type: record.requestType,
+      model: record.model,
+      image_bytes: record.imageBytes,
+      image_count: record.imageCount,
+      input_token_count: record.inputTokenCount,
+      output_token_count: record.outputTokenCount,
+      estimated_cost: record.estimatedCost,
+      billable: record.billable,
+      status: record.status,
+      output_text: record.outputText ?? null
+    });
+  }
+
+  async incrementMonthlyQuota(userId: string, requestCount: number, tokenCount: number, cost: number): Promise<void> {
+    const response = await fetch(new URL("/rest/v1/rpc/increment_monthly_quota", this.env.SUPABASE_URL), {
+      method: "POST",
+      headers: this.headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_request_count: requestCount,
+        p_token_count: tokenCount,
+        p_cost: cost
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase quota increment failed: ${response.status}`);
+    }
+  }
+
   private async query<T>(table: string, params: Record<string, string>): Promise<T[]> {
     const url = new URL(`/rest/v1/${table}`, this.env.SUPABASE_URL);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
     }
 
-    const response = await fetch(url, {
-      headers: {
-        apikey: this.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        Accept: "application/json"
-      }
-    });
+    const response = await fetch(url, { headers: this.headers() });
 
     if (!response.ok) {
       throw new Error(`Supabase query failed: ${response.status}`);
     }
 
     return (await response.json()) as T[];
+  }
+
+  private async insert(table: string, body: Record<string, unknown>): Promise<void> {
+    const response = await fetch(new URL(`/rest/v1/${table}`, this.env.SUPABASE_URL), {
+      method: "POST",
+      headers: this.headers({
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      }),
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase insert failed: ${response.status}`);
+    }
+  }
+
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    return {
+      apikey: this.env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${this.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Accept: "application/json",
+      ...extra
+    };
   }
 }
 

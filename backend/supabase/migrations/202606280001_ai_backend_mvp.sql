@@ -52,6 +52,7 @@ create table if not exists public.usage_records (
   estimated_cost numeric(12, 6) not null default 0,
   billable boolean not null default false,
   status text not null,
+  output_text text,
   created_at timestamptz not null default now(),
   constraint usage_records_request_type_check check (
     request_type in ('analyze_screenshot')
@@ -141,3 +142,40 @@ left join lateral (
 left join public.usage_current usage on usage.user_id = u.id
 where s.revoked_at is null
   and (s.expires_at is null or s.expires_at > now());
+
+create or replace function public.increment_monthly_quota(
+  p_user_id uuid,
+  p_request_count integer,
+  p_token_count integer,
+  p_cost numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_month date := date_trunc('month', now())::date;
+begin
+  insert into public.monthly_quotas (
+    user_id,
+    month,
+    used_count,
+    used_tokens,
+    used_cost
+  )
+  values (
+    p_user_id,
+    current_month,
+    p_request_count,
+    p_token_count,
+    p_cost
+  )
+  on conflict (user_id, month)
+  do update set
+    used_count = public.monthly_quotas.used_count + excluded.used_count,
+    used_tokens = public.monthly_quotas.used_tokens + excluded.used_tokens,
+    used_cost = public.monthly_quotas.used_cost + excluded.used_cost,
+    updated_at = now();
+end;
+$$;
