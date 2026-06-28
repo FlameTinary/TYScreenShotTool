@@ -45,6 +45,8 @@ enum AppSettings {
     static let showAIEntrancesKey = "settings.showAIEntrances"
     /// 显示 AI 功能入口默认值（默认关闭，出于合规考虑）
     static let showAIEntrancesDefaultValue = false
+    /// Debug 区域策略 storefront 覆盖值，用于本地验证 CHN / USA / unknown。
+    static let debugStorefrontCodeOverrideKey = "debug.regionPolicy.storefrontCode"
 
     /// Release 模式下永远返回 false；Debug 模式下先经过区域策略，再读取 UserDefaults 开关。
     ///
@@ -52,7 +54,7 @@ enum AppSettings {
     /// Debug 构建时即使手动写入 true，也不能绕过区域策略显示商业 AI 入口。
     static var effectiveShowAIEntrances: Bool {
         #if DEBUG
-        return AIAvailabilityService().shouldShowCommercialAIEntry
+        return AIAvailabilityService().shouldShowAIProShellEntry
         #else
         return false
         #endif

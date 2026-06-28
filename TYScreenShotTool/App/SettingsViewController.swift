@@ -22,6 +22,7 @@ final class SettingsViewController: NSViewController {
     #endif
     #if DEBUG
     private let aiEntranceCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let debugStorefrontCodeField = NSTextField()
     #endif
     private let saveDirectoryLabel = NSTextField(labelWithString: "")
 
@@ -70,6 +71,7 @@ extension SettingsViewController {
         #endif
         #if DEBUG
         let aiEntranceSection = makeAIEntranceSection()
+        let debugRegionPolicySection = makeDebugRegionPolicySection()
         #endif
         let saveSection = makeSaveDirectorySection()
 
@@ -80,6 +82,7 @@ extension SettingsViewController {
         #if DEBUG
         contentSections.append(aiSection)
         contentSections.append(aiEntranceSection)
+        contentSections.append(debugRegionPolicySection)
         #endif
         contentSections.append(saveSection)
         contentSections.forEach(contentStack.addArrangedSubview)
@@ -92,6 +95,7 @@ extension SettingsViewController {
         #if DEBUG
         widthSections.append(aiSection)
         widthSections.append(aiEntranceSection)
+        widthSections.append(debugRegionPolicySection)
         #endif
         widthSections.append(saveSection)
         for section in widthSections {
@@ -118,6 +122,8 @@ extension SettingsViewController {
         #if DEBUG
         aiEntranceCheckbox.target = self
         aiEntranceCheckbox.action = #selector(aiEntranceChanged)
+        debugStorefrontCodeField.target = self
+        debugStorefrontCodeField.action = #selector(debugStorefrontOverrideChanged)
         #endif
     }
 
@@ -142,6 +148,9 @@ extension SettingsViewController {
         #endif
         #if DEBUG
         aiEntranceCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey) ? .on : .off
+        debugStorefrontCodeField.stringValue = UserDefaults.standard.string(
+            forKey: AppSettings.debugStorefrontCodeOverrideKey
+        ) ?? ""
         #endif
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
     }
@@ -398,6 +407,46 @@ private extension SettingsViewController {
     }
     #endif
 
+    #if DEBUG
+    func makeDebugRegionPolicySection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppLocalization.text("settings.region_policy.section"))
+        let helpLabel = makeSecondaryLabel(AppLocalization.text("settings.region_policy.help"))
+        let applyButton = NSButton(
+            title: AppLocalization.text("settings.region_policy.apply"),
+            target: self,
+            action: #selector(debugStorefrontOverrideChanged)
+        )
+
+        debugStorefrontCodeField.placeholderString = AppLocalization.text("settings.region_policy.placeholder")
+
+        container.addSubview(sectionTitle)
+        container.addSubview(debugStorefrontCodeField)
+        container.addSubview(applyButton)
+        container.addSubview(helpLabel)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        debugStorefrontCodeField.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.equalToSuperview()
+            make.width.equalTo(160)
+        }
+        applyButton.snp.makeConstraints { make in
+            make.centerY.equalTo(debugStorefrontCodeField)
+            make.leading.equalTo(debugStorefrontCodeField.snp.trailing).offset(8)
+        }
+        helpLabel.snp.makeConstraints { make in
+            make.top.equalTo(debugStorefrontCodeField.snp.bottom).offset(6)
+            make.leading.trailing.bottom.equalToSuperview()
+        }
+
+        return container
+    }
+    #endif
+
     func makeSaveDirectorySection() -> NSView {
         let container = NSView()
 
@@ -480,6 +529,19 @@ private extension SettingsViewController {
             aiEntranceCheckbox.state == .on,
             forKey: AppSettings.showAIEntrancesKey
         )
+    }
+    #endif
+
+    #if DEBUG
+    @objc func debugStorefrontOverrideChanged() {
+        let storefrontCode = debugStorefrontCodeField.stringValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if storefrontCode.isEmpty {
+            UserDefaults.standard.removeObject(forKey: AppSettings.debugStorefrontCodeOverrideKey)
+        } else {
+            UserDefaults.standard.set(storefrontCode, forKey: AppSettings.debugStorefrontCodeOverrideKey)
+        }
     }
     #endif
 

@@ -1312,7 +1312,7 @@ final class CaptureOverlayView: NSView {
     @objc
     private func requestAI() {
         annotationCanvasView.commitActiveTextIfNeeded()
-        presentAIMenu(relativeTo: aiButton)
+        AIProPromptPresenter.show(from: self)
     }
 
     private func presentAIMenu(relativeTo button: NSButton) {

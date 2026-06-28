@@ -485,6 +485,15 @@ created_at
 - 未订阅点击 AI 时不会产生 AI 请求
 - 大陆模式下完全看不到该入口
 
+实现记录：
+
+- 新增 `AppRegionPolicyProvider`，Debug 下支持通过 `debug.regionPolicy.storefrontCode` 注入 storefront，便于本地验证 `USA` / `CHN` / unknown 分支
+- 新增 `AIProShellAvailability`，将海外 AI Pro 壳层可见性与点击行为收口为可测试模型
+- `AIAvailabilityService` 默认从 `AppRegionPolicyProvider` 获取当前区域策略，`AppSettings.effectiveShowAIEntrances` 切换为 AI Pro 壳层入口判断
+- 普通截图与长截图 AI 按钮在海外 Debug 策略下展示 AI Pro 说明弹窗，不再进入真实 AI 请求菜单
+- Debug Settings 新增区域策略覆盖输入，方便人工验证海外 / 大陆 / unknown 模式
+- 单元测试覆盖 Debug storefront override、AI Pro 壳层可见性，以及点击壳层不转换为 AI 请求
+
 ### Feature 53.4：StoreKit 2 订阅接入
 
 目标：
@@ -648,11 +657,11 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 当前处于需求与方案对齐阶段。
+本 Sprint 当前处于 App 端区域化底座实现阶段，已完成 Feature 53.1、Feature 53.2 与 Feature 53.3。
 
 完成标准：
 
 - 当前 Sprint 文档完成
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
-- 下一步可以进入 Feature 53.1 的代码实现
+- 下一步可以进入 Feature 53.4 的 StoreKit 2 订阅接入

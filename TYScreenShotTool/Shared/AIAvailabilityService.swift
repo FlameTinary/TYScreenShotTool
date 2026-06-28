@@ -6,7 +6,7 @@ struct AIAvailabilityService {
     private let userDefaults: UserDefaults
 
     init(
-        regionPolicy: RegionPolicy = RegionPolicyResolver.policy(forStorefrontCode: nil),
+        regionPolicy: RegionPolicy = AppRegionPolicyProvider().currentPolicy(),
         userDefaults: UserDefaults = .standard
     ) {
         self.regionPolicy = regionPolicy
@@ -16,6 +16,13 @@ struct AIAvailabilityService {
     var shouldShowCommercialAIEntry: Bool {
         regionPolicy.isCommercialAIAllowed
             && userDefaults.bool(forKey: AppSettings.showAIEntrancesKey)
+    }
+
+    var shouldShowAIProShellEntry: Bool {
+        AIProShellAvailability(
+            regionPolicy: regionPolicy,
+            isEntranceSettingEnabled: userDefaults.bool(forKey: AppSettings.showAIEntrancesKey)
+        ).shouldShowEntry
     }
 
     var isServerAIAllowed: Bool {
