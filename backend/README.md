@@ -52,13 +52,102 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put OPENAI_API_KEY
 ```
 
-DeepSeek 配置：
+## 切换大模型
+
+Worker 通过 `backend/worker/wrangler.jsonc` 中的运行时变量切换 AI Provider 和模型。修改后需要重新生成类型并部署：
+
+```bash
+cd backend/worker
+npx wrangler types
+npx wrangler deploy
+```
+
+如果切换到新的服务商，还需要更新 `OPENAI_API_KEY`。密钥名称保持不变，但值应替换为目标服务商的 API Key：
+
+```bash
+cd backend/worker
+npx wrangler secret put OPENAI_API_KEY
+```
+
+### OpenAI 图片分析模型
+
+用于正式截图分析时，优先选择支持图片输入的 OpenAI 模型：
+
+```jsonc
+{
+  "vars": {
+    "AI_PROVIDER": "openai",
+    "AI_MODEL": "gpt-4.1-mini",
+    "OPENAI_BASE_URL": "https://api.openai.com"
+  }
+}
+```
+
+说明：
+
+- `AI_PROVIDER=openai` 会使用 OpenAI Responses API。
+- `AI_MODEL` 必须是支持图片输入的模型。
+- `OPENAI_API_KEY` 必须设置为 OpenAI API Key。
+
+### OpenAI-compatible 视觉模型
+
+如果使用第三方 OpenAI-compatible 服务，并且该服务支持 Chat Completions 的 `image_url` 图片输入：
+
+```jsonc
+{
+  "vars": {
+    "AI_PROVIDER": "openai-compatible",
+    "AI_MODEL": "your-vision-model-name",
+    "OPENAI_BASE_URL": "https://your-provider-api-root"
+  }
+}
+```
+
+说明：
+
+- Worker 会请求 `${OPENAI_BASE_URL}/v1/chat/completions`。
+- 请求体会携带文本 prompt 和 `image_url`。
+- 目标模型必须支持图片输入；纯文本模型会调用失败。
+- `OPENAI_API_KEY` 必须设置为该第三方服务商的 API Key。
+
+### DeepSeek 当前配置
 
 - `wrangler.jsonc` 中设置 `AI_PROVIDER=deepseek`
 - `wrangler.jsonc` 中设置 `AI_MODEL=deepseek-v4-flash`
 - `wrangler.jsonc` 中设置 `OPENAI_BASE_URL=https://api.deepseek.com`
 - `OPENAI_API_KEY` 仍然必须设置，值为 DeepSeek API Key
 - DeepSeek 当前接口按文本模型处理，不支持截图图片输入；`/v1/ai/analyze-screenshot` 会返回 `ai_provider_input_unsupported`，正式截图分析需切换到支持视觉输入的 AI Provider。
+
+### 切换后验证
+
+部署后先验证鉴权和用量接口：
+
+```bash
+curl -i -H "Authorization: Bearer YOUR_TOKEN" \
+  https://tshot-ai-backend.tshot.workers.dev/v1/usage/current
+```
+
+再验证截图分析接口：
+
+```bash
+curl -i -X POST https://tshot-ai-backend.tshot.workers.dev/v1/ai/analyze-screenshot \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "model-switch-test-001",
+    "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "prompt": "请用一句话描述这张图片"
+  }'
+```
+
+常见结果：
+
+- `200`：模型调用成功，返回截图分析结果，并计入用量。
+- `401 unauthorized`：Bearer token 无效或会话不存在。
+- `403 region_unavailable`：当前 storefront 不允许使用 server AI。
+- `402 subscription_required`：用户没有有效订阅。
+- `422 ai_provider_input_unsupported`：当前 Provider 不支持截图图片输入。
+- `502 ai_provider_failed`：Provider 调用失败，通常需要检查模型名、API Key、余额、Base URL 或服务商是否支持当前请求格式。
 
 本地开发：
 
