@@ -4,7 +4,7 @@
  */
 
 import { createApp } from "./app";
-import { OpenAIResponsesProvider, type OpenAIProviderEnv } from "./openAIProvider";
+import { createAIProvider, type OpenAIProviderEnv } from "./openAIProvider";
 import { SupabaseRepository, type SupabaseEnv } from "./supabaseRepository";
 
 /**
@@ -24,7 +24,7 @@ const worker = {
    * @returns HTTP 响应对象
    */
   async fetch(request, env) {
-    const app = createApp(new SupabaseRepository(env), new OpenAIResponsesProvider(env));
+    const app = createApp(new SupabaseRepository(env), createAIProvider(env));
     return app.fetch(request, env);
   }
 } satisfies ExportedHandler<WorkerEnv>;

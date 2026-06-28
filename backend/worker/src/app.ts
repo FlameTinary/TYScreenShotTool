@@ -456,6 +456,16 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
       maxOutputTokens: numberFromEnv(context.env.AI_MAX_OUTPUT_TOKENS, 1200)
     });
   } catch (error) {
+    const unsupportedInput = isAIProviderUnsupportedInputError(error);
+    console.error(
+      JSON.stringify({
+        event: unsupportedInput ? "ai_provider_input_unsupported" : "ai_provider_failed",
+        request_id: requestId,
+        user_id: context.user.id,
+        model,
+        error: error instanceof Error ? error.message : "AI provider failed"
+      })
+    );
     // AI 调用失败，记录为不可计费的失败请求
     await context.repository.recordUsage({
       userId: context.user.id,
@@ -471,7 +481,7 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
       status: "failed",
       outputText: error instanceof Error ? error.message : "AI provider failed"
     });
-    return json({ error: "ai_provider_failed" }, 502);
+    return json({ error: unsupportedInput ? "ai_provider_input_unsupported" : "ai_provider_failed" }, unsupportedInput ? 422 : 502);
   }
 
   // AI 调用成功，记录用量并更新配额
@@ -502,6 +512,10 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
       output_tokens: result.outputTokenCount
     }
   });
+}
+
+function isAIProviderUnsupportedInputError(error: unknown): boolean {
+  return error instanceof Error && (error as { code?: string }).code === "ai_provider_input_unsupported";
 }
 
 /**

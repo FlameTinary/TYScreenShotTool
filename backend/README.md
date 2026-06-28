@@ -36,7 +36,9 @@ npx wrangler deploy
 - `MONTHLY_REQUEST_LIMIT`：默认月度 AI 请求上限。
 - `DAILY_REQUEST_LIMIT`：默认每日 AI 请求上限。
 - `MAX_IMAGE_BYTES`：允许的最大图片载荷大小。
-- `AI_MODEL`：Responses API 模型名称。
+- `AI_PROVIDER`：AI Provider 类型，默认 `openai`；`deepseek` / `openai-compatible` 走 Chat Completions API。
+- `AI_MODEL`：AI 模型名称；DeepSeek 当前配置为 `deepseek-v4-flash`。
+- `OPENAI_BASE_URL`：AI Provider API 根地址；DeepSeek 当前配置为 `https://api.deepseek.com`。
 - `AI_MAX_OUTPUT_TOKENS`：每次请求的最大输出 token 数。
 
 密钥必须通过 Wrangler 设置，不可提交：
@@ -50,12 +52,13 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put OPENAI_API_KEY
 ```
 
-可选密钥：
+DeepSeek 配置：
 
-```bash
-npx wrangler secret put OPENAI_BASE_URL
-# 输入: https://your-custom-openai-endpoint.com (可选)
-```
+- `wrangler.jsonc` 中设置 `AI_PROVIDER=deepseek`
+- `wrangler.jsonc` 中设置 `AI_MODEL=deepseek-v4-flash`
+- `wrangler.jsonc` 中设置 `OPENAI_BASE_URL=https://api.deepseek.com`
+- `OPENAI_API_KEY` 仍然必须设置，值为 DeepSeek API Key
+- DeepSeek 当前接口按文本模型处理，不支持截图图片输入；`/v1/ai/analyze-screenshot` 会返回 `ai_provider_input_unsupported`，正式截图分析需切换到支持视觉输入的 AI Provider。
 
 本地开发：
 
@@ -89,17 +92,20 @@ curl -X POST http://localhost:8787/v1/ai/analyze-screenshot \
   }'
 ```
 
-## 生产环境密钥配置
-在 Cloudflare Dashboard 中配置密钥：
+## 生产环境配置
+在 Cloudflare Dashboard 中检查变量与密钥：
 
 1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
 2. 进入 Workers & Pages → tshot-ai-backend
 3. 点击 Settings → Variables and Secrets
-4. 添加以下环境变量：
+4. 确认以下运行时变量：
+   - AI_PROVIDER
+   - AI_MODEL
+   - OPENAI_BASE_URL
+5. 确认以下密钥：
    - SUPABASE_URL
    - SUPABASE_SERVICE_ROLE_KEY
    - OPENAI_API_KEY
-   - OPENAI_BASE_URL （可选）
 
 ## API MVP
 

@@ -390,4 +390,44 @@ describe("TShot AI backend app", () => {
     });
     expect(quotaIncrements).toHaveLength(0);
   });
+
+  /**
+   * 测试：AI 提供商不支持图片输入时应返回明确错误
+   * 不应更新配额
+   */
+  it("returns unsupported input when AI provider cannot analyze images", async () => {
+    const usageRecords: UsageRecordInput[] = [];
+    const quotaIncrements: Array<{ userId: string; requestCount: number; tokenCount: number; cost: number }> = [];
+    const error = Object.assign(new Error("DeepSeek does not support image input for screenshot analysis."), {
+      code: "ai_provider_input_unsupported"
+    });
+    const app = createApp(
+      repository(user({ storefront: "USA", subscriptionStatus: "active" }), { usageRecords, quotaIncrements }),
+      aiProvider({ error })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-screenshot", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ request_id: "req_unsupported", image_base64: "aGVsbG8=" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(422);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "ai_provider_input_unsupported"
+    });
+    expect(usageRecords).toHaveLength(1);
+    expect(usageRecords[0]).toMatchObject({
+      requestId: "req_unsupported",
+      billable: false,
+      status: "failed"
+    });
+    expect(quotaIncrements).toHaveLength(0);
+  });
 });
