@@ -1,3 +1,8 @@
+/**
+ * TShot AI 后端应用测试套件
+ * 测试核心业务逻辑：认证、地区限制、订阅验证、配额检查、AI 调用和用量记录
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   createApp,
@@ -8,6 +13,9 @@ import {
   type UserProfile
 } from "../src/app";
 
+/**
+ * 默认环境变量配置
+ */
 const defaultEnv: BackendEnv = {
   ALLOWED_STOREFRONTS: "USA,JPN",
   MONTHLY_REQUEST_LIMIT: "100",
@@ -17,6 +25,11 @@ const defaultEnv: BackendEnv = {
   AI_MAX_OUTPUT_TOKENS: "1200"
 };
 
+/**
+ * 创建测试用户
+ * @param overrides 用户属性覆盖（可选）
+ * @returns 用户档案对象
+ */
 function user(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
     id: "user_1",
@@ -29,6 +42,15 @@ function user(overrides: Partial<UserProfile> = {}): UserProfile {
   };
 }
 
+/**
+ * 创建测试用的数据访问层 mock
+ * @param profile 用户档案（null 表示认证失败）
+ * @param options 配置选项
+ * @param options.existingRequestId 已存在的请求 ID（用于测试幂等性）
+ * @param options.usageRecords 用量记录数组（用于收集记录）
+ * @param options.quotaIncrements 配额增量数组（用于收集增量）
+ * @returns Mock 的 BackendRepository
+ */
 function repository(profile: UserProfile | null, options: {
   existingRequestId?: string;
   usageRecords?: UsageRecordInput[];
@@ -72,6 +94,13 @@ function repository(profile: UserProfile | null, options: {
   };
 }
 
+/**
+ * 创建测试用的 AI 提供商 mock
+ * @param options 配置选项
+ * @param options.calls 调用次数计数器
+ * @param options.error 模拟错误（可选）
+ * @returns Mock 的 AIProvider
+ */
 function aiProvider(options: {
   calls?: number[];
   error?: Error;
@@ -93,11 +122,19 @@ function aiProvider(options: {
   };
 }
 
+/**
+ * 解析响应体为 JSON 对象
+ * @param response HTTP 响应对象
+ * @returns JSON 对象
+ */
 async function json(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
 describe("TShot AI backend app", () => {
+  /**
+   * 测试：没有 Authorization 头的请求应被拒绝
+   */
   it("rejects usage requests without Authorization", async () => {
     const app = createApp(repository(user()));
 
@@ -109,6 +146,10 @@ describe("TShot AI backend app", () => {
     });
   });
 
+  /**
+   * 测试：中国大陆用户（CHN）应被拒绝访问 AI 功能
+   * 地区检查应在订阅检查之前执行
+   */
   it("rejects AI requests for China mainland users before subscription checks", async () => {
     const app = createApp(repository(user({ storefront: "CHN", countryCode: "CN", subscriptionStatus: "active" })));
 
@@ -130,6 +171,9 @@ describe("TShot AI backend app", () => {
     });
   });
 
+  /**
+   * 测试：未知地区（storefront 为 null）应被保守拒绝
+   */
   it("rejects AI requests for unknown storefronts conservatively", async () => {
     const app = createApp(repository(user({ storefront: null, subscriptionStatus: "active" })));
 
@@ -151,6 +195,10 @@ describe("TShot AI backend app", () => {
     });
   });
 
+  /**
+   * 测试：未订阅的海外用户应被拒绝访问 AI 功能
+   * 不应调用 AI 提供商
+   */
   it("rejects unsubscribed overseas users without invoking AI", async () => {
     const app = createApp(repository(user({ storefront: "USA", subscriptionStatus: "inactive" })));
 
@@ -172,6 +220,9 @@ describe("TShot AI backend app", () => {
     });
   });
 
+  /**
+   * 测试：已认证的海外用户应能获取当前用量信息
+   */
   it("returns current usage for authenticated overseas users", async () => {
     const app = createApp(repository(user({ storefront: "USA", monthlyUsedCount: 7, dailyUsedCount: 2 })));
 
@@ -192,6 +243,10 @@ describe("TShot AI backend app", () => {
     });
   });
 
+  /**
+   * 测试：已订阅的海外用户应能获取 AI 分析结果
+   * 并正确记录可计费用量和更新配额
+   */
   it("returns AI analysis and records billable usage for subscribed overseas users", async () => {
     const usageRecords: UsageRecordInput[] = [];
     const quotaIncrements: Array<{ userId: string; requestCount: number; tokenCount: number; cost: number }> = [];
@@ -239,6 +294,10 @@ describe("TShot AI backend app", () => {
     ]);
   });
 
+  /**
+   * 测试：重复的请求 ID 应被拒绝（幂等性检查）
+   * 不应再次调用 AI 提供商
+   */
   it("rejects duplicate request IDs without invoking AI again", async () => {
     const calls: number[] = [];
     const app = createApp(
@@ -265,6 +324,10 @@ describe("TShot AI backend app", () => {
     expect(calls).toHaveLength(0);
   });
 
+  /**
+   * 测试：月度配额用尽时应被拒绝
+   * 不应调用 AI 提供商
+   */
   it("rejects monthly quota exhaustion before invoking AI", async () => {
     const calls: number[] = [];
     const app = createApp(
@@ -291,6 +354,10 @@ describe("TShot AI backend app", () => {
     expect(calls).toHaveLength(0);
   });
 
+  /**
+   * 测试：AI 提供商失败时应记录不可计费的失败请求
+   * 不应更新配额
+   */
   it("records a non-billable failure when AI provider fails", async () => {
     const usageRecords: UsageRecordInput[] = [];
     const quotaIncrements: Array<{ userId: string; requestCount: number; tokenCount: number; cost: number }> = [];

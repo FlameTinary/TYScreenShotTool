@@ -1,111 +1,273 @@
+/**
+ * 用户订阅状态枚举
+ * @enum {string}
+ * @description active - 活跃订阅
+ * @description inactive - 非活跃订阅
+ * @description expired - 过期订阅
+ * @description refunded - 已退款订阅
+ * @description grace_period - 试用期订阅
+ */
 export type SubscriptionStatus = "active" | "inactive" | "expired" | "refunded" | "grace_period";
 
+/**
+ * 用户档案接口，描述已认证用户的基本信息
+ */
 export interface UserProfile {
+  /** 用户唯一标识符 */
   id: string;
+  /** App Store 地区代码（如 "USA", "CHN"），null 表示未知 */
   storefront: string | null;
+  /** 国家代码（如 "US", "CN"），null 表示未知 */
   countryCode: string | null;
+  /** 当前订阅状态 */
   subscriptionStatus: SubscriptionStatus;
+  /** 当月已使用的 AI 请求次数 */
   monthlyUsedCount: number;
+  /** 当日已使用的 AI 请求次数 */
   dailyUsedCount: number;
 }
 
+/**
+ * 用量快照接口，描述用户当前的用量情况
+ */
 export interface UsageSnapshot {
+  /** 用户唯一标识符 */
   userId: string;
+  /** 当月已使用次数 */
   monthlyUsedCount: number;
+  /** 当月配额上限 */
   monthlyLimitCount: number;
+  /** 当日已使用次数 */
   dailyUsedCount: number;
+  /** 当日配额上限 */
   dailyLimitCount: number;
 }
 
+/**
+ * 用量记录状态枚举
+ * @enum {string}
+ * @description accepted - 请求已接受，等待处理
+ * @description blocked - 请求已被阻止，不允许处理
+ * @description succeeded - 请求处理成功
+ * @description failed - 请求处理失败
+ */
 export type UsageRecordStatus = "accepted" | "blocked" | "succeeded" | "failed";
 
+/**
+ * 用量记录快照接口，描述单次请求的记录状态
+ */
 export interface UsageRecordSnapshot {
+  /** 请求唯一标识符 */
   requestId: string;
+  /** 请求状态 */
   status: UsageRecordStatus;
 }
 
+/**
+ * 用量记录输入接口，用于创建新的用量记录
+ */
 export interface UsageRecordInput {
+  /** 用户唯一标识符 */
   userId: string;
+  /** 请求唯一标识符 */
   requestId: string;
+  /** 请求类型，当前仅支持 analyze_screenshot */
   requestType: "analyze_screenshot";
+  /** 使用的 AI 模型名称 */
   model: string | null;
+  /** 图片字节大小 */
   imageBytes: number;
+  /** 图片数量 */
   imageCount: number;
+  /** 输入 Token 数量 */
   inputTokenCount: number;
+  /** 输出 Token 数量 */
   outputTokenCount: number;
+  /** 预估费用 */
   estimatedCost: number;
+  /** 是否可计费 */
   billable: boolean;
+  /** 请求状态 */
   status: UsageRecordStatus;
+  /** AI 返回的文本结果（可选） */
   outputText?: string;
 }
 
+/**
+ * 订阅快照接口，描述用户订阅的最新状态
+ */
 export interface SubscriptionSnapshot {
+  /** 用户唯一标识符 */
   userId: string;
+  /** 订阅状态 */
   status: SubscriptionStatus;
+  /** 产品 ID（如 "tshot.pro.monthly"），null 表示无订阅 */
   productId: string | null;
+  /** 订阅过期时间（ISO 格式），可选 */
   expiresAt?: string | null;
 }
 
+/**
+ * 后端数据访问层接口，定义数据持久化操作
+ */
 export interface BackendRepository {
+  /**
+   * 通过 Bearer Token 查找用户
+   * @param token 用户认证令牌
+   * @returns 用户档案，未找到时返回 null
+   */
   findUserByBearerToken(token: string): Promise<UserProfile | null>;
+  /**
+   * 通过请求 ID 查找用量记录
+   * @param userId 用户唯一标识符
+   * @param requestId 请求唯一标识符
+   * @returns 用量记录快照，未找到时返回 null
+   */
   findUsageRecordByRequestId(userId: string, requestId: string): Promise<UsageRecordSnapshot | null>;
+  /**
+   * 获取用户当前用量
+   * @param userId 用户唯一标识符
+   * @returns 用量快照
+   */
   getUsage(userId: string): Promise<UsageSnapshot>;
+  /**
+   * 获取用户订阅状态
+   * @param userId 用户唯一标识符
+   * @returns 订阅快照
+   */
   getSubscriptionStatus(userId: string): Promise<SubscriptionSnapshot>;
+  /**
+   * 记录用量
+   * @param record 用量记录输入
+   */
   recordUsage(record: UsageRecordInput): Promise<void>;
+  /**
+   * 增加月度配额消耗
+   * @param userId 用户唯一标识符
+   * @param requestCount 请求次数增量
+   * @param tokenCount Token 数量增量
+   * @param cost 预估费用增量
+   */
   incrementMonthlyQuota(userId: string, requestCount: number, tokenCount: number, cost: number): Promise<void>;
 }
 
+/**
+ * 后端环境变量接口，定义运行时配置
+ */
 export interface BackendEnv {
+  /** 允许访问的地区列表，逗号分隔 */
   ALLOWED_STOREFRONTS: string;
+  /** 默认月度请求上限 */
   MONTHLY_REQUEST_LIMIT: string;
+  /** 默认每日请求上限 */
   DAILY_REQUEST_LIMIT: string;
+  /** 最大图片字节大小 */
   MAX_IMAGE_BYTES: string;
+  /** AI 模型名称 */
   AI_MODEL: string;
+  /** 最大输出 Token 数 */
   AI_MAX_OUTPUT_TOKENS: string;
 }
 
+/**
+ * AI 提供商请求接口
+ */
 export interface AIProviderRequest {
+  /** 请求唯一标识符 */
   requestId: string;
+  /** 用户唯一标识符 */
   userId: string;
+  /** 图片的 Base64 编码字符串 */
   imageBase64: string;
+  /** 提示词 */
   prompt: string;
+  /** AI 模型名称 */
   model: string;
+  /** 最大输出 Token 数 */
   maxOutputTokens: number;
 }
 
+/**
+ * AI 提供商结果接口
+ */
 export interface AIProviderResult {
+  /** AI 返回的文本内容 */
   text: string;
+  /** 使用的 AI 模型名称 */
   model: string;
+  /** 输入 Token 数量 */
   inputTokenCount: number;
+  /** 输出 Token 数量 */
   outputTokenCount: number;
+  /** 预估费用 */
   estimatedCost: number;
 }
 
+/**
+ * AI 提供商接口，定义 AI 服务调用规范
+ */
 export interface AIProvider {
+  /**
+   * 分析截图
+   * @param request AI 请求参数
+   * @returns AI 分析结果
+   */
   analyzeScreenshot(request: AIProviderRequest): Promise<AIProviderResult>;
 }
 
+/**
+ * 后端应用接口，定义 HTTP 请求处理规范
+ */
 export interface BackendApp {
+  /**
+   * 处理 HTTP 请求
+   * @param request HTTP 请求对象
+   * @param env 环境变量
+   * @returns HTTP 响应对象
+   */
   fetch(request: Request, env: BackendEnv): Promise<Response>;
 }
 
+/**
+ * 请求上下文接口，包含处理请求所需的所有信息
+ */
 interface RequestContext {
+  /** HTTP 请求对象 */
   request: Request;
+  /** 环境变量 */
   env: BackendEnv;
+  /** 数据访问层实例 */
   repository: BackendRepository;
+  /** AI 提供商实例 */
   aiProvider: AIProvider;
 }
 
+/**
+ * 请求处理器类型，接收上下文并返回响应
+ */
 type Handler = (context: RequestContext) => Promise<Response>;
 
+/**
+ * 已认证请求上下文接口，继承 RequestContext 并包含用户信息
+ */
 interface AuthenticatedContext extends RequestContext {
+  /** 已认证用户档案 */
   user: UserProfile;
 }
 
+/**
+ * JSON 响应头，用于所有 API 响应
+ */
 const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8"
 };
 
+/**
+ * 创建后端应用实例
+ * @param repository 数据访问层实例
+ * @param aiProvider AI 提供商实例，默认为未配置状态
+ * @returns 后端应用实例
+ */
 export function createApp(repository: BackendRepository, aiProvider: AIProvider = unavailableAIProvider): BackendApp {
   return {
     async fetch(request, env) {
@@ -114,6 +276,12 @@ export function createApp(repository: BackendRepository, aiProvider: AIProvider 
   };
 }
 
+/**
+ * 处理 HTTP 请求的核心函数
+ * 负责路由匹配、错误处理和请求分发
+ * @param context 请求上下文
+ * @returns HTTP 响应
+ */
 async function handleRequest(context: RequestContext): Promise<Response> {
   const url = new URL(context.request.url);
   const routeKey = `${context.request.method} ${url.pathname}`;
@@ -146,10 +314,22 @@ async function handleRequest(context: RequestContext): Promise<Response> {
   }
 }
 
+/**
+ * 创建未实现功能的处理器
+ * 返回 501 Not Implemented 状态码
+ * @param error 错误标识符
+ * @returns 处理器函数
+ */
 function notImplemented(error: string): Handler {
   return async () => json({ error }, 501);
 }
 
+/**
+ * 认证中间件，包装需要用户认证的处理器
+ * 从请求头中提取 Bearer Token，验证用户身份
+ * @param handler 需要认证的处理器
+ * @returns 包装后的处理器
+ */
 function withAuthenticatedUser(
   handler: (context: AuthenticatedContext) => Promise<Response>
 ): Handler {
@@ -168,6 +348,11 @@ function withAuthenticatedUser(
   };
 }
 
+/**
+ * 处理获取订阅状态请求
+ * @param context 已认证请求上下文
+ * @returns 订阅状态响应
+ */
 async function handleSubscriptionStatus(context: AuthenticatedContext): Promise<Response> {
   const regionError = validateRegion(context.user, context.env);
   if (regionError) {
@@ -183,6 +368,11 @@ async function handleSubscriptionStatus(context: AuthenticatedContext): Promise<
   });
 }
 
+/**
+ * 处理获取当前用量请求
+ * @param context 已认证请求上下文
+ * @returns 用量响应
+ */
 async function handleUsageCurrent(context: AuthenticatedContext): Promise<Response> {
   const regionError = validateRegion(context.user, context.env);
   if (regionError) {
@@ -199,46 +389,62 @@ async function handleUsageCurrent(context: AuthenticatedContext): Promise<Respon
   });
 }
 
+/**
+ * 处理 AI 截图分析请求
+ * 执行完整的请求流程：地区验证 -> 订阅验证 -> 配额验证 -> 请求格式验证 -> 
+ * 幂等性检查 -> 图片大小验证 -> AI 调用 -> 用量记录 -> 配额更新
+ * @param context 已认证请求上下文
+ * @returns AI 分析结果响应
+ */
 async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<Response> {
+  // 验证地区权限
   const regionError = validateRegion(context.user, context.env);
   if (regionError) {
     return regionError;
   }
 
+  // 验证订阅状态（必须是 active 或 grace_period）
   if (context.user.subscriptionStatus !== "active" && context.user.subscriptionStatus !== "grace_period") {
     return json({ error: "subscription_required" }, 402);
   }
 
+  // 验证日/月配额
   const quotaError = validateQuota(context.user, context.env);
   if (quotaError) {
     return quotaError;
   }
 
+  // 解析请求体
   const body = await parseJsonBody(context.request);
   if (!body || typeof body.request_id !== "string" || typeof body.image_base64 !== "string") {
     return json({ error: "invalid_request" }, 400);
   }
 
+  // 验证 request_id
   const requestId = body.request_id.trim();
   if (!requestId) {
     return json({ error: "invalid_request" }, 400);
   }
 
+  // 幂等性检查：防止重复请求
   const existingRecord = await context.repository.findUsageRecordByRequestId(context.user.id, requestId);
   if (existingRecord) {
     return json({ error: "duplicate_request", status: existingRecord.status }, 409);
   }
 
+  // 验证图片大小
   const imageBytes = estimateBase64Bytes(body.image_base64);
   if (imageBytes > numberFromEnv(context.env.MAX_IMAGE_BYTES, 2_097_152)) {
     return json({ error: "image_too_large" }, 413);
   }
 
+  // 准备 AI 请求参数
   const model = context.env.AI_MODEL || "gpt-5.4-mini";
   const prompt = typeof body.prompt === "string" && body.prompt.trim()
     ? body.prompt.trim()
     : "Analyze this screenshot. Explain the likely context, key text, and actionable next steps.";
 
+  // 调用 AI 提供商
   let result: AIProviderResult;
   try {
     result = await context.aiProvider.analyzeScreenshot({
@@ -250,6 +456,7 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
       maxOutputTokens: numberFromEnv(context.env.AI_MAX_OUTPUT_TOKENS, 1200)
     });
   } catch (error) {
+    // AI 调用失败，记录为不可计费的失败请求
     await context.repository.recordUsage({
       userId: context.user.id,
       requestId,
@@ -267,6 +474,7 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
     return json({ error: "ai_provider_failed" }, 502);
   }
 
+  // AI 调用成功，记录用量并更新配额
   const tokenCount = result.inputTokenCount + result.outputTokenCount;
   await context.repository.recordUsage({
     userId: context.user.id,
@@ -284,6 +492,7 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
   });
   await context.repository.incrementMonthlyQuota(context.user.id, 1, tokenCount, result.estimatedCost);
 
+  // 返回成功响应
   return json({
     request_id: requestId,
     analysis: result.text,
@@ -295,6 +504,13 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
   });
 }
 
+/**
+ * 验证用户地区是否在白名单中
+ * CHN、未知或缺失的地区将被阻止
+ * @param user 用户档案
+ * @param env 环境变量
+ * @returns 错误响应或 null（验证通过）
+ */
 function validateRegion(user: UserProfile, env: BackendEnv): Response | null {
   const storefront = user.storefront?.trim().toUpperCase();
   if (!storefront || storefront === "CHN") {
@@ -314,6 +530,12 @@ function validateRegion(user: UserProfile, env: BackendEnv): Response | null {
   return null;
 }
 
+/**
+ * 验证用户是否还有可用配额
+ * @param user 用户档案
+ * @param env 环境变量
+ * @returns 错误响应或 null（验证通过）
+ */
 function validateQuota(user: UserProfile, env: BackendEnv): Response | null {
   const monthlyLimit = numberFromEnv(env.MONTHLY_REQUEST_LIMIT, 100);
   const dailyLimit = numberFromEnv(env.DAILY_REQUEST_LIMIT, 20);
@@ -326,12 +548,22 @@ function validateQuota(user: UserProfile, env: BackendEnv): Response | null {
   return null;
 }
 
+/**
+ * 从请求头中提取 Bearer Token
+ * @param request HTTP 请求对象
+ * @returns Token 字符串或 null
+ */
 function bearerToken(request: Request): string | null {
   const authorization = request.headers.get("Authorization");
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim() || null;
 }
 
+/**
+ * 解析 JSON 请求体
+ * @param request HTTP 请求对象
+ * @returns 解析后的对象或 null（解析失败）
+ */
 async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   try {
     return (await request.json()) as Record<string, unknown>;
@@ -340,17 +572,34 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown> 
   }
 }
 
+/**
+ * 估算 Base64 编码字符串的原始字节大小
+ * @param value Base64 编码字符串
+ * @returns 原始字节数
+ */
 function estimateBase64Bytes(value: string): number {
   const normalized = value.replace(/^data:[^,]+,/, "").replace(/\s/g, "");
   const padding = normalized.endsWith("==") ? 2 : normalized.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
 }
 
+/**
+ * 从环境变量中解析数字
+ * @param value 环境变量值
+ * @param fallback 默认值
+ * @returns 解析后的数字或默认值
+ */
 function numberFromEnv(value: string, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * 创建 JSON 响应
+ * @param body 响应体对象
+ * @param status HTTP 状态码，默认为 200
+ * @returns HTTP 响应对象
+ */
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -358,6 +607,10 @@ function json(body: Record<string, unknown>, status = 200): Response {
   });
 }
 
+/**
+ * 未配置的 AI 提供商，用于默认值
+ * 调用时会抛出错误
+ */
 const unavailableAIProvider: AIProvider = {
   async analyzeScreenshot() {
     throw new Error("AI provider is not configured");
