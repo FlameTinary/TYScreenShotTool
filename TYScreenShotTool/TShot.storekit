@@ -1,0 +1,109 @@
+{
+  "identifier" : "TSHOTAI01",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "TSHOTPRO",
+      "localizations" : [
+
+      ],
+      "name" : "AI Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "TSHOTPRO01",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Monthly AI Pro subscription for screenshot AI features.",
+              "displayName" : "AI Pro Monthly",
+              "locale" : "en_US"
+            },
+            {
+              "description" : "截图 AI 功能的月度 AI Pro 订阅。",
+              "displayName" : "AI Pro Monthly",
+              "locale" : "zh_Hans"
+            }
+          ],
+          "productID" : "tshot.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "AI Pro Monthly",
+          "subscriptionGroupID" : "TSHOTPRO",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

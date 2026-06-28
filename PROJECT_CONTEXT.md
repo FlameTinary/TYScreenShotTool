@@ -214,7 +214,7 @@ AI 请求配置仍然不提供完整的公开设置页入口。
 - AI 行为依赖本地开发/使用者自行配置
 - `local.aiAnalysis.*` 不能绕过 `AIAvailabilityService` 与区域策略
 - 中国大陆模式与 unknown / nil storefront 下，即使写入本地 API Key，也不能发起商业 AI 请求
-- 海外模式下当前只展示 AI Pro 壳层说明；点击入口不会上传截图，也不会调用 AI 后端
+- 海外模式下当前 AI Pro 壳层可加载 StoreKit 2 订阅商品并提供购买 / 恢复入口；点击入口不会上传截图，也不会调用 AI 后端
 - AI 链路要特别注意失败回退、无结果语义和人工验证
 
 Sprint 53 起，AI 商业化方向采用区域化策略：
@@ -224,7 +224,8 @@ Sprint 53 起，AI 商业化方向采用区域化策略：
 - 中国大陆区不请求海外后端，不上传截图内容
 - 中国大陆区不依赖远程配置打开 AI 商业能力
 - 中国大陆以外地区可以规划 AI Pro 订阅能力
-- 海外 AI Pro 壳层已可通过 Debug storefront 覆盖模拟验证，但尚未接入登录、StoreKit 或后端
+- 海外 AI Pro 壳层已可通过 Debug storefront 覆盖和本地 `TYScreenShotTool/TShot.storekit` 验证订阅入口，但尚未接入登录或后端
+- 本地订阅状态只用于 UI 展示，不作为最终 AI 请求权限
 - 海外 AI Pro 必须通过后端校验登录、订阅、地区、额度和风控
 - 现有本地隐藏 AI 配置后续应收口为开发者 / Debug / 内部验证能力，不能作为正式商业化路径
 

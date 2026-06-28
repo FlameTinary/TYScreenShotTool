@@ -78,6 +78,9 @@
             ReferencedContainer = "container:TYScreenShotTool.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <StoreKitConfigurationFileReference
+         identifier = "../../../TYScreenShotTool/TShot.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Debug"

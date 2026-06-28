@@ -83,7 +83,11 @@ private extension ScrollingCaptureControlPanelContentView {
     @objc func handleCancel() { onCancel?() }
     @objc func handleOCR() { onOCR?() }
     @objc func handleTranslate() { onTranslate?() }
-    @objc func handleAI() { AIProPromptPresenter.show(from: self) }
+    @objc func handleAI() {
+        Task {
+            await AIProPromptPresenter.show(from: self)
+        }
+    }
     @objc func handleSave() { onSave?() }
     @objc func handleCopy() { onCopy?() }
 }

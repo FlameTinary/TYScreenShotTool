@@ -29,6 +29,10 @@ struct AIAvailabilityService {
         regionPolicy.isServerAPIAllowed
     }
 
+    var isSubscriptionAllowed: Bool {
+        regionPolicy.isSubscriptionAllowed
+    }
+
     var isDeveloperLocalAIConfigAllowed: Bool {
         regionPolicy.isCommercialAIAllowed && regionPolicy.isServerAPIAllowed
     }

@@ -41,6 +41,7 @@ final class RegionPolicyTests: XCTestCase {
 
         XCTAssertFalse(service.shouldShowCommercialAIEntry)
         XCTAssertFalse(service.isServerAIAllowed)
+        XCTAssertFalse(service.isSubscriptionAllowed)
     }
 
     func test_aiEntryVisible_whenUserSettingEnabledAndRegionAllowsCommercialAI() {
@@ -51,6 +52,7 @@ final class RegionPolicyTests: XCTestCase {
 
         XCTAssertTrue(service.shouldShowCommercialAIEntry)
         XCTAssertTrue(service.isServerAIAllowed)
+        XCTAssertTrue(service.isSubscriptionAllowed)
     }
 
     func test_aiEntryHiddenByDefault_whenRegionAllowsCommercialAI() {

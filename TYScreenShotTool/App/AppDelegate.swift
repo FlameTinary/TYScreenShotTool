@@ -8,6 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         AppThemeCoordinator.shared.applyCurrentAppearance()
+        if AIAvailabilityService().isSubscriptionAllowed {
+            AIProSubscriptionService.shared.startTransactionListener()
+        }
 
         let overlayService = CaptureOverlayService()
         let screenCaptureService = ScreenCaptureService()
