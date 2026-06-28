@@ -532,6 +532,17 @@ created_at
 - 后端能校验登录态、地区和订阅状态
 - 未订阅用户无法调用 AI API
 
+实现记录：
+
+- 新增 `backend/worker` Cloudflare Workers TypeScript MVP，使用 `wrangler.jsonc`、Vitest 和 TypeScript 类型检查
+- Worker 当前提供 `GET /health`、`GET /v1/subscriptions/status`、`GET /v1/usage/current`、`POST /v1/ai/analyze-screenshot` 等 API 骨架
+- `POST /v1/ai/analyze-screenshot` 已按登录态、地区、订阅、日/月额度、图片大小顺序进行前置拦截；通过前置校验后仍返回 `501 ai_forwarding_not_implemented`，避免本 Feature 提前产生 AI 成本
+- `CHN`、unknown / nil storefront 和非 allowlist storefront 在后端侧默认返回 `region_unavailable`
+- 新增 Supabase migration，包含 `users`、`app_sessions`、`subscriptions`、`usage_records`、`monthly_quotas`、`abuse_events`、`usage_current` 和 `user_ai_access`
+- 所有 Supabase 基础表已启用 RLS；Worker 使用 Cloudflare secret 中的 Supabase service role key 访问，普通客户端不直接访问这些表
+- 当前 `POST /v1/auth/apple`、`POST /v1/subscriptions/verify` 与 `POST /v1/apple/notifications` 仍为占位接口，真实 Apple 登录、App Store Server API 校验和通知处理留给后续 Feature
+- 单元测试覆盖无 Authorization、大陆地区、unknown storefront、海外未订阅和海外用量查询路径
+
 ### Feature 53.6：AI 分析闭环与额度控制
 
 目标：
@@ -579,10 +590,10 @@ created_at
 
 本 Sprint 不直接实现：
 
-- StoreKit 2 购买代码
 - Sign in with Apple 真实登录
-- Cloudflare Workers 项目
-- Supabase 项目
+- App Store Server API 真实交易校验
+- Cloudflare Workers 生产部署
+- Supabase 生产项目配置
 - AI 后端转发
 - App Store Connect 商品配置
 - 真实 AI 订阅购买
@@ -667,11 +678,11 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 当前处于 App 端区域化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3 与 Feature 53.4 的第一阶段 StoreKit 2 本地订阅壳层。
+本 Sprint 当前处于 AI Pro 区域化商业化底座实现阶段，已完成 Feature 53.1、Feature 53.2、Feature 53.3、Feature 53.4 的第一阶段 StoreKit 2 本地订阅壳层，以及 Feature 53.5 的 Serverless 后端 MVP 骨架。
 
 完成标准：
 
 - 当前 Sprint 文档完成
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
-- 下一步可以进入 Feature 53.5 的 Serverless 后端 MVP，或继续补齐 Feature 53.4 的 Sandbox 人工购买验证
+- 下一步可以进入 Feature 53.6 的 AI 分析闭环与额度控制，或继续补齐 Feature 53.4 的 Sandbox 人工购买验证
