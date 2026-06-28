@@ -9,7 +9,8 @@
 - OpenAI Responses API 转发：面向已订阅且有剩余配额的海外用户。
 - 成功调用 AI 后的用量记录和月度配额递增。
 - 已实现 Sign in with Apple 验证：JWT 签名验证（RS256）+ 用户创建与会话管理。
-- 尚未实现真正的 App Store Server API 验证。
+- 已实现 App Store 订阅收据验证：StoreKit signedTransaction JWT 签名验证 + 订阅记录 UPSERT。
+- 尚未实现 App Store Server 通知（webhook）。
 
 Worker 仅在通过身份验证、地区、订阅、配额、请求格式、幂等性和图片大小检查后，才会调用 AI 提供商。失败的 AI 提供商调用将记录为不可计费用量，不会增加月度配额。
 
@@ -200,7 +201,7 @@ curl -X POST http://localhost:8787/v1/ai/analyze-screenshot \
 
 - `GET /health`
 - `POST /v1/auth/apple`：Apple Sign In 登录，传入 `identity_token`（Apple JWT），返回 `token` 和 `user_id`
-- `POST /v1/subscriptions/verify`：占位接口，返回 `501 subscription_verify_not_implemented`
+- `POST /v1/subscriptions/verify`：需要 Bearer token，传入 `signed_transaction`（StoreKit JWT），验证后创建或更新订阅记录并返回订阅状态
 - `GET /v1/subscriptions/status`：需要 Bearer token，地区允许
 - `GET /v1/usage/current`：需要 Bearer token，地区允许
 - `POST /v1/ai/analyze-screenshot`：需要 Bearer token、地区允许、有效订阅、可用配额、唯一的 `request_id`、有效的图片载荷；返回 AI 分析结果并记录用量
