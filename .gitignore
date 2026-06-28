@@ -24,6 +24,11 @@ backend/worker/node_modules/
 backend/worker/supabase/.temp/
 .wrangler/
 
+# Environment variables (local dev secrets)
+.env
+.env.*
+.dev.vars
+
 # Logs
 *.log
 tmp/
