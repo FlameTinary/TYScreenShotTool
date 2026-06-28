@@ -121,6 +121,78 @@ export class SupabaseRepository implements BackendRepository {
   }
 
   /**
+   * 按 Apple User ID 查找或创建用户
+   * 先查询 users 表，不存在则创建新用户
+   * @param appleUserId Apple 用户唯一标识符
+   * @param email 用户邮箱（可选）
+   * @returns 用户档案
+   */
+  async findOrCreateUser(appleUserId: string, email?: string): Promise<UserProfile> {
+    // 查询已有用户
+    const rows = await this.query<{ id: string }>("users", {
+      apple_user_id: `eq.${appleUserId}`,
+      select: "id",
+      limit: "1"
+    });
+
+    let userId: string;
+    if (rows.length > 0) {
+      userId = rows[0]!.id;
+    } else {
+      // 创建新用户
+      userId = crypto.randomUUID();
+      const insertBody: Record<string, unknown> = {
+        id: userId,
+        apple_user_id: appleUserId
+      };
+      if (email) {
+        insertBody.email = email;
+      }
+      await this.insert("users", insertBody);
+    }
+
+    // 从 users 表获取用户地区信息
+    const userRows = await this.query<{ country_code: string | null; storefront: string | null }>("users", {
+      id: `eq.${userId}`,
+      select: "country_code,storefront",
+      limit: "1"
+    });
+    const userRow = userRows[0];
+
+    return {
+      id: userId,
+      countryCode: userRow?.country_code ?? null,
+      storefront: userRow?.storefront ?? null,
+      subscriptionStatus: "inactive",
+      monthlyUsedCount: 0,
+      dailyUsedCount: 0
+    };
+  }
+
+  /**
+   * 创建用户会话并返回 Bearer Token
+   * 生成 32 字节随机 Token，SHA-256 哈希后存入 app_sessions 表，
+   * 原始 Token 返回给客户端
+   * @param userId 用户唯一标识符
+   * @returns Bearer Token 字符串
+   */
+  async createSession(userId: string): Promise<string> {
+    // 生成 32 字节随机 Token（64 字符十六进制字符串）
+    const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+    const token = [...tokenBytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const tokenHash = await sha256Hex(token);
+
+    // 存入 app_sessions 表，有效期 7 天
+    await this.insert("app_sessions", {
+      user_id: userId,
+      token_hash: tokenHash,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    });
+
+    return token;
+  }
+
+  /**
    * 获取用户当前用量
    * @param userId 用户唯一标识符
    * @returns 用量快照

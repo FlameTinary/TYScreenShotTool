@@ -1,3 +1,5 @@
+import { verifyAppleJWT } from "./appleAuth";
+
 /**
  * 用户订阅状态枚举
  * @enum {string}
@@ -149,6 +151,19 @@ export interface BackendRepository {
    * @param cost 预估费用增量
    */
   incrementMonthlyQuota(userId: string, requestCount: number, tokenCount: number, cost: number): Promise<void>;
+  /**
+   * 按 Apple User ID 查找或创建用户
+   * @param appleUserId Apple 用户唯一标识符
+   * @param email 用户邮箱（可选）
+   * @returns 用户档案
+   */
+  findOrCreateUser(appleUserId: string, email?: string): Promise<UserProfile>;
+  /**
+   * 创建用户会话并返回 Bearer Token
+   * @param userId 用户唯一标识符
+   * @returns Bearer Token 字符串
+   */
+  createSession(userId: string): Promise<string>;
 }
 
 /**
@@ -167,6 +182,8 @@ export interface BackendEnv {
   AI_MODEL: string;
   /** 最大输出 Token 数 */
   AI_MAX_OUTPUT_TOKENS: string;
+  /** Apple 应用的 Bundle Identifier，用于验证 Apple JWT */
+  APPLE_BUNDLE_ID: string;
 }
 
 /**
@@ -310,7 +327,7 @@ async function handleRequest(context: RequestContext): Promise<Response> {
   const routeKey = `${context.request.method} ${url.pathname}`;
   const routes: Record<string, Handler> = {
     "GET /health": async () => json({ status: "ok" }),
-    "POST /v1/auth/apple": notImplemented("auth_not_implemented"),
+    "POST /v1/auth/apple": handleAuthApple,
     "POST /v1/subscriptions/verify": notImplemented("subscription_verify_not_implemented"),
     "GET /v1/subscriptions/status": withAuthenticatedUser(handleSubscriptionStatus),
     "GET /v1/usage/current": withAuthenticatedUser(handleUsageCurrent),
@@ -414,8 +431,51 @@ async function handleUsageCurrent(context: AuthenticatedContext): Promise<Respon
 }
 
 /**
+ * 处理 Apple Sign In 登录请求
+ * 验证客户端传来的 Apple identity token（JWT），查找或创建用户，
+ * 生成 Bearer Token 并返回给客户端
+ * @param context 请求上下文（无需认证）
+ * @returns 登录响应（含 Bearer Token）
+ */
+async function handleAuthApple(context: RequestContext): Promise<Response> {
+  // 解析请求体
+  const body = await parseJsonBody(context.request);
+  if (!body || typeof body.identity_token !== "string" || !body.identity_token.trim()) {
+    return json({ error: "invalid_request" }, 400);
+  }
+
+  const identityToken = body.identity_token.trim();
+
+  // 验证 Apple JWT
+  let claims: { sub: string; email?: string; emailVerified?: boolean };
+  try {
+    claims = await verifyAppleJWT(identityToken, context.env.APPLE_BUNDLE_ID);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "apple_jwt_verification_failed",
+        error: error instanceof Error ? error.message : "unknown"
+      })
+    );
+    return json({ error: "authentication_failed" }, 401);
+  }
+
+  // 查找或创建用户
+  const user = await context.repository.findOrCreateUser(claims.sub, claims.email);
+
+  // 创建会话并生成 Bearer Token
+  const token = await context.repository.createSession(user.id);
+
+  // 返回响应
+  return json({
+    token,
+    user_id: user.id
+  });
+}
+
+/**
  * 处理 AI 截图分析请求
- * 执行完整的请求流程：地区验证 -> 订阅验证 -> 配额验证 -> 请求格式验证 -> 
+ * 执行完整的请求流程：地区验证 -> 订阅验证 -> 配额验证 -> 请求格式验证 ->
  * 幂等性检查 -> 图片大小验证 -> AI 调用 -> 用量记录 -> 配额更新
  * @param context 已认证请求上下文
  * @returns AI 分析结果响应

@@ -3,9 +3,14 @@
  * 测试核心业务逻辑：认证、地区限制、订阅验证、配额检查、AI 调用和用量记录
  */
 
-import { describe, expect, it } from "vitest";
-import {
-  createApp,
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../src/appleAuth", () => ({
+  verifyAppleJWT: () => Promise.resolve({ sub: "test-apple-user-001", email: "test@example.com" }),
+  resetAppleKeyCache: () => {}
+}));
+
+import { createApp,
   type AIProvider,
   type BackendEnv,
   type BackendRepository,
@@ -22,7 +27,8 @@ const defaultEnv: BackendEnv = {
   DAILY_REQUEST_LIMIT: "20",
   MAX_IMAGE_BYTES: "2097152",
   AI_MODEL: "gpt-5.4-mini",
-  AI_MAX_OUTPUT_TOKENS: "1200"
+  AI_MAX_OUTPUT_TOKENS: "1200",
+  APPLE_BUNDLE_ID: "com.tshot.app"
 };
 
 /**
@@ -55,6 +61,10 @@ function repository(profile: UserProfile | null, options: {
   existingRequestId?: string;
   usageRecords?: UsageRecordInput[];
   quotaIncrements?: Array<{ userId: string; requestCount: number; tokenCount: number; cost: number }>;
+  /** 模拟 findOrCreateUser 返回的用户 ID */
+  createdUserId?: string;
+  /** 模拟 createSession 返回的 token */
+  createdToken?: string;
 } = {}): BackendRepository {
   return {
     async findUserByBearerToken() {
@@ -90,6 +100,19 @@ function repository(profile: UserProfile | null, options: {
     },
     async incrementMonthlyQuota(userId: string, requestCount: number, tokenCount: number, cost: number) {
       options.quotaIncrements?.push({ userId, requestCount, tokenCount, cost });
+    },
+    async findOrCreateUser(_appleUserId: string, _email?: string) {
+      return profile ?? {
+        id: options.createdUserId ?? "new_user_1",
+        storefront: null,
+        countryCode: null,
+        subscriptionStatus: "inactive" as const,
+        monthlyUsedCount: 0,
+        dailyUsedCount: 0
+      };
+    },
+    async createSession(_userId: string) {
+      return options.createdToken ?? "mock-session-token-001";
     }
   };
 }
@@ -156,6 +179,80 @@ describe("TShot AI backend app", () => {
     expect(response.status).toBe(401);
     await expect(json(response)).resolves.toMatchObject({
       error: "unauthorized"
+    });
+  });
+
+  /**
+   * 测试：Apple Sign In 缺少 identity_token 应返回 400
+   */
+  it("rejects Apple Sign In without identity_token", async () => {
+    const app = createApp(repository(user()));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/auth/apple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(400);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "invalid_request"
+    });
+  });
+
+  /**
+   * 测试：Apple Sign In 返回 token 和 user_id
+   * 验证新用户的创建和 token 返回
+   */
+  it("returns token and user_id from Apple Sign In for a new user", async () => {
+    const app = createApp(
+      repository(null, { createdUserId: "apple-new-user-001", createdToken: "apple-token-abc" })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/auth/apple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity_token: "header.payload.signature" })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(200);
+    const body = await json(response);
+    expect(body).toMatchObject({
+      token: "apple-token-abc",
+      user_id: "apple-new-user-001"
+    });
+    // token 应为字符串且非空
+    expect(typeof body.token).toBe("string");
+    expect((body.token as string).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * 测试：Apple Sign In 已存在的用户应返回新的 token
+   */
+  it("returns a session token for an existing user via Apple Sign In", async () => {
+    const app = createApp(
+      repository(user({ id: "existing-user-001" }), { createdToken: "existing-session-token" })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/auth/apple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identity_token: "header.payload.signature" })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(json(response)).resolves.toMatchObject({
+      token: "existing-session-token",
+      user_id: "existing-user-001"
     });
   });
 
