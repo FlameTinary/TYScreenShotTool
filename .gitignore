@@ -18,6 +18,11 @@ xcuserdata/
 # SwiftPM
 .swiftpm/
 
+# Node / backend
+node_modules/
+backend/worker/node_modules/
+.wrangler/
+
 # Logs
 *.log
 tmp/
