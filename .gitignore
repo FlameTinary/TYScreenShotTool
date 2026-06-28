@@ -21,6 +21,7 @@ xcuserdata/
 # Node / backend
 node_modules/
 backend/worker/node_modules/
+backend/worker/supabase/.temp/
 .wrangler/
 
 # Logs
