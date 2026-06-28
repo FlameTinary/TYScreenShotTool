@@ -10,7 +10,7 @@
 - 成功调用 AI 后的用量记录和月度配额递增。
 - 已实现 Sign in with Apple 验证：JWT 签名验证（RS256）+ 用户创建与会话管理。
 - 已实现 App Store 订阅收据验证：StoreKit signedTransaction JWT 签名验证 + 订阅记录 UPSERT。
-- 尚未实现 App Store Server 通知（webhook）。
+- 已实现 App Store Server 通知（webhook）：JWT 签名验证 + 订阅状态同步。
 
 Worker 仅在通过身份验证、地区、订阅、配额、请求格式、幂等性和图片大小检查后，才会调用 AI 提供商。失败的 AI 提供商调用将记录为不可计费用量，不会增加月度配额。
 
@@ -206,7 +206,7 @@ curl -X POST http://localhost:8787/v1/ai/analyze-screenshot \
 - `GET /v1/usage/current`：需要 Bearer token，地区允许
 - `POST /v1/ai/analyze-screenshot`：需要 Bearer token、地区允许、有效订阅、可用配额、唯一的 `request_id`、有效的图片载荷；返回 AI 分析结果并记录用量
 - `POST /v1/ai/analyze-text`：需要 Bearer token、地区允许、有效订阅、可用配额、唯一的 `request_id`、`prompt`（可选）；返回 AI 文字分析结果并记录用量
-- `POST /v1/apple/notifications`：占位接口，返回 `202`
+- `POST /v1/apple/notifications`：App Store Server 通知 webhook，验证 signedPayload JWT，更新订阅状态，始终返回 200
 
 ## Supabase
 
