@@ -71,8 +71,8 @@ export interface UsageRecordInput {
   userId: string;
   /** 请求唯一标识符 */
   requestId: string;
-  /** 请求类型，当前仅支持 analyze_screenshot */
-  requestType: "analyze_screenshot";
+  /** 请求类型：analyze_screenshot（图片分析）/ analyze_text（文字分析） */
+  requestType: "analyze_screenshot" | "analyze_text";
   /** 使用的 AI 模型名称 */
   model: string | null;
   /** 图片字节大小 */
@@ -188,6 +188,22 @@ export interface AIProviderRequest {
 }
 
 /**
+ * AI 提供商文字分析请求接口
+ */
+export interface AIProviderTextRequest {
+  /** 请求唯一标识符 */
+  requestId: string;
+  /** 用户唯一标识符 */
+  userId: string;
+  /** 提示词 */
+  prompt: string;
+  /** AI 模型名称 */
+  model: string;
+  /** 最大输出 Token 数 */
+  maxOutputTokens: number;
+}
+
+/**
  * AI 提供商结果接口
  */
 export interface AIProviderResult {
@@ -213,6 +229,13 @@ export interface AIProvider {
    * @returns AI 分析结果
    */
   analyzeScreenshot(request: AIProviderRequest): Promise<AIProviderResult>;
+
+  /**
+   * 分析文字
+   * @param request AI 文字分析请求参数
+   * @returns AI 分析结果
+   */
+  analyzeText(request: AIProviderTextRequest): Promise<AIProviderResult>;
 }
 
 /**
@@ -292,6 +315,7 @@ async function handleRequest(context: RequestContext): Promise<Response> {
     "GET /v1/subscriptions/status": withAuthenticatedUser(handleSubscriptionStatus),
     "GET /v1/usage/current": withAuthenticatedUser(handleUsageCurrent),
     "POST /v1/ai/analyze-screenshot": withAuthenticatedUser(handleAnalyzeScreenshot),
+    "POST /v1/ai/analyze-text": withAuthenticatedUser(handleAnalyzeText),
     "POST /v1/apple/notifications": async () => json({ accepted: true }, 202)
   };
 
@@ -514,6 +538,123 @@ async function handleAnalyzeScreenshot(context: AuthenticatedContext): Promise<R
   });
 }
 
+/**
+ * 处理 AI 文字分析请求
+ * 执行完整的请求流程：地区验证 -> 订阅验证 -> 配额验证 -> 请求格式验证 ->
+ * 幂等性检查 -> AI 调用 -> 用量记录 -> 配额更新
+ * @param context 已认证请求上下文
+ * @returns AI 分析结果响应
+ */
+async function handleAnalyzeText(context: AuthenticatedContext): Promise<Response> {
+  // 验证地区权限
+  const regionError = validateRegion(context.user, context.env);
+  if (regionError) {
+    return regionError;
+  }
+
+  // 验证订阅状态（必须是 active 或 grace_period）
+  if (context.user.subscriptionStatus !== "active" && context.user.subscriptionStatus !== "grace_period") {
+    return json({ error: "subscription_required" }, 402);
+  }
+
+  // 验证日/月配额
+  const quotaError = validateQuota(context.user, context.env);
+  if (quotaError) {
+    return quotaError;
+  }
+
+  // 解析请求体
+  const body = await parseJsonBody(context.request);
+  if (!body || typeof body.request_id !== "string") {
+    return json({ error: "invalid_request" }, 400);
+  }
+
+  // 验证 request_id
+  const requestId = body.request_id.trim();
+  if (!requestId) {
+    return json({ error: "invalid_request" }, 400);
+  }
+
+  // 幂等性检查：防止重复请求
+  const existingRecord = await context.repository.findUsageRecordByRequestId(context.user.id, requestId);
+  if (existingRecord) {
+    return json({ error: "duplicate_request", status: existingRecord.status }, 409);
+  }
+
+  // 准备 AI 请求参数
+  const model = context.env.AI_MODEL || "gpt-5.4-mini";
+  const prompt = typeof body.prompt === "string" && body.prompt.trim()
+    ? body.prompt.trim()
+    : "请分析以下内容并给出有价值的见解。";
+
+  // 调用 AI 提供商
+  let result: AIProviderResult;
+  try {
+    result = await context.aiProvider.analyzeText({
+      requestId,
+      userId: context.user.id,
+      prompt,
+      model,
+      maxOutputTokens: numberFromEnv(context.env.AI_MAX_OUTPUT_TOKENS, 1200)
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "ai_provider_failed",
+        request_id: requestId,
+        user_id: context.user.id,
+        model,
+        error: error instanceof Error ? error.message : "AI provider failed"
+      })
+    );
+    // AI 调用失败，记录为不可计费的失败请求
+    await context.repository.recordUsage({
+      userId: context.user.id,
+      requestId,
+      requestType: "analyze_text",
+      model,
+      imageBytes: 0,
+      imageCount: 0,
+      inputTokenCount: 0,
+      outputTokenCount: 0,
+      estimatedCost: 0,
+      billable: false,
+      status: "failed",
+      outputText: error instanceof Error ? error.message : "AI provider failed"
+    });
+    return json({ error: "ai_provider_failed" }, 502);
+  }
+
+  // AI 调用成功，记录用量并更新配额
+  const tokenCount = result.inputTokenCount + result.outputTokenCount;
+  await context.repository.recordUsage({
+    userId: context.user.id,
+    requestId,
+    requestType: "analyze_text",
+    model: result.model,
+    imageBytes: 0,
+    imageCount: 0,
+    inputTokenCount: result.inputTokenCount,
+    outputTokenCount: result.outputTokenCount,
+    estimatedCost: result.estimatedCost,
+    billable: true,
+    status: "succeeded",
+    outputText: result.text
+  });
+  await context.repository.incrementMonthlyQuota(context.user.id, 1, tokenCount, result.estimatedCost);
+
+  // 返回成功响应
+  return json({
+    request_id: requestId,
+    analysis: result.text,
+    model: result.model,
+    usage: {
+      input_tokens: result.inputTokenCount,
+      output_tokens: result.outputTokenCount
+    }
+  });
+}
+
 function isAIProviderUnsupportedInputError(error: unknown): boolean {
   return error instanceof Error && (error as { code?: string }).code === "ai_provider_input_unsupported";
 }
@@ -627,6 +768,9 @@ function json(body: Record<string, unknown>, status = 200): Response {
  */
 const unavailableAIProvider: AIProvider = {
   async analyzeScreenshot() {
+    throw new Error("AI provider is not configured");
+  },
+  async analyzeText() {
     throw new Error("AI provider is not configured");
   }
 };

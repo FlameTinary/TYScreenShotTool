@@ -3,7 +3,7 @@
  * 支持 OpenAI Responses API 与 OpenAI-compatible Chat Completions API。
  */
 
-import type { AIProvider, AIProviderRequest, AIProviderResult } from "./app";
+import type { AIProvider, AIProviderRequest, AIProviderResult, AIProviderTextRequest } from "./app";
 
 /**
  * OpenAI 提供商环境变量接口
@@ -183,6 +183,46 @@ export class OpenAIResponsesProvider implements AIProvider {
   }
 
   /**
+   * 分析文字
+   * 调用 OpenAI Responses API 进行纯文字分析和问答
+   * @param request AI 文字请求参数
+   * @returns AI 分析结果
+   */
+  async analyzeText(request: AIProviderTextRequest): Promise<AIProviderResult> {
+    const response = await fetch(this.responsesURL(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: request.model,
+        max_output_tokens: request.maxOutputTokens,
+        input: request.prompt
+      })
+    });
+
+    if (!response.ok) {
+      const diagnostic = await safeErrorText(response);
+      throw new Error(`OpenAI Responses API failed: ${response.status}${diagnostic}`);
+    }
+
+    const body = (await response.json()) as ResponsesAPIResponse;
+    const text = extractResponseText(body);
+    if (!text) {
+      throw new Error("OpenAI Responses API returned empty text");
+    }
+
+    return {
+      text,
+      model: body.model ?? request.model,
+      inputTokenCount: body.usage?.input_tokens ?? 0,
+      outputTokenCount: body.usage?.output_tokens ?? 0,
+      estimatedCost: 0
+    };
+  }
+
+  /**
    * 构建 Responses API 的完整 URL
    * @returns API 端点 URL
    */
@@ -245,6 +285,52 @@ export class OpenAICompatibleChatProvider implements AIProvider {
                 }
               }
             ] satisfies ChatCompletionContent[]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const diagnostic = await safeErrorText(response);
+      throw new Error(`Chat Completions API failed: ${response.status}${diagnostic}`);
+    }
+
+    const body = (await response.json()) as ChatCompletionsAPIResponse;
+    const text = extractChatCompletionText(body);
+    if (!text) {
+      throw new Error("Chat Completions API returned empty text");
+    }
+
+    return {
+      text,
+      model: body.model ?? request.model,
+      inputTokenCount: body.usage?.prompt_tokens ?? 0,
+      outputTokenCount: body.usage?.completion_tokens ?? 0,
+      estimatedCost: 0
+    };
+  }
+
+  /**
+   * 分析文字
+   * 调用 Chat Completions API 进行纯文字分析和问答
+   * 兼容 DeepSeek 等支持 Chat Completions 的服务
+   * @param request AI 文字请求参数
+   * @returns AI 分析结果
+   */
+  async analyzeText(request: AIProviderTextRequest): Promise<AIProviderResult> {
+    const response = await fetch(this.chatCompletionsURL(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: request.model,
+        max_tokens: request.maxOutputTokens,
+        messages: [
+          {
+            role: "user",
+            content: request.prompt
           }
         ]
       })

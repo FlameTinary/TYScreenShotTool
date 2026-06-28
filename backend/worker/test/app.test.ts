@@ -118,6 +118,19 @@ function aiProvider(options: {
         outputTokenCount: 24,
         estimatedCost: 0.00042
       };
+    },
+    async analyzeText() {
+      options.calls?.push(1);
+      if (options.error) {
+        throw options.error;
+      }
+      return {
+        text: "REST API 是一种基于 HTTP 协议的架构风格，用于构建 Web 服务。",
+        model: "gpt-5.4-mini",
+        inputTokenCount: 35,
+        outputTokenCount: 60,
+        estimatedCost: 0.00015
+      };
     }
   };
 }
@@ -429,5 +442,252 @@ describe("TShot AI backend app", () => {
       status: "failed"
     });
     expect(quotaIncrements).toHaveLength(0);
+  });
+
+  /**
+   * 测试：没有 Authorization 头的文字分析请求应被拒绝
+   */
+  it("rejects text analysis requests without Authorization", async () => {
+    const app = createApp(repository(user()));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: "text_req_1", prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(401);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "unauthorized"
+    });
+  });
+
+  /**
+   * 测试：中国大陆用户的文字分析请求应被拒绝
+   */
+  it("rejects text analysis requests for China mainland users", async () => {
+    const app = createApp(repository(user({ storefront: "CHN", countryCode: "CN", subscriptionStatus: "active" })));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ request_id: "text_req_1", prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(403);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "region_unavailable"
+    });
+  });
+
+  /**
+   * 测试：未订阅用户的文字分析请求应被拒绝
+   * 不应调用 AI 提供商
+   */
+  it("rejects text analysis for unsubscribed users without invoking AI", async () => {
+    const calls: number[] = [];
+    const app = createApp(
+      repository(user({ storefront: "USA", subscriptionStatus: "inactive" })),
+      aiProvider({ calls })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ request_id: "text_req_1", prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(402);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "subscription_required"
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  /**
+   * 测试：月度配额用尽时文字分析请求应被拒绝
+   */
+  it("rejects text analysis when monthly quota is exhausted", async () => {
+    const calls: number[] = [];
+    const app = createApp(
+      repository(user({ storefront: "USA", subscriptionStatus: "active", monthlyUsedCount: 100 })),
+      aiProvider({ calls })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ request_id: "text_req_1", prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(429);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "monthly_quota_exceeded"
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  /**
+   * 测试：重复的 request_id 的文字分析请求应被拒绝
+   */
+  it("rejects duplicate text analysis requests", async () => {
+    const calls: number[] = [];
+    const app = createApp(
+      repository(user({ storefront: "USA", subscriptionStatus: "active" }), { existingRequestId: "dup_req" }),
+      aiProvider({ calls })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ request_id: "dup_req", prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(409);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "duplicate_request"
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  /**
+   * 测试：已订阅的海外用户应能获取文字分析结果
+   * 并正确记录可计费用量和更新配额
+   */
+  it("returns text analysis and records billable usage for subscribed overseas users", async () => {
+    const usageRecords: UsageRecordInput[] = [];
+    const quotaIncrements: Array<{ userId: string; requestCount: number; tokenCount: number; cost: number }> = [];
+    const calls: number[] = [];
+    const app = createApp(
+      repository(user({ storefront: "USA", subscriptionStatus: "active" }), { usageRecords, quotaIncrements }),
+      aiProvider({ calls })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          request_id: "text_req_success",
+          prompt: "请用中文解释什么是 REST API"
+        })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(200);
+    await expect(json(response)).resolves.toMatchObject({
+      request_id: "text_req_success",
+      analysis: "REST API 是一种基于 HTTP 协议的架构风格，用于构建 Web 服务。",
+      model: "gpt-5.4-mini"
+    });
+    expect(calls).toHaveLength(1);
+    expect(usageRecords).toHaveLength(1);
+    expect(usageRecords[0]).toMatchObject({
+      userId: "user_1",
+      requestId: "text_req_success",
+      requestType: "analyze_text",
+      imageBytes: 0,
+      imageCount: 0,
+      billable: true,
+      status: "succeeded",
+      outputText: "REST API 是一种基于 HTTP 协议的架构风格，用于构建 Web 服务。"
+    });
+    expect(quotaIncrements).toEqual([
+      { userId: "user_1", requestCount: 1, tokenCount: 95, cost: 0.00015 }
+    ]);
+  });
+
+  /**
+   * 测试：AI 提供商失败时文字分析应记录不可计费的失败请求
+   */
+  it("records non-billable failure when AI provider fails for text analysis", async () => {
+    const usageRecords: UsageRecordInput[] = [];
+    const quotaIncrements: Array<{ userId: string; requestCount: number; tokenCount: number; cost: number }> = [];
+    const app = createApp(
+      repository(user({ storefront: "USA", subscriptionStatus: "active" }), { usageRecords, quotaIncrements }),
+      aiProvider({ error: new Error("provider down") })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ request_id: "text_req_fail", prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(502);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "ai_provider_failed"
+    });
+    expect(usageRecords).toHaveLength(1);
+    expect(usageRecords[0]).toMatchObject({
+      requestId: "text_req_fail",
+      requestType: "analyze_text",
+      imageBytes: 0,
+      imageCount: 0,
+      billable: false,
+      status: "failed"
+    });
+    expect(quotaIncrements).toHaveLength(0);
+  });
+
+  /**
+   * 测试：缺少 request_id 的文字分析请求应被拒绝
+   */
+  it("rejects text analysis requests without request_id", async () => {
+    const app = createApp(repository(user({ storefront: "USA", subscriptionStatus: "active" })));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/ai/analyze-text", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ prompt: "Hello" })
+      }),
+      defaultEnv
+    );
+
+    expect(response.status).toBe(400);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "invalid_request"
+    });
   });
 });
