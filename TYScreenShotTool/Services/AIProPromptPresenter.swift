@@ -9,40 +9,111 @@ import AppKit
 /// 4. 展示订阅商品 / 购买 / 恢复弹窗
 @MainActor
 enum AIProPromptPresenter {
+    enum AccessState {
+        case ready
+        case needsLogin
+        case needsSubscription
+        case regionUnavailable
+    }
+
     private static var isPresenting = false
 
-    static func isReadyForAIMenu() async -> Bool {
+    static func currentAccessState() async -> AccessState {
         guard AIAvailabilityService().isSubscriptionAllowed else {
-            return false
-        }
-        guard UserDefaults.standard.bool(forKey: AppSettings.aiFirstUseConsentKey) else {
-            return false
+            return .regionUnavailable
         }
         guard AIProSessionManager.shared.isSignedIn else {
-            return false
+            return .needsLogin
         }
 
         do {
             let subscription = try await AIProBackendClient().fetchSubscriptionStatus()
             return subscription.status == "active" || subscription.status == "grace_period"
+                ? .ready
+                : .needsSubscription
         } catch {
             print("[AI Pro Prompt] preflight subscription check failed: \(error.localizedDescription)")
-            return false
+            return .needsSubscription
         }
+    }
+
+    static func isReadyForAIMenu() async -> Bool {
+        await currentAccessState() == .ready
+    }
+
+    static func showLoginOnboarding(from view: NSView? = nil) async {
+        guard beginPresenting() else {
+            return
+        }
+        defer { endPresenting() }
+
+        guard AIAvailabilityService().isSubscriptionAllowed else {
+            await showRegionUnavailable(from: view)
+            return
+        }
+
+        guard await showConsentIfNeeded(from: view) else {
+            print("[AI Pro Prompt] user cancelled first-use consent")
+            return
+        }
+
+        _ = await showLoginIfNeeded(from: view)
+    }
+
+    static func showSubscriptionOnboarding(from view: NSView? = nil) async {
+        guard beginPresenting() else {
+            return
+        }
+        defer { endPresenting() }
+
+        let subscriptionService = AIProSubscriptionService.shared
+
+        guard AIAvailabilityService().isSubscriptionAllowed else {
+            await showRegionUnavailable(from: view)
+            return
+        }
+
+        guard await showConsentIfNeeded(from: view) else {
+            print("[AI Pro Prompt] user cancelled first-use consent")
+            return
+        }
+
+        guard AIProSessionManager.shared.isSignedIn else {
+            _ = await showLoginIfNeeded(from: view)
+            return
+        }
+
+        subscriptionService.startTransactionListener()
+        let status = await subscriptionService.refreshStatus()
+        print("[AI Pro Prompt] subscription status: \(status)")
+        guard status.isSubscribed == false else {
+            return
+        }
+
+        _ = await showPrompt(
+            from: view,
+            content: AIProSubscriptionPromptContent(status: status),
+            subscriptionService: subscriptionService
+        )
+    }
+
+    static func showRegionUnavailable(from view: NSView? = nil) async {
+        let subscriptionService = AIProSubscriptionService.shared
+        _ = await showPrompt(
+            from: view,
+            content: AIProSubscriptionPromptContent(status: .regionUnavailable),
+            subscriptionService: subscriptionService
+        )
     }
 
     static func show(
         from view: NSView?,
         subscriptionService: AIProSubscriptionService? = nil
     ) async -> Bool {
-        guard isPresenting == false else {
-            print("[AI Pro Prompt] ignored duplicate prompt request")
+        guard beginPresenting() else {
             return false
         }
-        isPresenting = true
-        defer {
-            isPresenting = false
-        }
+        defer { endPresenting() }
 
         let subscriptionService = subscriptionService ?? .shared
 
@@ -84,6 +155,21 @@ enum AIProPromptPresenter {
             content: AIProSubscriptionPromptContent(status: status),
             subscriptionService: subscriptionService
         )
+    }
+}
+
+private extension AIProPromptPresenter {
+    static func beginPresenting() -> Bool {
+        guard isPresenting == false else {
+            print("[AI Pro Prompt] ignored duplicate prompt request")
+            return false
+        }
+        isPresenting = true
+        return true
+    }
+
+    static func endPresenting() {
+        isPresenting = false
     }
 }
 

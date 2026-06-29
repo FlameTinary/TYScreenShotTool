@@ -1315,17 +1315,30 @@ final class CaptureOverlayView: NSView {
     private func requestAI() {
         annotationCanvasView.commitActiveTextIfNeeded()
         Task {
-            let canUseCurrentCapture = await AIProPromptPresenter.isReadyForAIMenu()
-            let canContinue = await AIProPromptPresenter.show(from: nil)
-            guard canUseCurrentCapture, canContinue else {
+            switch await AIProPromptPresenter.currentAccessState() {
+            case .ready:
+                onAIGateStarted?(true)
+                guard presentAIMenuAtCurrentMouseLocation() else {
+                    onAIGateCancelled?()
+                    return
+                }
+
+            case .needsLogin:
                 onAIGateCancelled?()
-                print("[AI Pro Prompt] onboarding completed; take a new screenshot to use AI")
-                return
-            }
-            onAIGateStarted?(true)
-            guard presentAIMenuAtCurrentMouseLocation() else {
+                await Task.yield()
+                await AIProPromptPresenter.showLoginOnboarding()
+                print("[AI Pro Prompt] login onboarding completed; take a new screenshot to use AI")
+
+            case .needsSubscription:
                 onAIGateCancelled?()
-                return
+                await Task.yield()
+                await AIProPromptPresenter.showSubscriptionOnboarding()
+                print("[AI Pro Prompt] subscription onboarding completed; take a new screenshot to use AI")
+
+            case .regionUnavailable:
+                onAIGateCancelled?()
+                await Task.yield()
+                await AIProPromptPresenter.showRegionUnavailable()
             }
         }
     }
