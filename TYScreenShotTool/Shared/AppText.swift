@@ -263,6 +263,98 @@ enum AppText {
         fr: "Réessayer"
     ) }
 
+    // MARK: - Settings Login Section
+
+    static var settingsLoginSection: String { choose(
+        zhHans: "AI Pro 账号",
+        en: "AI Pro Account",
+        ja: "AI Pro アカウント",
+        ko: "AI Pro 계정",
+        de: "AI Pro Konto",
+        fr: "Compte AI Pro"
+    ) }
+
+    static var settingsSignOut: String { choose(
+        zhHans: "退出登录",
+        en: "Sign Out",
+        ja: "ログアウト",
+        ko: "로그아웃",
+        de: "Abmelden",
+        fr: "Déconnexion"
+    ) }
+
+    static func settingsSignedInAs(_ userID: String) -> String { choose(
+        zhHans: "已登录：\(userID)",
+        en: "Signed in: \(userID)",
+        ja: "ログイン中：\(userID)",
+        ko: "로그인됨: \(userID)",
+        de: "Angemeldet: \(userID)",
+        fr: "Connecté : \(userID)"
+    ) }
+
+    static var settingsLoginNotAvailable: String { choose(
+        zhHans: "当前区域不可用",
+        en: "Not available in current region",
+        ja: "現在の地域では利用できません",
+        ko: "현재 지역에서는 사용할 수 없습니다",
+        de: "In der aktuellen Region nicht verfügbar",
+        fr: "Non disponible dans la région actuelle"
+    ) }
+
+    static var settingsSubscriptionChecking: String { choose(
+        zhHans: "正在检查订阅状态...",
+        en: "Checking subscription...",
+        ja: "サブスクリプションを確認中...",
+        ko: "구독 상태 확인 중...",
+        de: "Abonnement wird geprüft...",
+        fr: "Vérification de l'abonnement..."
+    ) }
+
+    static var settingsSubscriptionActive: String { choose(
+        zhHans: "订阅状态：有效",
+        en: "Subscription: Active",
+        ja: "サブスクリプション：有効",
+        ko: "구독 상태: 활성",
+        de: "Abonnement: Aktiv",
+        fr: "Abonnement : Actif"
+    ) }
+
+    static var settingsSubscriptionExpired: String { choose(
+        zhHans: "订阅状态：已过期",
+        en: "Subscription: Expired",
+        ja: "サブスクリプション：期限切れ",
+        ko: "구독 상태: 만료됨",
+        de: "Abonnement: Abgelaufen",
+        fr: "Abonnement : Expiré"
+    ) }
+
+    static var settingsSubscriptionRefunded: String { choose(
+        zhHans: "订阅状态：已退款",
+        en: "Subscription: Refunded",
+        ja: "サブスクリプション：返金済み",
+        ko: "구독 상태: 환불됨",
+        de: "Abonnement: Rückerstattet",
+        fr: "Abonnement : Remboursé"
+    ) }
+
+    static var settingsSubscriptionNone: String { choose(
+        zhHans: "订阅状态：未订阅",
+        en: "Subscription: None",
+        ja: "サブスクリプション：なし",
+        ko: "구독 상태: 없음",
+        de: "Abonnement: Keines",
+        fr: "Abonnement : Aucun"
+    ) }
+
+    static var settingsSubscriptionFetchFailed: String { choose(
+        zhHans: "无法获取订阅状态",
+        en: "Failed to fetch subscription",
+        ja: "サブスクリプションの取得に失敗しました",
+        ko: "구독 상태를 가져오지 못했습니다",
+        de: "Abonnement konnte nicht abgerufen werden",
+        fr: "Impossible de récupérer l'abonnement"
+    ) }
+
     static var developerErrorSummaryTitle: String { choose(zhHans: "报错大意", en: "Error Summary", ja: "エラー概要", ko: "오류 요약", de: "Fehlerübersicht", fr: "Résumé de l’erreur") }
     static var developerErrorCausesTitle: String { choose(zhHans: "可能原因", en: "Possible Causes", ja: "考えられる原因", ko: "가능한 원인", de: "Mögliche Ursachen", fr: "Causes possibles") }
     static var developerErrorNextStepsTitle: String { choose(zhHans: "建议下一步", en: "Suggested Next Steps", ja: "次の推奨手順", ko: "다음 권장 단계", de: "Empfohlene nächste Schritte", fr: "Étapes suivantes suggérées") }

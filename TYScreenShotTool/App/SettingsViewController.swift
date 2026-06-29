@@ -26,6 +26,11 @@ final class SettingsViewController: NSViewController {
     #endif
     private let saveDirectoryLabel = NSTextField(labelWithString: "")
 
+    // MARK: - AI Pro Login Section
+
+    private let loginStatusLabel = NSTextField(labelWithString: "")
+    private let loginActionButton = NSButton(title: "", target: nil, action: nil)
+
     private var pendingHotKey: ScreenshotHotKey?
     private var previousHotKey: ScreenshotHotKey?
 
@@ -74,10 +79,11 @@ extension SettingsViewController {
         let debugRegionPolicySection = makeDebugRegionPolicySection()
         #endif
         let saveSection = makeSaveDirectorySection()
+        let loginSection = makeLoginSection()
 
         var contentSections: [NSView] = [
             titleLabel, descriptionLabel, hotKeySection, languageSection,
-            appearanceSection
+            appearanceSection, loginSection
         ]
         #if DEBUG
         contentSections.append(aiSection)
@@ -90,7 +96,7 @@ extension SettingsViewController {
         // NSStackView .leading alignment does not stretch arranged subviews;
         // each section container fills the stack width explicitly.
         var widthSections: [NSView] = [
-            hotKeySection, languageSection, appearanceSection
+            hotKeySection, languageSection, appearanceSection, loginSection
         ]
         #if DEBUG
         widthSections.append(aiSection)
@@ -153,6 +159,54 @@ extension SettingsViewController {
         ) ?? ""
         #endif
         saveDirectoryLabel.stringValue = currentSaveDirectoryPath
+        reloadLoginStatus()
+    }
+
+    func reloadLoginStatus() {
+        guard AIAvailabilityService().isSubscriptionAllowed else {
+            loginStatusLabel.stringValue = AppText.settingsLoginNotAvailable
+            loginActionButton.isHidden = true
+            return
+        }
+
+        loginActionButton.isHidden = false
+
+        if AIProSessionManager.shared.isSignedIn {
+            let userID = AIProSessionManager.shared.currentUserID ?? "--"
+            loginStatusLabel.stringValue = AppText.settingsSignedInAs(userID)
+            loginStatusLabel.textColor = .labelColor
+            loginActionButton.title = AppText.settingsSignOut
+            loginActionButton.action = #selector(handleLoginAction)
+
+            // 异步获取后端订阅状态
+            Task {
+                loginStatusLabel.stringValue = AppText.settingsSubscriptionChecking
+                do {
+                    let backendClient = AIProBackendClient()
+                    let subStatus = try await backendClient.fetchSubscriptionStatus()
+                    let userID = AIProSessionManager.shared.currentUserID ?? "--"
+                    let statusText: String
+                    switch subStatus.status {
+                    case "active", "grace_period":
+                        statusText = AppText.settingsSubscriptionActive
+                    case "expired":
+                        statusText = AppText.settingsSubscriptionExpired
+                    case "refunded":
+                        statusText = AppText.settingsSubscriptionRefunded
+                    default:
+                        statusText = AppText.settingsSubscriptionExpired
+                    }
+                    loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(statusText)"
+                } catch {
+                    let userID = AIProSessionManager.shared.currentUserID ?? "--"
+                    loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(AppText.settingsSubscriptionFetchFailed)"
+                }
+            }
+        } else {
+            loginStatusLabel.stringValue = ""
+            loginActionButton.title = AppText.aiProLoginButton
+            loginActionButton.action = #selector(handleLoginAction)
+        }
     }
 
     func reloadLocalizedTexts() {
@@ -447,6 +501,38 @@ private extension SettingsViewController {
     }
     #endif
 
+    func makeLoginSection() -> NSView {
+        let container = NSView()
+
+        let sectionTitle = makeSectionTitle(AppText.settingsLoginSection)
+
+        loginStatusLabel.font = .systemFont(ofSize: 12)
+        loginStatusLabel.textColor = .secondaryLabelColor
+        loginStatusLabel.maximumNumberOfLines = 0
+
+        loginActionButton.bezelStyle = .rounded
+        loginActionButton.target = self
+        loginActionButton.action = #selector(handleLoginAction)
+
+        container.addSubview(sectionTitle)
+        container.addSubview(loginStatusLabel)
+        container.addSubview(loginActionButton)
+
+        sectionTitle.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+        }
+        loginStatusLabel.snp.makeConstraints { make in
+            make.top.equalTo(sectionTitle.snp.bottom).offset(8)
+            make.leading.trailing.equalToSuperview()
+        }
+        loginActionButton.snp.makeConstraints { make in
+            make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
+            make.leading.bottom.equalToSuperview()
+        }
+
+        return container
+    }
+
     func makeSaveDirectorySection() -> NSView {
         let container = NSView()
 
@@ -547,6 +633,22 @@ private extension SettingsViewController {
 
     @objc func handleChooseSaveDirectory() { chooseSaveDirectory() }
     @objc func handleClearSaveDirectory() { clearSaveDirectory() }
+
+    @objc func handleLoginAction() {
+        if AIProSessionManager.shared.isSignedIn {
+            AIProSessionManager.shared.signOut()
+            reloadLoginStatus()
+        } else {
+            Task {
+                do {
+                    _ = try await AIProAuthService.shared.signIn()
+                    reloadLoginStatus()
+                } catch {
+                    loginStatusLabel.stringValue = error.localizedDescription
+                }
+            }
+        }
+    }
 
     func beginHotKeyRecording() {
         let current = ScreenshotHotKey(
