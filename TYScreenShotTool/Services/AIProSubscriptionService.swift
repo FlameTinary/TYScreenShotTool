@@ -114,13 +114,20 @@ final class AIProSubscriptionService {
                     return status
                 }
 
-                guard await reportVerificationToBackend(verification) else {
-                    status = .failed(AppText.aiProBackendVerificationFailed)
-                    return status
-                }
+                // 上报后端验证（best-effort，不影响本地订阅状态）
+                await reportVerificationToBackend(verification)
 
                 await transaction.finish()
-                return await refreshStatus()
+
+                // 立即标记为已订阅（refreshStatus 在 StoreKit 测试环境中
+                // 可能因 currentEntitlements 延迟返回 unsubscribed）
+                if let monthlyProduct {
+                    let viewModel = makeProductViewModel(from: monthlyProduct)
+                    status = .subscribed(viewModel)
+                } else {
+                    status = await refreshStatus()
+                }
+                return status
 
             case .userCancelled:
                 print("[AI Pro Subscription] StoreKit purchase cancelled by user")

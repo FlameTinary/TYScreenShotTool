@@ -1,4 +1,5 @@
 import AppKit
+import StoreKit
 
 /// AI Pro 弹窗流程编排
 ///
@@ -26,15 +27,27 @@ enum AIProPromptPresenter {
             return .needsLogin
         }
 
+        // 优先查询后端订阅状态
         do {
             let subscription = try await AIProBackendClient().fetchSubscriptionStatus()
             return subscription.status == "active" || subscription.status == "grace_period"
                 ? .ready
                 : .needsSubscription
         } catch {
-            print("[AI Pro Prompt] preflight subscription check failed: \(error.localizedDescription)")
-            return .needsSubscription
+            print("[AI Pro Prompt] backend subscription check failed: \(error.localizedDescription)")
+            // 后端不可用时降级到本地 StoreKit 检查
         }
+
+        // 降级：检查本地 StoreKit 有效订阅
+        let productID = AIProSubscriptionProductID.monthly
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result else { continue }
+            if transaction.productID == productID {
+                return .ready
+            }
+        }
+
+        return .needsSubscription
     }
 
     static func isReadyForAIMenu() async -> Bool {
