@@ -6,6 +6,7 @@ final class AIProAvailabilityTests: XCTestCase {
     func test_debugStorefrontOverride_buildsOverseasPolicy() {
         let defaults = UserDefaults.makeIsolated()
         defaults.set("usa", forKey: AppSettings.debugStorefrontCodeOverrideKey)
+        defaults.set("CHN", forKey: AppSettings.cachedStorefrontCodeKey)
 
         let policy = AppRegionPolicyProvider(userDefaults: defaults).currentPolicy()
 
@@ -14,6 +15,29 @@ final class AIProAvailabilityTests: XCTestCase {
         XCTAssertTrue(policy.isLoginAllowed)
         XCTAssertTrue(policy.isSubscriptionAllowed)
         XCTAssertTrue(policy.isServerAPIAllowed)
+    }
+
+    func test_cachedStorefrontBuildsPolicyWhenDebugOverrideIsEmpty() {
+        let defaults = UserDefaults.makeIsolated()
+        defaults.set("jpn", forKey: AppSettings.cachedStorefrontCodeKey)
+
+        let policy = AppRegionPolicyProvider(userDefaults: defaults).currentPolicy()
+
+        XCTAssertEqual(policy.storefrontCode, "JPN")
+        XCTAssertTrue(policy.isCommercialAIAllowed)
+        XCTAssertTrue(policy.isSubscriptionAllowed)
+    }
+
+    func test_emptyDebugOverrideFallsBackToCachedStorefront() {
+        let defaults = UserDefaults.makeIsolated()
+        defaults.set("", forKey: AppSettings.debugStorefrontCodeOverrideKey)
+        defaults.set("CHN", forKey: AppSettings.cachedStorefrontCodeKey)
+
+        let policy = AppRegionPolicyProvider(userDefaults: defaults).currentPolicy()
+
+        XCTAssertEqual(policy.storefrontCode, "CHN")
+        XCTAssertFalse(policy.isCommercialAIAllowed)
+        XCTAssertFalse(policy.isSubscriptionAllowed)
     }
 
     func test_aiProShellVisibleOnlyWhenRegionAllowsAndEntranceSettingEnabled() {

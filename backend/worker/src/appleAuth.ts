@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 /**
  * Apple Sign In JWT 验证模块
  * 验证 Apple 返回的 identity token（JWT），确保签名和 claims 合法
@@ -22,6 +24,7 @@ interface AppleKeysResponse {
 interface JWTHeader {
   alg?: string;
   kid?: string;
+  x5c?: string[];
   [key: string]: unknown;
 }
 
@@ -93,6 +96,13 @@ export interface AppStoreNotificationPayload {
   signedDate: number;
 }
 
+export interface AppStoreSignedDataVerificationConfig {
+  /** Apple Root CA PEM，可包含多个证书。 */
+  rootCertificatesPem?: string;
+  /** App Store Connect 中的 Apple App ID。生产环境 JWS 校验需要该值。 */
+  appAppleId?: string;
+}
+
 /** 公钥缓存 */
 let cachedKeys: { keys: AppleJWK[]; expiresAt: number } | null = null;
 const CACHE_TTL_MS = 3_600_000; // 1 小时
@@ -151,26 +161,15 @@ export async function verifyAppleJWT(
  */
 export async function verifyStoreKitTransactionJWT(
   signedTransaction: string,
-  bundleId: string
+  bundleId: string,
+  config: AppStoreSignedDataVerificationConfig = {}
 ): Promise<StoreKitTransactionPayload> {
-  const { payload } = await verifyJWTSignature(signedTransaction);
+  const payload = await verifyAppleSignedTransaction(signedTransaction, bundleId, config);
 
-  // StoreKit JWT 的 iss 通常是 "appstoreconnect.apple.com"（Production）或 "appleid.apple.com"（Sandbox）
-  // 放宽校验：只要 iss 包含 apple.com 即可
-  if (!payload.iss || !payload.iss.includes("apple.com")) {
-    throw new Error(`Invalid StoreKit JWT issuer: ${payload.iss}`);
-  }
-
-  // aud 应等于应用的 bundle ID
-  if (payload.aud !== bundleId) {
-    throw new Error(`Invalid StoreKit JWT audience: ${payload.aud}`);
-  }
-
-  // 提取交易字段（StoreKit JWT 使用驼峰命名）
-  const transactionId = payload.transactionId as string | undefined;
-  const originalTransactionId = payload.originalTransactionId as string | undefined;
-  const productId = payload.productId as string | undefined;
-  const environment = payload.environment as string | undefined;
+  const transactionId = payload.transactionId;
+  const originalTransactionId = payload.originalTransactionId;
+  const productId = payload.productId;
+  const environment = payload.environment;
 
   if (!transactionId) throw new Error("StoreKit JWT missing transactionId");
   if (!originalTransactionId) throw new Error("StoreKit JWT missing originalTransactionId");
@@ -185,9 +184,9 @@ export async function verifyStoreKitTransactionJWT(
     bundleId,
     environment: normalizedEnv,
     ...(typeof payload.expiresDate === "number" ? { expiresDate: payload.expiresDate } : {}),
-    purchaseDate: (payload.purchaseDate as number) ?? 0,
-    signedDate: (payload.signedDate as number) ?? 0,
-    ...(payload.appAccountToken !== undefined ? { appAccountToken: payload.appAccountToken as string } : {})
+    purchaseDate: payload.purchaseDate ?? 0,
+    signedDate: payload.signedDate ?? 0,
+    ...(payload.appAccountToken !== undefined ? { appAccountToken: payload.appAccountToken } : {})
   };
 }
 
@@ -204,37 +203,120 @@ export async function verifyStoreKitTransactionJWT(
  */
 export async function verifyAppStoreNotificationJWT(
   signedPayload: string,
-  bundleId: string
+  bundleId: string,
+  config: AppStoreSignedDataVerificationConfig = {}
 ): Promise<AppStoreNotificationPayload> {
-  const { payload } = await verifyJWTSignature(signedPayload);
+  const payload = await verifyAppleSignedNotification(signedPayload, bundleId, config);
 
-  const notificationType = payload.notificationType as string | undefined;
+  const notificationType = payload.notificationType;
   if (!notificationType) {
     throw new Error("App Store notification missing notificationType");
   }
 
-  const data = payload.data as Record<string, unknown> | undefined;
+  const data = payload.data;
   if (!data || !data.signedTransactionInfo) {
     throw new Error("App Store notification missing data.signedTransactionInfo");
   }
 
-  const notificationBundleId = data.bundleId as string | undefined;
+  const notificationBundleId = data.bundleId;
   if (!notificationBundleId || notificationBundleId !== bundleId) {
     throw new Error(`App Store notification bundleId mismatch: ${notificationBundleId}`);
   }
 
-  const environment = data.environment as string | undefined;
+  const environment = data.environment;
   const normalizedEnv = environment === "Sandbox" ? "Sandbox" : "Production";
 
   return {
-    notificationType,
-    ...(payload.subtype !== undefined ? { subtype: payload.subtype as string } : {}),
+    notificationType: String(notificationType),
+    ...(payload.subtype !== undefined ? { subtype: String(payload.subtype) } : {}),
     bundleId,
     environment: normalizedEnv,
-    signedTransactionInfo: data.signedTransactionInfo as string,
-    notificationUUID: (payload.notificationUUID as string) ?? "",
-    signedDate: (payload.signedDate as number) ?? 0
+    signedTransactionInfo: data.signedTransactionInfo,
+    notificationUUID: payload.notificationUUID ?? "",
+    signedDate: payload.signedDate ?? 0
   };
+}
+
+async function verifyAppleSignedTransaction(
+  signedTransaction: string,
+  bundleId: string,
+  config: AppStoreSignedDataVerificationConfig
+) {
+  const verifiers = await makeSignedDataVerifiers(bundleId, config);
+  let lastError: unknown;
+  for (const verifier of verifiers) {
+    try {
+      return await verifier.verifyAndDecodeTransaction(signedTransaction);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("StoreKit JWT verification failed");
+}
+
+async function verifyAppleSignedNotification(
+  signedPayload: string,
+  bundleId: string,
+  config: AppStoreSignedDataVerificationConfig
+) {
+  const verifiers = await makeSignedDataVerifiers(bundleId, config);
+  let lastError: unknown;
+  for (const verifier of verifiers) {
+    try {
+      return await verifier.verifyAndDecodeNotification(signedPayload);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("App Store notification verification failed");
+}
+
+async function makeSignedDataVerifiers(
+  bundleId: string,
+  config: AppStoreSignedDataVerificationConfig
+){
+  const { Environment, SignedDataVerifier } = await import("@apple/app-store-server-library");
+  const rootCertificates = parseRootCertificates(config.rootCertificatesPem);
+  const appAppleId = parseAppAppleId(config.appAppleId);
+  const enableOnlineChecks = true;
+
+  return [
+    new SignedDataVerifier(rootCertificates, enableOnlineChecks, Environment.SANDBOX, bundleId),
+    new SignedDataVerifier(rootCertificates, enableOnlineChecks, Environment.PRODUCTION, bundleId, appAppleId)
+  ];
+}
+
+function parseRootCertificates(rootCertificatesPem?: string): Buffer[] {
+  if (!rootCertificatesPem?.trim()) {
+    throw new Error("Missing APPLE_ROOT_CERTIFICATES_PEM for App Store signed data verification");
+  }
+
+  const matches = rootCertificatesPem.match(
+    /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g
+  );
+  if (!matches?.length) {
+    throw new Error("APPLE_ROOT_CERTIFICATES_PEM does not contain a PEM certificate");
+  }
+
+  return matches.map((pem) => {
+    const base64 = pem
+      .replace(/-----BEGIN CERTIFICATE-----/g, "")
+      .replace(/-----END CERTIFICATE-----/g, "")
+      .replace(/\s/g, "");
+    return Buffer.from(base64, "base64");
+  });
+}
+
+function parseAppAppleId(appAppleId?: string): number | undefined {
+  if (!appAppleId?.trim()) {
+    return undefined;
+  }
+
+  const parsed = Number(appAppleId);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error("APPLE_APP_ID must be a positive integer");
+  }
+  return parsed;
 }
 
 /**

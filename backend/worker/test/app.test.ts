@@ -85,6 +85,8 @@ function repository(profile: UserProfile | null, options: {
   createdUserId?: string;
   /** 模拟 createSession 返回的 token */
   createdToken?: string;
+  /** 收集 Apple 登录传入的数据 */
+  authInputs?: Array<{ appleUserId: string; email?: string; storefront?: string }>;
 } = {}): BackendRepository {
   return {
     async findUserByBearerToken() {
@@ -121,7 +123,12 @@ function repository(profile: UserProfile | null, options: {
     async incrementMonthlyQuota(userId: string, requestCount: number, tokenCount: number, cost: number) {
       options.quotaIncrements?.push({ userId, requestCount, tokenCount, cost });
     },
-    async findOrCreateUser(_appleUserId: string, _email?: string) {
+    async findOrCreateUser(appleUserId: string, email?: string, storefront?: string) {
+      options.authInputs?.push({
+        appleUserId,
+        ...(email !== undefined ? { email } : {}),
+        ...(storefront !== undefined ? { storefront } : {})
+      });
       return profile ?? {
         id: options.createdUserId ?? "new_user_1",
         storefront: null,
@@ -231,15 +238,20 @@ describe("TShot AI backend app", () => {
    * 验证新用户的创建和 token 返回
    */
   it("returns token and user_id from Apple Sign In for a new user", async () => {
+    const authInputs: Array<{ appleUserId: string; email?: string; storefront?: string }> = [];
     const app = createApp(
-      repository(null, { createdUserId: "apple-new-user-001", createdToken: "apple-token-abc" })
+      repository(null, {
+        createdUserId: "apple-new-user-001",
+        createdToken: "apple-token-abc",
+        authInputs
+      })
     );
 
     const response = await app.fetch(
       new Request("https://api.example.com/v1/auth/apple", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identity_token: "header.payload.signature" })
+        body: JSON.stringify({ identity_token: "header.payload.signature", storefront: "USA" })
       }),
       { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
     );
@@ -253,6 +265,13 @@ describe("TShot AI backend app", () => {
     // token 应为字符串且非空
     expect(typeof body.token).toBe("string");
     expect((body.token as string).length).toBeGreaterThan(0);
+    expect(authInputs).toEqual([
+      {
+        appleUserId: "test-apple-user-001",
+        email: "test@example.com",
+        storefront: "USA"
+      }
+    ]);
   });
 
   /**

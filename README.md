@@ -250,6 +250,14 @@ ARCHIVE_PATH=/your/path/TShot.xcarchive ./scripts/archive.sh
 ./scripts/test.sh
 ```
 
+AI Pro 上线前静态预检：
+
+```bash
+./scripts/preflight_ai_pro.sh
+```
+
+该脚本会检查 Release 网络与签名配置、Sign in with Apple entitlement、Worker 默认视觉模型、Apple StoreKit / 通知验签依赖和关键部署说明。
+
 测试说明见：
 
 * `docs/testing/automated-testing.md`
@@ -298,7 +306,7 @@ v1.0.0 后续迭代中，当前 Sprint 为 Sprint 53「AI 订阅服务区域化�
 - 进入截图编辑态后执行复制 / 保存 / OCR / 翻译 / AI / Pin / 长截图 / 取消
 - 普通截图与长截图共用 OCR / AI 结果窗口能力
 - 普通截图与长截图都支持独立「翻译」入口，使用本地 OCR + Apple Translation 框架，不调用 AI 服务
-- AI 入口默认隐藏；Debug Settings 中的开发者 AI 开关与 Debug 区域覆盖仍受区域策略约束
+- AI 入口在区域策略允许时默认显示；中国大陆和 unknown storefront 下隐藏，Debug Settings 中的开发者 AI 开关与 Debug 区域覆盖仍受区域策略约束
 - 当前主要业务 UI 现状以 AppKit 实现，布局常用 SnapKit
 - 后续开发默认推荐 AppKit + SnapKit，但不限制只能使用这一组合；若评估 SwiftUI 或手动 frame 更合适，也可按场景选用
 - 普通截图编辑态已支持矩形、圆形、直线、箭头、画笔、文字、马赛克
@@ -343,19 +351,19 @@ v1.0.0 后续迭代中，当前 Sprint 为 Sprint 53「AI 订阅服务区域化�
 
 ---
 
-## 隐藏 AI 配置
+## AI Pro 与隐藏 AI 配置
 
-当前版本默认隐藏 `AI` 入口；Debug Settings 中可以打开开发者 AI 入口，并可用 Debug 区域策略覆盖值模拟 `USA` / `CHN` / unknown，但最终是否展示仍以区域策略为准。
+当前版本的 `AI` 入口在区域策略允许时默认显示，并接入 Apple 登录、订阅状态和后端 AI 请求校验；中国大陆和 unknown storefront 下仍会隐藏。Debug Settings 中仍可关闭开发者 AI 入口，并可用 Debug 区域策略覆盖值模拟 `USA` / `CHN` / unknown，但最终是否展示仍以区域策略为准。
 
-`AI 分析` 的请求参数仍通过本地隐藏配置读取 `API Key`、`Base URL` 与模型名。
+旧的本地 `AI 分析` 请求参数仍通过隐藏配置读取 `API Key`、`Base URL` 与模型名，仅用于开发者 / Debug / 内部验证。
 
 注意：
 
 * 当前隐藏 AI 配置仅适合作为开发者 / Debug / 内部验证能力。
 * `local.aiAnalysis.*` 不能绕过区域策略；中国大陆模式和 unknown / nil storefront 下，即使写入本地 API Key，也不会发起商业 AI 请求。
-* 海外模式下当前 AI Pro 壳层可加载 StoreKit 2 订阅商品并提供购买 / 恢复入口；点击 AI 入口不会上传截图，也不会调用 AI 后端。
+* 海外模式下 AI Pro 会先经过首次使用同意、Apple 登录、订阅状态和区域策略判断；有效订阅用户点击 AI 后会调用后端 AI 分析接口。
 * `backend/` 已提供 Cloudflare Workers + Supabase 后端 MVP，可在登录态、地区、订阅、额度、幂等和图片大小校验通过后转发 AI 请求，并记录 usage 与扣减月额度。
-* 正式面向用户的 AI Pro 订阅能力将按区域化策略规划：中国大陆区保持纯本地工具定位，海外区后续通过登录、Apple 订阅和后端校验提供 AI 服务。
+* 正式面向用户的 AI Pro 订阅能力按区域化策略接入：中国大陆区保持纯本地工具定位，海外区通过登录、Apple 订阅和后端校验提供 AI 服务。
 * 商业 AI 请求不应依赖用户在本机写入 API Key，后续应统一走后端鉴权、订阅校验、地区校验、额度控制和风控。
 
 普通「翻译」按钮不属于 AI 链路。它默认显示，复用 OCR 识别截图文字，并使用 Apple Translation 框架执行本地翻译。
@@ -394,7 +402,7 @@ defaults delete com.sheldon.TShot debug.runStoreKitSandboxTests
 ```
 
 - 项目脚本 `./scripts/test.sh` 会禁用签名，因此该购买验证只作为显式人工 / Sandbox 验证步骤，不作为默认测试门禁
-- 当前本地订阅状态只用于展示，不作为最终 AI 请求权限；后续仍必须由后端校验地区、登录、订阅和额度
+- 本地订阅状态用于 App 端快速 gating 与设置页展示，最终 AI 请求权限仍由后端校验地区、登录、订阅和额度
 
 后端 MVP：
 
@@ -402,7 +410,7 @@ defaults delete com.sheldon.TShot debug.runStoreKitSandboxTests
 - Supabase migration：`backend/supabase/migrations/202606280001_ai_backend_mvp.sql`
 - 当前 API 可校验 Bearer 登录态、地区 allowlist、订阅状态、日/月额度、`request_id` 幂等和图片大小
 - `POST /v1/ai/analyze-screenshot` 在通过前置校验后会调用后端配置的 OpenAI Responses API，并写入 `usage_records`、扣减 `monthly_quotas`
-- 真实 Sign in with Apple、App Store Server API 订阅校验、Apple Server Notifications V2 和 App 端正式接入仍未完成
+- Sign in with Apple、StoreKit signed transaction 校验、Apple Server Notifications V2 和 App 端 AI Pro 接入已完成代码链路；正式上线前仍需用 Sandbox / TestFlight 和 App Store Connect 商品做真实端到端验证
 
 后端本地验证：
 

@@ -1314,38 +1314,16 @@ final class CaptureOverlayView: NSView {
     @objc
     private func requestAI() {
         annotationCanvasView.commitActiveTextIfNeeded()
-        // 简化：直接弹出菜单，跳过权限检查
-        presentAIMenu(relativeTo: aiButton)
-        
-        /* 原有权限检查逻辑（已注释）
         Task {
-            switch await AIProPromptPresenter.currentAccessState() {
-            case .ready:
-                await MainActor.run {
-                    presentAIMenuAtCurrentMouseLocation()
-                }
+            if await AIProPromptPresenter.isReadyForAIMenu() {
+                presentAIMenu(relativeTo: aiButton)
+                return
+            }
 
-            case .needsLogin:
-                await AIProPromptPresenter.showLoginOnboarding(from: self)
-                if await AIProPromptPresenter.currentAccessState() == .ready {
-                    await MainActor.run {
-                        presentAIMenuAtCurrentMouseLocation()
-                    }
-                }
-
-            case .needsSubscription:
-                await AIProPromptPresenter.showSubscriptionOnboarding(from: self)
-                if await AIProPromptPresenter.currentAccessState() == .ready || AIProSessionManager.shared.isSignedIn {
-                    await MainActor.run {
-                        presentAIMenuAtCurrentMouseLocation()
-                    }
-                }
-
-            case .regionUnavailable:
-                await AIProPromptPresenter.showRegionUnavailable(from: self)
+            if await AIProPromptPresenter.show(from: self) {
+                presentAIMenu(relativeTo: aiButton)
             }
         }
-        */
     }
 
     private func presentAIMenu(relativeTo button: NSButton) {

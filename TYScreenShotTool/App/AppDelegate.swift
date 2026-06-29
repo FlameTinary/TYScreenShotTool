@@ -16,8 +16,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 #endif
-        if AIAvailabilityService().isSubscriptionAllowed {
+        Task {
+            let regionPolicyProvider = AppRegionPolicyProvider()
+            await regionPolicyProvider.refreshStorefrontCache()
+            guard AIAvailabilityService(regionPolicy: regionPolicyProvider.currentPolicy()).isSubscriptionAllowed else {
+                return
+            }
             AIProSubscriptionService.shared.startTransactionListener()
+            if AIProSessionManager.shared.isSignedIn {
+                Task {
+                    _ = await AIProSubscriptionService.shared.refreshStatus()
+                }
+            }
         }
 
         let overlayService = CaptureOverlayService()
@@ -31,7 +41,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let scrollingCapturePreviewWindowService = ScrollingCapturePreviewWindowService()
         let ocrPreviewWindowService = OCRPreviewWindowService()
         let aiImageTextExtractionService = AIImageTextExtractionService()
-        let aiAnalysisService = AIAnalysisService()
         let aiAnalysisPreviewWindowService = AIAnalysisPreviewWindowService()
         let windowSelectionService = WindowSelectionService()
         let hotKeyService = GlobalHotKeyService(
@@ -50,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             imageSaveService: imageSaveService,
             ocrService: OCRService(),
             aiImageTextExtractionService: aiImageTextExtractionService,
-            aiAnalysisService: aiAnalysisService,
             pinWindowService: pinWindowService,
             toastService: toastService,
             settingsOpenCoordinator: settingsCoordinator,

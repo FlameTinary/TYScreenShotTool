@@ -80,6 +80,27 @@ final class AIServiceRegionPolicyTests: XCTestCase {
         XCTAssertEqual(RequestCountingURLProtocol.requestCount, 0)
     }
 
+    func test_analysisService_defaultAvailabilityUsesCachedStorefrontAtRequestTime() async {
+        let defaults = UserDefaults.makeIsolated()
+        defaults.set("test-api-key", forKey: AppSettings.aiAnalysisAPIKeyKey)
+        defaults.set("USA", forKey: AppSettings.cachedStorefrontCodeKey)
+        let service = AIAnalysisService(
+            session: .requestCounting,
+            userDefaults: defaults
+        )
+
+        do {
+            _ = try await service.analyze(text: "hello", mode: .summary)
+            XCTFail("Expected request counting session to fail after region policy allows network")
+        } catch let error as AIAnalysisError {
+            XCTAssertFalse(error.isRegionPolicyBlock)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        XCTAssertEqual(RequestCountingURLProtocol.requestCount, 1)
+    }
+
     func test_imageTextExtractionService_blocksChinaMainlandBeforeNetworkEvenWithLocalAPIKey() async throws {
         let defaults = UserDefaults.makeIsolated()
         defaults.set("test-api-key", forKey: AppSettings.aiAnalysisAPIKeyKey)

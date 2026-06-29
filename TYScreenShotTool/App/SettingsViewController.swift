@@ -30,7 +30,9 @@ final class SettingsViewController: NSViewController {
 
     private let loginStatusLabel = NSTextField(labelWithString: "")
     private let loginActionButton = NSButton(title: "", target: nil, action: nil)
+    private let subscriptionActionsStack = NSStackView()
     private let subscribeButton = NSButton(title: "", target: nil, action: nil)
+    private let restoreSubscriptionButton = NSButton(title: "", target: nil, action: nil)
 
     private var pendingHotKey: ScreenshotHotKey?
     private var previousHotKey: ScreenshotHotKey?
@@ -124,6 +126,8 @@ extension SettingsViewController {
         appearancePopUp.action = #selector(appearanceChanged)
         subscribeButton.target = self
         subscribeButton.action = #selector(handleSubscribeAction)
+        restoreSubscriptionButton.target = self
+        restoreSubscriptionButton.action = #selector(handleRestoreSubscriptionAction)
         #if DEBUG
         aiVisionCheckbox.target = self
         aiVisionCheckbox.action = #selector(aiVisionChanged)
@@ -156,7 +160,10 @@ extension SettingsViewController {
         aiVisionCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey) ? .on : .off
         #endif
         #if DEBUG
-        aiEntranceCheckbox.state = UserDefaults.standard.bool(forKey: AppSettings.showAIEntrancesKey) ? .on : .off
+        aiEntranceCheckbox.state = AppSettings.boolValue(
+            forKey: AppSettings.showAIEntrancesKey,
+            defaultValue: AppSettings.showAIEntrancesDefaultValue
+        ) ? .on : .off
         debugStorefrontCodeField.stringValue = UserDefaults.standard.string(
             forKey: AppSettings.debugStorefrontCodeOverrideKey
         ) ?? ""
@@ -169,6 +176,8 @@ extension SettingsViewController {
         guard AIAvailabilityService().isSubscriptionAllowed else {
             loginStatusLabel.stringValue = AppText.settingsLoginNotAvailable
             loginActionButton.isHidden = true
+            subscribeButton.isHidden = true
+            restoreSubscriptionButton.isHidden = true
             return
         }
 
@@ -176,48 +185,57 @@ extension SettingsViewController {
 
         if AIProSessionManager.shared.isSignedIn {
             let userID = AIProSessionManager.shared.currentUserID ?? "--"
-            loginStatusLabel.stringValue = AppText.settingsSignedInAs(userID)
             loginStatusLabel.textColor = .labelColor
             loginActionButton.title = AppText.settingsSignOut
             loginActionButton.action = #selector(handleLoginAction)
+            renderSignedInStatus(
+                userID: userID,
+                subscriptionStatus: AIProSubscriptionService.shared.status
+            )
 
-            // 异步获取后端订阅状态
-            Task {
-                loginStatusLabel.stringValue = AppText.settingsSubscriptionChecking
-                subscribeButton.isHidden = true
-                do {
-                    let backendClient = AIProBackendClient()
-                    let subStatus = try await backendClient.fetchSubscriptionStatus()
-                    let userID = AIProSessionManager.shared.currentUserID ?? "--"
-                    let statusText: String
-                    let isSubscribed = subStatus.status == "active" || subStatus.status == "grace_period"
-                    switch subStatus.status {
-                    case "active", "grace_period":
-                        statusText = AppText.settingsSubscriptionActive
-                    case "expired":
-                        statusText = AppText.settingsSubscriptionExpired
-                    case "refunded":
-                        statusText = AppText.settingsSubscriptionRefunded
-                    default:
-                        statusText = AppText.settingsSubscriptionExpired
+            if AIProSubscriptionService.shared.status.needsNetworkRefresh {
+                Task {
+                    let status = await AIProSubscriptionService.shared.refreshStatus()
+                    guard AIProSessionManager.shared.isSignedIn else {
+                        return
                     }
-                    loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(statusText)"
-                    
-                    // 订阅状态无效时显示订阅按钮
-                    if !isSubscribed {
-                        subscribeButton.title = AppText.settingsSubscribe
-                        subscribeButton.isHidden = false
-                    }
-                } catch {
                     let userID = AIProSessionManager.shared.currentUserID ?? "--"
-                    loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(AppText.settingsSubscriptionFetchFailed)"
+                    renderSignedInStatus(userID: userID, subscriptionStatus: status)
                 }
             }
         } else {
             loginStatusLabel.stringValue = ""
             loginActionButton.title = AppText.aiProLoginButton
             loginActionButton.action = #selector(handleLoginAction)
+            subscribeButton.isHidden = true
+            restoreSubscriptionButton.isHidden = true
         }
+    }
+
+    func renderSignedInStatus(userID: String, subscriptionStatus: AIProSubscriptionStatus) {
+        let statusText: String
+        switch subscriptionStatus {
+        case .notLoaded:
+            statusText = AppText.settingsSubscriptionChecking
+        case .loading:
+            statusText = AppText.settingsSubscriptionChecking
+        case .regionUnavailable:
+            statusText = AppText.settingsLoginNotAvailable
+        case .unavailable:
+            statusText = AppText.aiProSubscriptionUnavailableMessage
+        case .unsubscribed:
+            statusText = AppText.settingsSubscriptionNone
+        case .subscribed:
+            statusText = AppText.settingsSubscriptionActive
+        case .failed:
+            statusText = AppText.settingsSubscriptionFetchFailed
+        }
+
+        loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(statusText)"
+        subscribeButton.title = AppText.settingsSubscribe
+        subscribeButton.isHidden = !subscriptionStatus.canStartPurchase
+        restoreSubscriptionButton.title = AppText.settingsRestoreSubscription
+        restoreSubscriptionButton.isHidden = !subscriptionStatus.canStartRestore
     }
 
     func reloadLocalizedTexts() {
@@ -530,10 +548,21 @@ private extension SettingsViewController {
         subscribeButton.action = #selector(handleSubscribeAction)
         subscribeButton.isHidden = true
 
+        restoreSubscriptionButton.bezelStyle = .rounded
+        restoreSubscriptionButton.target = self
+        restoreSubscriptionButton.action = #selector(handleRestoreSubscriptionAction)
+        restoreSubscriptionButton.isHidden = true
+
+        subscriptionActionsStack.orientation = .horizontal
+        subscriptionActionsStack.alignment = .centerY
+        subscriptionActionsStack.spacing = 8
+        subscriptionActionsStack.addArrangedSubview(subscribeButton)
+        subscriptionActionsStack.addArrangedSubview(restoreSubscriptionButton)
+
         container.addSubview(sectionTitle)
         container.addSubview(loginStatusLabel)
         container.addSubview(loginActionButton)
-        container.addSubview(subscribeButton)
+        container.addSubview(subscriptionActionsStack)
 
         sectionTitle.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
@@ -546,7 +575,7 @@ private extension SettingsViewController {
             make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
             make.leading.equalToSuperview()
         }
-        subscribeButton.snp.makeConstraints { make in
+        subscriptionActionsStack.snp.makeConstraints { make in
             make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
             make.leading.equalTo(loginActionButton.snp.trailing).offset(8)
             make.bottom.equalToSuperview()
@@ -659,11 +688,16 @@ private extension SettingsViewController {
     @objc func handleLoginAction() {
         if AIProSessionManager.shared.isSignedIn {
             AIProSessionManager.shared.signOut()
+            AIProSubscriptionService.shared.clearCachedStatus()
             reloadLoginStatus()
         } else {
             Task {
                 do {
                     _ = try await AIProAuthService.shared.signIn()
+                    switch AIProSettingsSignInCompletionBehavior.afterSuccessfulSignIn {
+                    case .refreshSubscriptionStatus:
+                        _ = await AIProSubscriptionService.shared.refreshStatus()
+                    }
                     reloadLoginStatus()
                 } catch {
                     loginStatusLabel.stringValue = error.localizedDescription
@@ -673,10 +707,10 @@ private extension SettingsViewController {
     }
 
     @objc func handleSubscribeAction() {
-        subscribeButton.isEnabled = false
+        setSubscriptionButtonsEnabled(false)
         Task {
             let status = await AIProSubscriptionService.shared.purchaseMonthly()
-            subscribeButton.isEnabled = true
+            setSubscriptionButtonsEnabled(true)
             
             switch status {
             case .subscribed:
@@ -688,6 +722,31 @@ private extension SettingsViewController {
                 break
             }
         }
+    }
+
+    @objc func handleRestoreSubscriptionAction() {
+        setSubscriptionButtonsEnabled(false)
+        Task {
+            let status = await AIProSubscriptionService.shared.restorePurchases()
+            setSubscriptionButtonsEnabled(true)
+
+            switch status {
+            case .subscribed:
+                reloadLoginStatus()
+            case .failed(let error):
+                loginStatusLabel.stringValue = error
+            default:
+                renderSignedInStatus(
+                    userID: AIProSessionManager.shared.currentUserID ?? "--",
+                    subscriptionStatus: status
+                )
+            }
+        }
+    }
+
+    func setSubscriptionButtonsEnabled(_ isEnabled: Bool) {
+        subscribeButton.isEnabled = isEnabled
+        restoreSubscriptionButton.isEnabled = isEnabled
     }
 
     func beginHotKeyRecording() {

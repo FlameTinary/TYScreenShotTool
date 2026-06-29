@@ -55,12 +55,12 @@ struct AIAnalysisResult {
 final class AIAnalysisService {
     private let session: URLSession
     private let userDefaults: UserDefaults
-    private let aiAvailabilityService: AIAvailabilityService
+    private let aiAvailabilityService: AIAvailabilityService?
 
     init(
         session: URLSession = .shared,
         userDefaults: UserDefaults = .standard,
-        aiAvailabilityService: AIAvailabilityService = AIAvailabilityService()
+        aiAvailabilityService: AIAvailabilityService? = nil
     ) {
         self.session = session
         self.userDefaults = userDefaults
@@ -139,7 +139,8 @@ final class AIAnalysisService {
     }
 
     private func ensureDeveloperLocalAIConfigAllowed() throws {
-        guard aiAvailabilityService.isDeveloperLocalAIConfigAllowed else {
+        let availabilityService = aiAvailabilityService ?? AIAvailabilityService(userDefaults: userDefaults)
+        guard availabilityService.isDeveloperLocalAIConfigAllowed else {
             throw AIAnalysisError.requestFailed(AppText.aiRegionPolicyBlocked)
         }
     }

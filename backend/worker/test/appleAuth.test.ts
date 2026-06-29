@@ -4,7 +4,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resetAppleKeyCache, verifyAppleJWT } from "../src/appleAuth";
+import { resetAppleKeyCache, verifyAppleJWT, verifyStoreKitTransactionJWT } from "../src/appleAuth";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -214,5 +214,20 @@ describe("Apple JWT verification", () => {
       email: "test@example.com"
     });
     expect(claims.emailVerified).toBeUndefined();
+  });
+
+  it("requires Apple root certificates for StoreKit signed transaction verification", async () => {
+    await expect(
+      verifyStoreKitTransactionJWT("header.payload.signature", "com.tshot.app")
+    ).rejects.toThrow("Missing APPLE_ROOT_CERTIFICATES_PEM");
+  });
+
+  it("rejects invalid Apple App ID configuration for StoreKit signed transaction verification", async () => {
+    await expect(
+      verifyStoreKitTransactionJWT("header.payload.signature", "com.tshot.app", {
+        rootCertificatesPem: "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
+        appAppleId: "not-a-number"
+      })
+    ).rejects.toThrow("APPLE_APP_ID must be a positive integer");
   });
 });

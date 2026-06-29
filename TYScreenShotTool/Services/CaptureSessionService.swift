@@ -48,7 +48,6 @@ final class CaptureSessionService {
     private let imageSaveService: ImageSaveService
     private let ocrService: OCRService
     private let aiImageTextExtractionService: AIImageTextExtractionService
-    private let aiAnalysisService: AIAnalysisService
     private let pinWindowService: PinWindowService
     private let toastService: ToastService
     private let settingsOpenCoordinator: SettingsOpenCoordinator
@@ -85,7 +84,6 @@ final class CaptureSessionService {
         imageSaveService: ImageSaveService,
         ocrService: OCRService,
         aiImageTextExtractionService: AIImageTextExtractionService,
-        aiAnalysisService: AIAnalysisService,
         pinWindowService: PinWindowService,
         toastService: ToastService,
         settingsOpenCoordinator: SettingsOpenCoordinator,
@@ -101,7 +99,6 @@ final class CaptureSessionService {
         self.imageSaveService = imageSaveService
         self.ocrService = ocrService
         self.aiImageTextExtractionService = aiImageTextExtractionService
-        self.aiAnalysisService = aiAnalysisService
         self.pinWindowService = pinWindowService
         self.toastService = toastService
         self.settingsOpenCoordinator = settingsOpenCoordinator
@@ -847,7 +844,10 @@ final class CaptureSessionService {
     private func currentAITextInputStrategy() -> AITextInputStrategy {
         let useVision = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey)
         print("[AI Analysis] Settings aiUseVisionTextExtraction: \(useVision)")
-        return useVision ? .visionAI : .localOCR
+        if useVision {
+            print("[AI Analysis] Scrolling capture uses local OCR before backend analysis")
+        }
+        return .localOCR
     }
 
     private func logSelection(_ rect: CGRect) {
@@ -1402,7 +1402,34 @@ final class CaptureSessionService {
 
         do {
             let text = try await resolveAIText(from: image, strategy: strategy)
-            let result = try await aiAnalysisService.analyze(text: text, mode: mode)
+            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmedText.isEmpty == false else {
+                throw AIAnalysisError.emptyInput
+            }
+
+            let analysisPrompt: String
+            if let backendPrompt = mode.backendPrompt {
+                let separator = AppText.aiAnalysisExtractedTextSeparator
+                analysisPrompt = "\(backendPrompt)\n\n\(separator)\n\(trimmedText)"
+            } else {
+                analysisPrompt = trimmedText
+            }
+
+            let response = try await AIProBackendClient().analyzeText(
+                requestID: requestID.uuidString,
+                prompt: analysisPrompt
+            )
+            let result = AIAnalysisResult(
+                mode: mode,
+                statusTitle: mode.resultStatusTitle,
+                sections: [
+                    AIAnalysisSection(title: mode.resultStatusTitle, content: response.analysis)
+                ],
+                rawText: response.analysis,
+                secondaryCopyText: response.analysis
+            )
+            print("[AI Pro Backend] Scrolling text analysis succeeded, model: \(response.model)")
+
             await MainActor.run {
                 guard shouldAcceptScrollingAIResult(
                     requestID: requestID,
@@ -1424,6 +1451,30 @@ final class CaptureSessionService {
                             successMessage: result.mode.secondaryCopySuccessMessage
                         )
                     },
+                    onRetry: { [weak self] in
+                        self?.retryScrollingAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
+        } catch let error as AIProBackendError {
+            await MainActor.run {
+                guard shouldAcceptScrollingAIResult(
+                    requestID: requestID,
+                    resultRevision: resultRevision
+                ) else {
+                    return
+                }
+
+                print("[AI Pro Backend] Scrolling backend error: \(error.localizedDescription)")
+                toastService.showToast(message: error.localizedDescription)
+                aiAnalysisPreviewWindowService.presentError(
+                    title: AppText.aiResultError,
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    preferredSide: preferredSide,
                     onRetry: { [weak self] in
                         self?.retryScrollingAIAnalysis()
                     },

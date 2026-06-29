@@ -38,6 +38,26 @@ final class AIProSubscriptionTests: XCTestCase {
         XCTAssertFalse(status.canStartPurchase)
     }
 
+    func test_signedInSubscriptionStatesCanStartRestore() {
+        XCTAssertTrue(AIProSubscriptionStatus.unsubscribed(Self.monthlyProduct).canStartRestore)
+        XCTAssertTrue(AIProSubscriptionStatus.subscribed(Self.monthlyProduct).canStartRestore)
+        XCTAssertTrue(AIProSubscriptionStatus.unavailable.canStartRestore)
+        XCTAssertFalse(AIProSubscriptionStatus.notLoaded.canStartRestore)
+        XCTAssertFalse(AIProSubscriptionStatus.loading.canStartRestore)
+        XCTAssertFalse(AIProSubscriptionStatus.regionUnavailable.canStartRestore)
+    }
+
+    func test_settingsRestoreSubscriptionTextIsAvailable() {
+        XCTAssertFalse(AppText.settingsRestoreSubscription.isEmpty)
+    }
+
+    func test_settingsSuccessfulSignInRefreshesSubscriptionStatusWithoutAutoRestoringPurchases() {
+        XCTAssertEqual(
+            AIProSettingsSignInCompletionBehavior.afterSuccessfulSignIn,
+            .refreshSubscriptionStatus
+        )
+    }
+
     func test_promptContentForUnsubscribedProductOffersSubscribeAndRestore() {
         let product = AIProSubscriptionProduct(
             id: AIProSubscriptionProductID.monthly,
@@ -69,6 +89,138 @@ final class AIProSubscriptionTests: XCTestCase {
         XCTAssertNil(content.cancelButtonTitle)
     }
 
+    func test_accessStateBlocksRegionBeforeLoginAndSubscription() {
+        let state = AIProAccessState.resolve(
+            isSubscriptionAllowed: false,
+            isSignedIn: true,
+            subscriptionStatus: .subscribed(Self.monthlyProduct)
+        )
+
+        XCTAssertEqual(state, .regionUnavailable)
+    }
+
+    func test_accessStateRequiresLoginBeforeSubscription() {
+        let state = AIProAccessState.resolve(
+            isSubscriptionAllowed: true,
+            isSignedIn: false,
+            subscriptionStatus: .subscribed(Self.monthlyProduct)
+        )
+
+        XCTAssertEqual(state, .needsLogin)
+    }
+
+    func test_accessStateUsesCachedSubscribedStatus() {
+        let state = AIProAccessState.resolve(
+            isSubscriptionAllowed: true,
+            isSignedIn: true,
+            subscriptionStatus: .subscribed(Self.monthlyProduct)
+        )
+
+        XCTAssertEqual(state, .ready)
+    }
+
+    func test_accessStateTreatsUnknownOrInactiveCachedStatusAsNeedsSubscription() {
+        XCTAssertEqual(
+            AIProAccessState.resolve(
+                isSubscriptionAllowed: true,
+                isSignedIn: true,
+                subscriptionStatus: .notLoaded
+            ),
+            .needsSubscription
+        )
+        XCTAssertEqual(
+            AIProAccessState.resolve(
+                isSubscriptionAllowed: true,
+                isSignedIn: true,
+                subscriptionStatus: .unsubscribed(Self.monthlyProduct)
+            ),
+            .needsSubscription
+        )
+    }
+
+    func test_purchaseConfirmationRequiresBackendActiveStatus() {
+        let failedStatus = AIProSubscriptionStatus.statusAfterVerifiedPurchase(
+            product: Self.monthlyProduct,
+            backendConfirmed: false
+        )
+
+        XCTAssertFalse(failedStatus.isSubscribed)
+        XCTAssertEqual(failedStatus, .failed(AppText.aiProBackendVerificationFailed))
+
+        let subscribedStatus = AIProSubscriptionStatus.statusAfterVerifiedPurchase(
+            product: Self.monthlyProduct,
+            backendConfirmed: true
+        )
+
+        XCTAssertEqual(subscribedStatus, .subscribed(Self.monthlyProduct))
+    }
+
+    func test_subscriptionStatusCacheRestoresFreshSubscribedStatus() {
+        let defaults = UserDefaults.makeIsolated()
+
+        AIProSubscriptionStatus.subscribed(Self.monthlyProduct).saveCachedStatus(
+            in: defaults,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+
+        XCTAssertEqual(
+            AIProSubscriptionStatus.cachedStatus(
+                in: defaults,
+                now: Date(timeIntervalSince1970: 1_100)
+            ),
+            .subscribed(Self.monthlyProduct)
+        )
+    }
+
+    func test_subscriptionStatusCacheIgnoresExpiredStatus() {
+        let defaults = UserDefaults.makeIsolated()
+
+        AIProSubscriptionStatus.subscribed(Self.monthlyProduct).saveCachedStatus(
+            in: defaults,
+            now: Date(timeIntervalSince1970: 1_000),
+            maxAge: 60
+        )
+
+        XCTAssertNil(
+            AIProSubscriptionStatus.cachedStatus(
+                in: defaults,
+                now: Date(timeIntervalSince1970: 1_061),
+                maxAge: 60
+            )
+        )
+    }
+
+    func test_clearCachedSubscriptionStatusRemovesStoredStatus() {
+        let defaults = UserDefaults.makeIsolated()
+
+        AIProSubscriptionStatus.subscribed(Self.monthlyProduct).saveCachedStatus(in: defaults)
+        AIProSubscriptionStatus.clearCachedStatus(in: defaults)
+
+        XCTAssertNil(AIProSubscriptionStatus.cachedStatus(in: defaults))
+    }
+
+    func test_backendActiveStatusKeepsAccessWhenStoreKitProductIsUnavailableButCachedProductExists() {
+        let status = AIProSubscriptionStatus.statusAfterBackendRefresh(
+            loadedProduct: nil,
+            cachedProduct: Self.monthlyProduct,
+            backendStatus: "active",
+            backendProductID: AIProSubscriptionProductID.monthly
+        )
+
+        XCTAssertEqual(status, .subscribed(Self.monthlyProduct))
+    }
+
+    func test_backendInactiveWithoutLoadedProductShowsSubscriptionUnavailable() {
+        let status = AIProSubscriptionStatus.statusAfterBackendRefresh(
+            loadedProduct: nil,
+            cachedProduct: Self.monthlyProduct,
+            backendStatus: "inactive",
+            backendProductID: AIProSubscriptionProductID.monthly
+        )
+
+        XCTAssertEqual(status, .unavailable)
+    }
+
     @MainActor
     func test_storeKitConfigurationCanPurchaseMonthlyProduct() async throws {
         let isEnabledByEnvironment = ProcessInfo.processInfo.environment["TSHOT_RUN_STOREKIT_SANDBOX_TESTS"] == "1"
@@ -90,4 +242,13 @@ final class AIProSubscriptionTests: XCTestCase {
             "Expected local StoreKit purchase to create a monthly subscription transaction"
         )
     }
+}
+
+private extension AIProSubscriptionTests {
+    static let monthlyProduct = AIProSubscriptionProduct(
+        id: AIProSubscriptionProductID.monthly,
+        displayName: "AI Pro Monthly",
+        displayPrice: "$4.99",
+        description: "Monthly AI Pro subscription"
+    )
 }

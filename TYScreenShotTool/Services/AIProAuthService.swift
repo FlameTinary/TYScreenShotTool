@@ -41,7 +41,7 @@ final class AIProAuthService: NSObject {
             // 超时保护：30 秒后如果 delegate 还没返回，主动恢复 continuation
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: Self.signInTimeout)
-                await self?.handleTimeout()
+                self?.handleTimeout()
             }
 
             let request = ASAuthorizationAppleIDProvider().createRequest()
@@ -123,18 +123,26 @@ extension AIProAuthService: ASAuthorizationControllerDelegate {
 
 extension AIProAuthService: ASAuthorizationControllerPresentationContextProviding {
     nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        // 主线程安全获取当前窗口（keyWindow 只能在主线程访问）
         if Thread.isMainThread {
-            return NSApplication.shared.keyWindow
-                ?? NSApplication.shared.windows.first
-                ?? ASPresentationAnchor()
+            return MainActor.assumeIsolated {
+                Self.currentPresentationAnchor()
+            }
         }
 
-        var window: NSWindow?
+        var anchor: ASPresentationAnchor!
         DispatchQueue.main.sync {
-            window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first
+            anchor = MainActor.assumeIsolated {
+                Self.currentPresentationAnchor()
+            }
         }
-        return window ?? ASPresentationAnchor()
+        return anchor
+    }
+
+    @MainActor
+    private static func currentPresentationAnchor() -> ASPresentationAnchor {
+        NSApplication.shared.keyWindow
+            ?? NSApplication.shared.windows.first
+            ?? ASPresentationAnchor()
     }
 }
 

@@ -1,5 +1,4 @@
 import AppKit
-import StoreKit
 
 /// AI Pro 弹窗流程编排
 ///
@@ -10,44 +9,24 @@ import StoreKit
 /// 4. 展示订阅商品 / 购买 / 恢复弹窗
 @MainActor
 enum AIProPromptPresenter {
-    enum AccessState {
-        case ready
-        case needsLogin
-        case needsSubscription
-        case regionUnavailable
-    }
-
     private static var isPresenting = false
 
-    static func currentAccessState() async -> AccessState {
-        guard AIAvailabilityService().isSubscriptionAllowed else {
-            return .regionUnavailable
-        }
-        guard AIProSessionManager.shared.isSignedIn else {
-            return .needsLogin
-        }
+    static func currentAccessState() async -> AIProAccessState {
+        let subscriptionService = AIProSubscriptionService.shared
+        let state = AIProAccessState.resolve(
+            isSubscriptionAllowed: AIAvailabilityService().isSubscriptionAllowed,
+            isSignedIn: AIProSessionManager.shared.isSignedIn,
+            subscriptionStatus: subscriptionService.status
+        )
 
-        // 优先查询后端订阅状态
-        do {
-            let subscription = try await AIProBackendClient().fetchSubscriptionStatus()
-            return subscription.status == "active" || subscription.status == "grace_period"
-                ? .ready
-                : .needsSubscription
-        } catch {
-            print("[AI Pro Prompt] backend subscription check failed: \(error.localizedDescription)")
-            // 后端不可用时降级到本地 StoreKit 检查
-        }
-
-        // 降级：检查本地 StoreKit 有效订阅
-        let productID = AIProSubscriptionProductID.monthly
-        for await result in Transaction.currentEntitlements {
-            guard case .verified(let transaction) = result else { continue }
-            if transaction.productID == productID {
-                return .ready
+        if AIProSessionManager.shared.isSignedIn,
+           subscriptionService.status.needsNetworkRefresh {
+            Task {
+                _ = await subscriptionService.refreshStatus()
             }
         }
 
-        return .needsSubscription
+        return state
     }
 
     static func isReadyForAIMenu() async -> Bool {
@@ -79,35 +58,7 @@ enum AIProPromptPresenter {
         }
         defer { endPresenting() }
 
-        let subscriptionService = AIProSubscriptionService.shared
-
-        guard AIAvailabilityService().isSubscriptionAllowed else {
-            await showRegionUnavailable(from: view)
-            return
-        }
-
-        guard await showConsentIfNeeded(from: view) else {
-            print("[AI Pro Prompt] user cancelled first-use consent")
-            return
-        }
-
-        guard AIProSessionManager.shared.isSignedIn else {
-            _ = await showLoginIfNeeded(from: view)
-            return
-        }
-
-        subscriptionService.startTransactionListener()
-        let status = await subscriptionService.refreshStatus()
-        print("[AI Pro Prompt] subscription status: \(status)")
-        guard status.isSubscribed == false else {
-            return
-        }
-
-        _ = await showPrompt(
-            from: view,
-            content: AIProSubscriptionPromptContent(status: status),
-            subscriptionService: subscriptionService
-        )
+        _ = await showGatedFlow(from: view, subscriptionService: .shared)
     }
 
     static func showRegionUnavailable(from view: NSView? = nil) async {
@@ -128,7 +79,15 @@ enum AIProPromptPresenter {
         }
         defer { endPresenting() }
 
-        let subscriptionService = subscriptionService ?? .shared
+        return await showGatedFlow(from: view, subscriptionService: subscriptionService ?? .shared)
+    }
+}
+
+private extension AIProPromptPresenter {
+    static func showGatedFlow(
+        from view: NSView?,
+        subscriptionService: AIProSubscriptionService
+    ) async -> Bool {
 
         // 1. 区域策略
         guard AIAvailabilityService().isSubscriptionAllowed else {
@@ -254,10 +213,10 @@ private extension AIProPromptPresenter {
             return false
         }
 
-        // 发起 Apple 登录
         do {
             print("[AI Pro Prompt] starting Sign in with Apple")
             _ = try await AIProAuthService.shared.signIn()
+            _ = await AIProSubscriptionService.shared.refreshStatus()
             return true
         } catch {
             print("[AI Pro Prompt] Sign in with Apple failed: \(error.localizedDescription)")

@@ -10,8 +10,7 @@
 - Pin
 - 标注与马赛克
 - 长截图
-
-不包含尚未正式交付的 AI 分析能力。
+- AI Pro（海外区订阅能力，使用 Sign in with Apple、StoreKit 订阅、后端校验和额度控制）
 
 ---
 
@@ -29,7 +28,7 @@ Key features:
 - OCR text recognition
 - Pin screenshots as floating windows
 - **AI Pro** (subscription): Analyze screenshots using AI, with backend subscription verification, usage quota management, and privacy-first design.
-- Screenshot content is uploaded to the backend and processed by third-party AI models (e.g. DeepSeek) only for the specific analysis request.
+- Screenshot content is uploaded to the backend and processed by configured third-party AI models only for the specific analysis request.
 - Monthly and daily usage limits apply.
 
 Not available in China Mainland.

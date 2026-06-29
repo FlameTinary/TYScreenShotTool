@@ -644,7 +644,7 @@ created_at
 - 海外区显示 AI Pro 入口
 - 未登录时提示 Sign in with Apple
 - 未订阅时展示订阅说明
-- 本阶段不真实调用 AI 后端
+- 点击 AI 时按区域、登录和订阅状态进入后端 AI 请求或对应引导
 
 验收：
 
@@ -657,7 +657,7 @@ created_at
 - 新增 `AppRegionPolicyProvider`，Debug 下支持通过 `debug.regionPolicy.storefrontCode` 注入 storefront，便于本地验证 `USA` / `CHN` / unknown 分支
 - 新增 `AIProShellAvailability`，将海外 AI Pro 壳层可见性与点击行为收口为可测试模型
 - `AIAvailabilityService` 默认从 `AppRegionPolicyProvider` 获取当前区域策略，`AppSettings.effectiveShowAIEntrances` 切换为 AI Pro 壳层入口判断
-- 普通截图与长截图 AI 按钮在海外 Debug 策略下展示 AI Pro 说明弹窗，不再进入真实 AI 请求菜单
+- 普通截图与长截图 AI 按钮在海外策略下优先读取缓存权限状态，未登录 / 未订阅时展示对应引导，已订阅时进入后端 AI 请求链路
 - Debug Settings 新增区域策略覆盖输入，方便人工验证海外 / 大陆 / unknown 模式
 - 单元测试覆盖 Debug storefront override、AI Pro 壳层可见性，以及点击壳层不转换为 AI 请求
 
@@ -687,7 +687,7 @@ created_at
 - 新增显式 opt-in 的 StoreKitTest 购买验证：`test_storeKitConfigurationCanPurchaseMonthlyProduct` 默认跳过；本机签名环境写入 `debug.runStoreKitSandboxTests=true` 后可验证 `tshot.pro.monthly` 能产生本地购买交易
 - 已在本机签名环境执行 StoreKit 购买验证，结果通过；默认 `./scripts/test.sh` 会禁用签名，因此该购买验证不作为默认测试门禁
 - Xcode Debug scheme 下的 Product API `load` 验证当前返回 `unavailable`，已记录为本地 StoreKit runtime 注入限制；可重复的购买交易验证以后续显式签名测试为准
-- 本地订阅状态当前只用于 UI 展示，不作为最终 AI 请求权限；AI 后端、登录和额度校验仍留给后续 Feature
+- 本地订阅状态用于 App 端快速 gating 与设置页展示，最终 AI 请求权限仍由后端登录、地区、订阅和额度校验兜底
 - 单元测试覆盖商品 ID、订阅状态、弹窗动作、订阅区域策略判断和 opt-in StoreKit 本地购买交易验证
 
 ### Feature 53.5：Serverless 后端 MVP
@@ -762,6 +762,8 @@ created_at
 - 修改 `AppDelegate`：启动时调用 `AIProSessionManager.shared.restoreSession()` 恢复 Keychain 中的 Token
 - 中国大陆 / unknown 模式不会触发任何登录或后端请求（由区域策略控制入口可见性）
 - Bearer Token 通过 Keychain 安全存储，不写入日志或 UserDefaults 明文
+- Settings 与 AI 工具栏登录成功后只刷新后端订阅状态，不自动触发 StoreKit 恢复购买弹窗；恢复购买由 Feature 53.8 的显式「恢复订阅」入口承接
+- AI Pro 订阅引导入口复用完整 gate 流程，未登录用户完成 Apple 登录后会继续刷新订阅状态并进入订阅判断，不需要再次点击 AI
 
 ### Feature 53.8：App 端订阅交易上报与后端订阅状态同步 ✅
 
@@ -775,13 +777,15 @@ created_at
 
 - 修改 `AIProSubscriptionService`：`purchaseMonthly()` 和 `restorePurchases()` 成功后，获取 `transaction.jwsRepresentation`（signedTransaction JWT），调用 `AIProBackendClient.verifySubscription()` 上报后端
 - 交易监听 `Transaction.updates` 新交易也自动上报后端
+- Settings 已提供「恢复订阅」入口，可将当前 Apple ID 下的有效 AI Pro 订阅重新上报后端，用于后端订阅记录丢失或换设备后的权益恢复
+- 后端 `subscriptions` 按 `original_transaction_id` 更新已有记录时会同步当前认证用户、商品和环境，确保恢复订阅能把 Apple 原始交易重新绑定到当前登录用户
 - 后端验证失败不影响本地状态，仅打印日志；AI 请求全权以后端校验为准
 - 整合后的 AI Pro 弹窗流程：同意提示（53.10）→ Apple 登录（53.7）→ 订阅购买（53.4）→ 上报后端（53.8）
 
 验收：
 
 - Sandbox 环境可完成购买
-- 恢复购买可恢复订阅状态
+- 恢复购买 / 设置页恢复订阅可恢复订阅状态并重新同步后端记录
 - 购买成功后后端收到交易并返回验证结果
 - 本地 UI 不作为最终权限来源
 

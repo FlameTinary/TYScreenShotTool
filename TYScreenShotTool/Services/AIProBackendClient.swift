@@ -101,6 +101,19 @@ final class AIProBackendClient {
     private let sessionManager: AIProSessionManager
     private let baseURL: URL
 
+    static func defaultBaseURL(userDefaults: UserDefaults = .standard) -> URL {
+        if let configured = userDefaults.string(forKey: AppSettings.backendBaseURLKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           configured.isEmpty == false,
+           let url = URL(string: configured),
+           url.scheme != nil,
+           url.host != nil {
+            return url
+        }
+
+        return URL(string: AppSettings.backendBaseURLDefaultValue)!
+    }
+
     static func makeDefaultSession() -> URLSession {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 15
@@ -111,7 +124,7 @@ final class AIProBackendClient {
     init(
         session: URLSession = AIProBackendClient.makeDefaultSession(),
         sessionManager: AIProSessionManager = .shared,
-        baseURL: URL = URL(string: AppSettings.backendBaseURLDefaultValue)!
+        baseURL: URL = AIProBackendClient.defaultBaseURL()
     ) {
         self.session = session
         self.sessionManager = sessionManager
@@ -122,7 +135,11 @@ final class AIProBackendClient {
 
     /// 使用 Apple identity token 登录
     func authApple(identityToken: String) async throws -> AuthAppleResponse {
-        let body: [String: String] = ["identity_token": identityToken]
+        let policy = AppRegionPolicyProvider().currentPolicy()
+        var body: [String: String] = ["identity_token": identityToken]
+        if let storefrontCode = policy.storefrontCode {
+            body["storefront"] = storefrontCode
+        }
         let data = try await performRequest(path: "/v1/auth/apple", body: body, requiresAuth: false)
         return try decodeResponse(data)
     }

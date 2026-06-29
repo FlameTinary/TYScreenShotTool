@@ -44,12 +44,12 @@ enum AIImageTextExtractionError: LocalizedError {
 final class AIImageTextExtractionService {
     private let session: URLSession
     private let userDefaults: UserDefaults
-    private let aiAvailabilityService: AIAvailabilityService
+    private let aiAvailabilityService: AIAvailabilityService?
 
     init(
         session: URLSession = .shared,
         userDefaults: UserDefaults = .standard,
-        aiAvailabilityService: AIAvailabilityService = AIAvailabilityService()
+        aiAvailabilityService: AIAvailabilityService? = nil
     ) {
         self.session = session
         self.userDefaults = userDefaults
@@ -110,7 +110,8 @@ extension AIImageTextExtractionService {
 
 private extension AIImageTextExtractionService {
     func ensureDeveloperLocalAIConfigAllowed() throws {
-        guard aiAvailabilityService.isDeveloperLocalAIConfigAllowed else {
+        let availabilityService = aiAvailabilityService ?? AIAvailabilityService(userDefaults: userDefaults)
+        guard availabilityService.isDeveloperLocalAIConfigAllowed else {
             throw AIImageTextExtractionError.requestFailed(AppText.aiRegionPolicyBlocked)
         }
     }

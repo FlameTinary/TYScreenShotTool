@@ -43,10 +43,13 @@ enum AppSettings {
     static let aiAnalysisModelDefaultValue = "gpt-5.4-mini"
     /// 是否显示 AI 功能入口（控制工具栏中的 AI 按钮显示/隐藏）
     static let showAIEntrancesKey = "settings.showAIEntrances"
-    /// 显示 AI 功能入口默认值（默认关闭，出于合规考虑）
-    static let showAIEntrancesDefaultValue = false
+    /// 显示 AI 功能入口默认值（区域策略仍会在中国大陆和 unknown storefront 下隐藏入口）
+    static let showAIEntrancesDefaultValue = true
     /// Debug 区域策略 storefront 覆盖值，用于本地验证 CHN / USA / unknown。
     static let debugStorefrontCodeOverrideKey = "debug.regionPolicy.storefrontCode"
+
+    /// 最近一次从 StoreKit 读取到的 storefront code，用于启动后快速判断区域策略。
+    static let cachedStorefrontCodeKey = "regionPolicy.cachedStorefrontCode"
     /// Debug StoreKit 验证模式，仅用于本地验证 AI Pro 商品加载 / 购买 / 恢复。
     static let debugStoreKitVerificationModeKey = "debug.storeKitVerificationMode"
     /// Debug StoreKit 测试开关，仅用于本机签名环境下的购买验证。
@@ -58,6 +61,8 @@ enum AppSettings {
     static let backendBaseURLKey = "settings.backendBaseURL"
     /// 后端 API 基础 URL 默认值
     static let backendBaseURLDefaultValue = "https://tshot-ai-backend.tshot.workers.dev"
+    /// AI Pro 订阅状态缓存，用于启动后快速判断工具栏 AI 入口权限。
+    static let aiProSubscriptionStatusCacheKey = "aiPro.subscriptionStatusCache"
 
     // MARK: - AI Pro First Use Consent
 
@@ -66,15 +71,21 @@ enum AppSettings {
     /// 首次使用 AI Pro 同意状态默认值
     static let aiFirstUseConsentDefaultValue = false
 
-    /// Release 模式下永远返回 false；Debug 模式下先经过区域策略，再读取 UserDefaults 开关。
+    /// 先经过区域策略，再读取用户入口开关。
     ///
-    /// Release 构建时即使 UserDefaults 意外写入 true，此方法也返回 false，
-    /// Debug 构建时即使手动写入 true，也不能绕过区域策略显示商业 AI 入口。
+    /// 即使手动写入 true，也不能绕过区域策略显示商业 AI 入口。
     static var effectiveShowAIEntrances: Bool {
-        #if DEBUG
-        return AIAvailabilityService().shouldShowAIProShellEntry
-        #else
-        return false
-        #endif
+        AIAvailabilityService().shouldShowAIProShellEntry
+    }
+
+    static func boolValue(
+        forKey key: String,
+        defaultValue: Bool,
+        userDefaults: UserDefaults = .standard
+    ) -> Bool {
+        guard userDefaults.object(forKey: key) != nil else {
+            return defaultValue
+        }
+        return userDefaults.bool(forKey: key)
     }
 }

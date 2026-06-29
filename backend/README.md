@@ -41,6 +41,8 @@ npx wrangler deploy
 - `AI_MODEL`：AI 模型名称；当前默认配置为 `gpt-4.1-mini`。
 - `OPENAI_BASE_URL`：AI Provider API 根地址；当前默认配置为 `https://api.openai.com`。
 - `AI_MAX_OUTPUT_TOKENS`：每次请求的最大输出 token 数。
+- `APPLE_BUNDLE_ID`：Apple 登录、StoreKit 交易和 App Store Server Notifications 校验使用的 Bundle ID，当前为 `com.sheldon.TShot`。
+- `APPLE_APP_ID`：App Store Connect 中的 Apple App ID；生产环境 StoreKit / 通知 JWS 校验需要，Sandbox 可为空。
 
 密钥必须通过 Wrangler 设置，不可提交：
 
@@ -51,7 +53,15 @@ npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 # 输入: sk-your-api-key
 npx wrangler secret put OPENAI_API_KEY
+# 输入: 从 Apple PKI 下载的 Apple Root CA PEM，可包含多个 -----BEGIN CERTIFICATE----- 区块
+npx wrangler secret put APPLE_ROOT_CERTIFICATES_PEM
 ```
+
+Apple Root CA 获取方式：
+
+1. 打开 [Apple PKI](https://www.apple.com/certificateauthority/)
+2. 下载 Apple Root Certificates 区域中当前根证书
+3. 转换为 PEM 后合并写入 `APPLE_ROOT_CERTIFICATES_PEM`
 
 ## 切换大模型
 
@@ -111,13 +121,25 @@ npx wrangler secret put OPENAI_API_KEY
 - 目标模型必须支持图片输入；纯文本模型会调用失败。
 - `OPENAI_API_KEY` 必须设置为该第三方服务商的 API Key。
 
-### DeepSeek 当前配置
+### DeepSeek 纯文本配置
 
-- `wrangler.jsonc` 中设置 `AI_PROVIDER=deepseek`
-- `wrangler.jsonc` 中设置 `AI_MODEL=deepseek-v4-flash`
-- `wrangler.jsonc` 中设置 `OPENAI_BASE_URL=https://api.deepseek.com`
-- `OPENAI_API_KEY` 仍然必须设置，值为 DeepSeek API Key
-- DeepSeek 当前接口按文本模型处理，不支持截图图片输入；`/v1/ai/analyze-screenshot` 会返回 `ai_provider_input_unsupported`，正式截图分析需切换到支持视觉输入的 AI Provider。
+如仅验证文字分析，可临时切换到 DeepSeek：
+
+```jsonc
+{
+  "vars": {
+    "AI_PROVIDER": "deepseek",
+    "AI_MODEL": "deepseek-v4-flash",
+    "OPENAI_BASE_URL": "https://api.deepseek.com"
+  }
+}
+```
+
+说明：
+
+- `OPENAI_API_KEY` 仍然必须设置，值为 DeepSeek API Key。
+- DeepSeek 当前接口按文本模型处理，不支持截图图片输入；`/v1/ai/analyze-screenshot` 会返回 `ai_provider_input_unsupported`。
+- 正式截图 AI Pro 必须使用支持图片输入的 provider/model，例如默认的 `AI_PROVIDER=openai` + `AI_MODEL=gpt-4.1-mini`。
 
 ### 切换后验证
 
@@ -192,10 +214,26 @@ curl -X POST http://localhost:8787/v1/ai/analyze-screenshot \
    - AI_PROVIDER
    - AI_MODEL
    - OPENAI_BASE_URL
+   - APPLE_BUNDLE_ID
+   - APPLE_APP_ID
+   - ALLOWED_STOREFRONTS
+   - MONTHLY_REQUEST_LIMIT
+   - DAILY_REQUEST_LIMIT
+   - MAX_IMAGE_BYTES
 5. 确认以下密钥：
    - SUPABASE_URL
    - SUPABASE_SERVICE_ROLE_KEY
    - OPENAI_API_KEY
+   - APPLE_ROOT_CERTIFICATES_PEM
+6. 在 App Store Connect 中将 App Store Server Notifications V2 URL 配置为：
+   - `https://tshot-ai-backend.tshot.workers.dev/v1/apple/notifications`
+7. 确认 App 侧 `settings.backendBaseURL` 未被本地覆盖，或明确指向当前 Worker：
+
+```bash
+defaults delete com.sheldon.TShot settings.backendBaseURL
+# 或
+defaults write com.sheldon.TShot settings.backendBaseURL -string "https://tshot-ai-backend.tshot.workers.dev"
+```
 
 ## API MVP
 

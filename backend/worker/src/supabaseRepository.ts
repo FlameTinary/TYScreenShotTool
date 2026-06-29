@@ -126,19 +126,24 @@ export class SupabaseRepository implements BackendRepository {
    * 先查询 users 表，不存在则创建新用户
    * @param appleUserId Apple 用户唯一标识符
    * @param email 用户邮箱（可选）
+   * @param storefront App Store 商店地区代码（可选）
    * @returns 用户档案
    */
-  async findOrCreateUser(appleUserId: string, email?: string): Promise<UserProfile> {
+  async findOrCreateUser(appleUserId: string, email?: string, storefront?: string): Promise<UserProfile> {
     // 查询已有用户
-    const rows = await this.query<{ id: string }>("users", {
+    const rows = await this.query<{ id: string; storefront: string | null }>("users", {
       apple_user_id: `eq.${appleUserId}`,
-      select: "id",
+      select: "id,storefront",
       limit: "1"
     });
 
     let userId: string;
     if (rows.length > 0) {
       userId = rows[0]!.id;
+      // 如果用户已存在且传入了新的 storefront，更新 storefront
+      if (storefront && storefront !== rows[0]!.storefront) {
+        await this.update("users", { id: `eq.${userId}` }, { storefront });
+      }
     } else {
       // 创建新用户
       userId = crypto.randomUUID();
@@ -148,6 +153,9 @@ export class SupabaseRepository implements BackendRepository {
       };
       if (email) {
         insertBody.email = email;
+      }
+      if (storefront) {
+        insertBody.storefront = storefront;
       }
       await this.insert("users", insertBody);
     }
@@ -207,15 +215,19 @@ export class SupabaseRepository implements BackendRepository {
       limit: "1"
     });
 
-    const status = transaction.expiresAt && new Date(transaction.expiresAt) > new Date() ? "active" : "expired";
+    const status = transaction.status
+      ?? (transaction.expiresAt && new Date(transaction.expiresAt) > new Date() ? "active" : "expired");
     const now = new Date().toISOString();
 
     if (existing.length > 0) {
       // 已有记录 → 更新
       await this.update("subscriptions", { id: `eq.${existing[0]!.id}` }, {
+        user_id: userId,
+        product_id: transaction.productId,
         latest_transaction_id: transaction.latestTransactionId,
         status,
         expires_at: transaction.expiresAt,
+        environment: transaction.environment,
         updated_at: now
       });
     } else {

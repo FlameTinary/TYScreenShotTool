@@ -13,10 +13,11 @@ final class AIProSubscriptionService {
     private var transactionUpdatesTask: Task<Void, Never>?
     private let backendClient: AIProBackendClient
 
-    private(set) var status: AIProSubscriptionStatus = .notLoaded
+    private(set) var status: AIProSubscriptionStatus
 
     private init() {
         self.backendClient = AIProBackendClient()
+        self.status = AIProSubscriptionStatus.cachedStatus() ?? .notLoaded
     }
 
     deinit {
@@ -43,43 +44,53 @@ final class AIProSubscriptionService {
         }
     }
 
+    func clearCachedStatus() {
+        monthlyProduct = nil
+        status = .notLoaded
+        AIProSubscriptionStatus.clearCachedStatus()
+    }
+
     func refreshStatus() async -> AIProSubscriptionStatus {
+        let cachedProduct = status.product
         status = .loading
+        var productLoadError: Error?
+        var viewModel: AIProSubscriptionProduct?
 
         do {
             let products = try await Product.products(for: [AIProSubscriptionProductID.monthly])
-            guard let product = products.first else {
+            if let product = products.first {
+                monthlyProduct = product
+                viewModel = makeProductViewModel(from: product)
+            } else {
                 monthlyProduct = nil
-                status = .unavailable
-                return status
             }
-
-            monthlyProduct = product
-            let viewModel = makeProductViewModel(from: product)
-
-            do {
-                let subscription = try await backendClient.fetchSubscriptionStatus()
-                guard subscription.product_id == nil || subscription.product_id == viewModel.id else {
-                    status = .unsubscribed(viewModel)
-                    return status
-                }
-
-                status = subscription.status == "active" || subscription.status == "grace_period"
-                    ? .subscribed(viewModel)
-                    : .unsubscribed(viewModel)
-            } catch let error as AIProBackendError {
-                switch error {
-                case .regionUnavailable:
-                    status = .regionUnavailable
-                default:
-                    status = .failed(error.localizedDescription)
-                }
-            }
-            return status
         } catch {
-            status = .failed(error.localizedDescription)
-            return status
+            monthlyProduct = nil
+            productLoadError = error
         }
+
+        do {
+            let subscription = try await backendClient.fetchSubscriptionStatus()
+            status = AIProSubscriptionStatus.statusAfterBackendRefresh(
+                loadedProduct: viewModel,
+                cachedProduct: cachedProduct,
+                backendStatus: subscription.status,
+                backendProductID: subscription.product_id
+            )
+            status.saveCachedStatus()
+        } catch let error as AIProBackendError {
+            switch error {
+            case .regionUnavailable:
+                status = .regionUnavailable
+                AIProSubscriptionStatus.clearCachedStatus()
+            default:
+                status = .failed(error.localizedDescription)
+            }
+        } catch {
+            status = .failed(productLoadError?.localizedDescription ?? error.localizedDescription)
+        }
+
+        return status
     }
 
     func purchaseMonthly() async -> AIProSubscriptionStatus {
@@ -114,19 +125,15 @@ final class AIProSubscriptionService {
                     return status
                 }
 
-                // 上报后端验证（best-effort，不影响本地订阅状态）
-                await reportVerificationToBackend(verification)
-
-                await transaction.finish()
-
-                // 立即标记为已订阅（refreshStatus 在 StoreKit 测试环境中
-                // 可能因 currentEntitlements 延迟返回 unsubscribed）
-                if let monthlyProduct {
-                    let viewModel = makeProductViewModel(from: monthlyProduct)
-                    status = .subscribed(viewModel)
-                } else {
-                    status = await refreshStatus()
+                let backendConfirmed = await reportVerificationToBackend(verification)
+                if backendConfirmed {
+                    await transaction.finish()
                 }
+                status = AIProSubscriptionStatus.statusAfterVerifiedPurchase(
+                    product: makeProductViewModel(from: product),
+                    backendConfirmed: backendConfirmed
+                )
+                status.saveCachedStatus()
                 return status
 
             case .userCancelled:
@@ -147,19 +154,37 @@ final class AIProSubscriptionService {
 
     func restorePurchases() async -> AIProSubscriptionStatus {
         do {
+            status = .loading
             try await AppStore.sync()
+
+            var confirmedStatus: AIProSubscriptionStatus?
 
             // 恢复后，将当前有效交易上报后端
             for await result in Transaction.currentEntitlements {
-                guard case .verified(let transaction) = result else {
+                guard case .verified(let transaction) = result,
+                      transaction.productID == AIProSubscriptionProductID.monthly else {
                     continue
                 }
                 if await reportVerificationToBackend(result) {
+                    let product = await monthlyProductViewModel(fallbackID: transaction.productID)
+                    let restoredStatus = AIProSubscriptionStatus.subscribed(product)
+                    status = restoredStatus
+                    status.saveCachedStatus()
+                    confirmedStatus = restoredStatus
                     await transaction.finish()
                 }
             }
 
-            return await refreshStatus()
+            let refreshedStatus = await refreshStatus()
+            if refreshedStatus.isSubscribed {
+                return refreshedStatus
+            }
+            if case .failed = refreshedStatus, let confirmedStatus {
+                status = confirmedStatus
+                status.saveCachedStatus()
+                return status
+            }
+            return refreshedStatus
         } catch {
             status = .failed(error.localizedDescription)
             return status
@@ -174,6 +199,25 @@ private extension AIProSubscriptionService {
             displayName: product.displayName,
             displayPrice: product.displayPrice,
             description: product.description
+        )
+    }
+
+    func monthlyProductViewModel(fallbackID: String) async -> AIProSubscriptionProduct {
+        if let monthlyProduct {
+            return makeProductViewModel(from: monthlyProduct)
+        }
+        if let cachedProduct = status.product {
+            return cachedProduct
+        }
+        if let product = try? await Product.products(for: [AIProSubscriptionProductID.monthly]).first {
+            monthlyProduct = product
+            return makeProductViewModel(from: product)
+        }
+        return AIProSubscriptionProduct(
+            id: fallbackID,
+            displayName: "AI Pro Monthly",
+            displayPrice: "",
+            description: "AI Pro Monthly"
         )
     }
 

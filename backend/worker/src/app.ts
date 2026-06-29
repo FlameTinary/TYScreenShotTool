@@ -1,4 +1,4 @@
-import { verifyAppleJWT, verifyAppStoreNotificationJWT, verifyStoreKitTransactionJWT, type AppStoreNotificationPayload, type StoreKitTransactionPayload } from "./appleAuth";
+import { verifyAppleJWT, verifyAppStoreNotificationJWT, verifyStoreKitTransactionJWT, type AppStoreNotificationPayload, type AppStoreSignedDataVerificationConfig, type StoreKitTransactionPayload } from "./appleAuth";
 
 /**
  * 用户订阅状态枚举
@@ -123,6 +123,8 @@ export interface SubscriptionTransactionInput {
   environment: string;
   /** 订阅到期时间（ISO 格式） */
   expiresAt?: string | null;
+  /** App Store 通知映射后的订阅状态；购买/恢复接口不传时由 expiresAt 推导 */
+  status?: SubscriptionStatus;
 }
 
 /**
@@ -173,7 +175,7 @@ export interface BackendRepository {
    * @param email 用户邮箱（可选）
    * @returns 用户档案
    */
-  findOrCreateUser(appleUserId: string, email?: string): Promise<UserProfile>;
+  findOrCreateUser(appleUserId: string, email?: string, storefront?: string): Promise<UserProfile>;
   /**
    * 创建用户会话并返回 Bearer Token
    * @param userId 用户唯一标识符
@@ -207,6 +209,10 @@ export interface BackendEnv {
   AI_MAX_OUTPUT_TOKENS: string;
   /** Apple 应用的 Bundle Identifier，用于验证 Apple JWT */
   APPLE_BUNDLE_ID: string;
+  /** Apple Root CA PEM，用于验证 StoreKit / App Store Server Notification JWS 的 x5c 证书链 */
+  APPLE_ROOT_CERTIFICATES_PEM?: string;
+  /** App Store Connect 中的 Apple App ID，生产环境 JWS 校验需要 */
+  APPLE_APP_ID?: string;
 }
 
 /**
@@ -468,6 +474,7 @@ async function handleAuthApple(context: RequestContext): Promise<Response> {
   }
 
   const identityToken = body.identity_token.trim();
+  const storefront = typeof body.storefront === "string" ? body.storefront.trim() : undefined;
 
   // 验证 Apple JWT
   let claims: { sub: string; email?: string; emailVerified?: boolean };
@@ -483,8 +490,8 @@ async function handleAuthApple(context: RequestContext): Promise<Response> {
     return json({ error: "authentication_failed" }, 401);
   }
 
-  // 查找或创建用户
-  const user = await context.repository.findOrCreateUser(claims.sub, claims.email);
+  // 查找或创建用户（传入 storefront）
+  const user = await context.repository.findOrCreateUser(claims.sub, claims.email, storefront);
 
   // 创建会话并生成 Bearer Token
   const token = await context.repository.createSession(user.id);
@@ -515,7 +522,11 @@ async function handleVerifySubscription(context: AuthenticatedContext): Promise<
   // 验证 StoreKit JWT 签名并提取交易信息
   let transaction: StoreKitTransactionPayload;
   try {
-    transaction = await verifyStoreKitTransactionJWT(signedTransaction, context.env.APPLE_BUNDLE_ID);
+    transaction = await verifyStoreKitTransactionJWT(
+      signedTransaction,
+      context.env.APPLE_BUNDLE_ID,
+      appStoreSignedDataConfig(context.env)
+    );
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -570,7 +581,11 @@ async function handleAppleNotification(context: RequestContext): Promise<Respons
   // 验证通知 JWT 签名
   let notification: AppStoreNotificationPayload;
   try {
-    notification = await verifyAppStoreNotificationJWT(signedPayload, context.env.APPLE_BUNDLE_ID);
+    notification = await verifyAppStoreNotificationJWT(
+      signedPayload,
+      context.env.APPLE_BUNDLE_ID,
+      appStoreSignedDataConfig(context.env)
+    );
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -584,7 +599,11 @@ async function handleAppleNotification(context: RequestContext): Promise<Respons
   // 验证交易信息 JWT 并提取交易数据
   let transaction: StoreKitTransactionPayload;
   try {
-    transaction = await verifyStoreKitTransactionJWT(notification.signedTransactionInfo, context.env.APPLE_BUNDLE_ID);
+    transaction = await verifyStoreKitTransactionJWT(
+      notification.signedTransactionInfo,
+      context.env.APPLE_BUNDLE_ID,
+      appStoreSignedDataConfig(context.env)
+    );
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -606,7 +625,8 @@ async function handleAppleNotification(context: RequestContext): Promise<Respons
         latestTransactionId: transaction.transactionId,
         productId: transaction.productId,
         environment: transaction.environment,
-        expiresAt: transaction.expiresDate ? new Date(transaction.expiresDate).toISOString() : null
+        expiresAt: transaction.expiresDate ? new Date(transaction.expiresDate).toISOString() : null,
+        status
       });
     } catch (error) {
       console.error(
@@ -926,6 +946,15 @@ function validateRegion(user: UserProfile, env: BackendEnv): Response | null {
   }
 
   return null;
+}
+
+function appStoreSignedDataConfig(env: BackendEnv): AppStoreSignedDataVerificationConfig {
+  return {
+    ...(env.APPLE_ROOT_CERTIFICATES_PEM !== undefined
+      ? { rootCertificatesPem: env.APPLE_ROOT_CERTIFICATES_PEM }
+      : {}),
+    ...(env.APPLE_APP_ID !== undefined ? { appAppleId: env.APPLE_APP_ID } : {})
+  };
 }
 
 /**

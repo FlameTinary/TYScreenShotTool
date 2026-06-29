@@ -13,7 +13,7 @@ AI Pro Feature Data Processing
 When you use the AI Pro feature (available outside China Mainland), the following data processing occurs:
 
 - Screenshot content is uploaded to TShot's backend server for AI analysis.
-- The backend server forwards screenshot content to third-party AI model services (such as DeepSeek) for processing.
+- The backend server forwards screenshot content to third-party AI model services for processing.
 - Uploaded content is used only for the specific AI analysis request you initiate. It is not retained on the server long-term and is not used for model training or any other purpose.
 - Login information (Apple ID) is used solely for authentication and session management.
 - Subscription information is used only for access control and quota management.

@@ -55,8 +55,18 @@ final class RegionPolicyTests: XCTestCase {
         XCTAssertTrue(service.isSubscriptionAllowed)
     }
 
-    func test_aiEntryHiddenByDefault_whenRegionAllowsCommercialAI() {
+    func test_aiEntryVisibleByDefault_whenRegionAllowsCommercialAI() {
         let defaults = UserDefaults.makeIsolated()
+        let policy = RegionPolicyResolver.policy(forStorefrontCode: "USA")
+        let service = AIAvailabilityService(regionPolicy: policy, userDefaults: defaults)
+
+        XCTAssertTrue(service.shouldShowCommercialAIEntry)
+        XCTAssertTrue(service.isServerAIAllowed)
+    }
+
+    func test_aiEntryHiddenWhenUserExplicitlyDisablesEntrance() {
+        let defaults = UserDefaults.makeIsolated()
+        defaults.set(false, forKey: AppSettings.showAIEntrancesKey)
         let policy = RegionPolicyResolver.policy(forStorefrontCode: "USA")
         let service = AIAvailabilityService(regionPolicy: policy, userDefaults: defaults)
 

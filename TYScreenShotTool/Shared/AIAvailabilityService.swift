@@ -15,13 +15,13 @@ struct AIAvailabilityService {
 
     var shouldShowCommercialAIEntry: Bool {
         regionPolicy.isCommercialAIAllowed
-            && userDefaults.bool(forKey: AppSettings.showAIEntrancesKey)
+            && isEntranceSettingEnabled
     }
 
     var shouldShowAIProShellEntry: Bool {
         AIProShellAvailability(
             regionPolicy: regionPolicy,
-            isEntranceSettingEnabled: userDefaults.bool(forKey: AppSettings.showAIEntrancesKey)
+            isEntranceSettingEnabled: isEntranceSettingEnabled
         ).shouldShowEntry
     }
 
@@ -35,5 +35,13 @@ struct AIAvailabilityService {
 
     var isDeveloperLocalAIConfigAllowed: Bool {
         regionPolicy.isCommercialAIAllowed && regionPolicy.isServerAPIAllowed
+    }
+
+    private var isEntranceSettingEnabled: Bool {
+        AppSettings.boolValue(
+            forKey: AppSettings.showAIEntrancesKey,
+            defaultValue: AppSettings.showAIEntrancesDefaultValue,
+            userDefaults: userDefaults
+        )
     }
 }

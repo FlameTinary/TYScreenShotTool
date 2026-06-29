@@ -1,0 +1,134 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_FILE="$ROOT_DIR/TYScreenShotTool.xcodeproj/project.pbxproj"
+ENTITLEMENTS_FILE="$ROOT_DIR/TYScreenShotTool/TYScreenShotTool.entitlements"
+WRANGLER_FILE="$ROOT_DIR/backend/worker/wrangler.jsonc"
+PACKAGE_FILE="$ROOT_DIR/backend/worker/package.json"
+
+fail() {
+  print -u2 "❌ $1"
+  exit 1
+}
+
+pass() {
+  print "✅ $1"
+}
+
+require_file() {
+  [[ -f "$1" ]] || fail "Missing required file: $1"
+}
+
+require_contains() {
+  local file="$1"
+  local pattern="$2"
+  local message="$3"
+  rg -q "$pattern" "$file" || fail "$message"
+}
+
+require_not_contains() {
+  local pattern="$1"
+  shift
+  if rg -q "$pattern" "$@"; then
+    fail "Found stale AI Pro wording or unsafe production text: $pattern"
+  fi
+}
+
+require_file "$PROJECT_FILE"
+require_file "$ENTITLEMENTS_FILE"
+require_file "$WRANGLER_FILE"
+require_file "$PACKAGE_FILE"
+
+require_contains "$ENTITLEMENTS_FILE" "com.apple.developer.applesignin" "Sign in with Apple entitlement is missing."
+require_contains "$ENTITLEMENTS_FILE" "com.apple.security.app-sandbox" "App Sandbox entitlement is missing."
+if awk '
+  /nonisolated func presentationAnchor/ { in_anchor = 1; depth = 0 }
+  in_anchor {
+    if ($0 ~ /NSApplication\.shared/) found = 1
+    depth += gsub(/\{/, "{")
+    depth -= gsub(/\}/, "}")
+    if (depth == 0 && $0 ~ /\}/) in_anchor = 0
+  }
+  END { exit found ? 0 : 1 }
+' "$ROOT_DIR/TYScreenShotTool/Services/AIProAuthService.swift"; then
+  fail "Sign in with Apple presentationAnchor must not read NSApplication.shared from a nonisolated context."
+fi
+pass "App entitlements include Apple Sign In and sandbox."
+
+release_block="$(
+  awk '
+    index($0, "08E7B3B12FD276F300BC7687 /* Release */") { in_release = 1 }
+    in_release { print }
+    in_release && index($0, "name = Release;") { exit }
+  ' "$PROJECT_FILE"
+)"
+[[ "$release_block" == *"ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;"* ]] || fail "Release build must allow outgoing network connections."
+[[ "$release_block" != *'"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";'* ]] || fail "Release automatic signing must not manually specify Apple Distribution, otherwise archive fails."
+pass "Release build settings allow backend access and avoid archive signing conflicts."
+
+require_contains "$WRANGLER_FILE" '"AI_PROVIDER": "openai"' "Worker default AI provider must support screenshot image input."
+require_contains "$WRANGLER_FILE" '"AI_MODEL": "gpt-4.1-mini"' "Worker default AI model should be an image-capable model."
+require_contains "$WRANGLER_FILE" '"OPENAI_BASE_URL": "https://api.openai.com"' "Worker default base URL should match OpenAI provider."
+require_contains "$WRANGLER_FILE" '"APPLE_BUNDLE_ID": "com.sheldon.TShot"' "Worker Apple bundle ID must match the app bundle ID."
+require_contains "$WRANGLER_FILE" '"nodejs_compat"' "Worker must enable nodejs_compat for Apple signed-data verification."
+pass "Worker defaults are suitable for AI Pro screenshot analysis."
+
+require_contains "$PACKAGE_FILE" '"@apple/app-store-server-library"' "Apple App Store Server library dependency is missing."
+if rg -q '^import \{ Environment, SignedDataVerifier \} from "@apple/app-store-server-library";' "$ROOT_DIR/backend/worker/src/appleAuth.ts"; then
+  fail "Apple App Store Server library must be loaded dynamically inside request handling; static import prevents Worker startup."
+fi
+require_contains "$ROOT_DIR/backend/README.md" "APPLE_ROOT_CERTIFICATES_PEM" "Backend README must document Apple Root CA secret."
+require_contains "$ROOT_DIR/backend/README.md" "App Store Server Notifications V2 URL" "Backend README must document notification URL setup."
+pass "Backend Apple signed-data verification dependency and deployment notes are present."
+
+if awk '
+  /AIProAuthService\.shared\.signIn\(\)/ { in_sign_in = 1; depth = 0 }
+  in_sign_in {
+    if ($0 ~ /restorePurchases\(\)/) found = 1
+    depth += gsub(/\{/, "{")
+    depth -= gsub(/\}/, "}")
+    if (depth == 0 && $0 ~ /\}/) in_sign_in = 0
+  }
+  END { exit found ? 0 : 1 }
+' "$ROOT_DIR/TYScreenShotTool/App/SettingsViewController.swift" \
+  "$ROOT_DIR/TYScreenShotTool/Services/AIProPromptPresenter.swift"; then
+  fail "Apple sign-in completion must refresh subscription status, not auto-trigger StoreKit restore purchases."
+fi
+pass "Apple sign-in completion does not auto-trigger StoreKit restore purchases."
+
+if awk '
+  /static func showSubscriptionOnboarding/ { in_func = 1; depth = 0 }
+  in_func {
+    if ($0 ~ /showLoginIfNeeded\(from: view\)/) saw_login = 1
+    if (saw_login && $0 ~ /return/) found = 1
+    depth += gsub(/\{/, "{")
+    depth -= gsub(/\}/, "}")
+    if (depth == 0 && $0 ~ /\}/) in_func = 0
+  }
+  END { exit found ? 0 : 1 }
+' "$ROOT_DIR/TYScreenShotTool/Services/AIProPromptPresenter.swift"; then
+  fail "Subscription onboarding must continue to subscription status after successful login, not return early."
+fi
+pass "Subscription onboarding continues after successful login."
+
+if rg -q "fallbackID: String = AIProSubscriptionProductID\\.monthly" "$ROOT_DIR/TYScreenShotTool/Services/AIProSubscriptionService.swift"; then
+  fail "AI Pro subscription helpers must not reference MainActor-isolated product constants from default argument expressions."
+fi
+pass "AI Pro subscription helpers avoid actor-isolated default argument expressions."
+
+require_not_contains \
+  "不会调用 AI 后端|正式接入仍未完成|尚未正式交付的 AI|本阶段不真实调用 AI 后端|AI 后端、登录和额度校验仍留给后续 Feature|Release 模式下永远返回 false" \
+  "$ROOT_DIR/README.md" \
+  "$ROOT_DIR/PROJECT_CONTEXT.md" \
+  "$ROOT_DIR/backend/README.md" \
+  "$ROOT_DIR/docs/privacy-policy.md" \
+  "$ROOT_DIR/docs/AppStore" \
+  "$ROOT_DIR/TYScreenShotTool"
+require_not_contains \
+  "such as DeepSeek" \
+  "$ROOT_DIR/docs/privacy-policy.md"
+pass "No stale AI Pro launch-blocking wording found."
+
+print "AI Pro preflight passed."
