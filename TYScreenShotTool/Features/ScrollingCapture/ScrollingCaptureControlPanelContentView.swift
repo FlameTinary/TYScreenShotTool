@@ -86,40 +86,7 @@ private extension ScrollingCaptureControlPanelContentView {
     @objc func handleOCR() { onOCR?() }
     @objc func handleTranslate() { onTranslate?() }
     @objc func handleAI() {
-        Task {
-            switch await AIProPromptPresenter.currentAccessState() {
-            case .ready:
-                onAIGateStarted?(true)
-                guard presentAIMenuAtCurrentMouseLocation() else {
-                    onAIGateCancelled?()
-                    return
-                }
-
-            case .needsLogin:
-                await AIProPromptPresenter.showLoginOnboarding(from: self)
-                if await AIProPromptPresenter.currentAccessState() == .ready {
-                    onAIGateStarted?(true)
-                    guard presentAIMenuAtCurrentMouseLocation() else {
-                        onAIGateCancelled?()
-                        return
-                    }
-                }
-
-            case .needsSubscription:
-                await AIProPromptPresenter.showSubscriptionOnboarding(from: self)
-                if await AIProPromptPresenter.currentAccessState() == .ready || AIProSessionManager.shared.isSignedIn {
-                    onAIGateStarted?(true)
-                    guard presentAIMenuAtCurrentMouseLocation() else {
-                        onAIGateCancelled?()
-                        return
-                    }
-                }
-
-            case .regionUnavailable:
-                await AIProPromptPresenter.showRegionUnavailable(from: self)
-                onAIGateCancelled?()
-            }
-        }
+        presentAIMenu()
     }
     @objc func handleSave() { onSave?() }
     @objc func handleCopy() { onCopy?() }
