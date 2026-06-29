@@ -4,6 +4,7 @@ import AuthenticationServices
 /// Sign in with Apple 登录服务
 ///
 /// 发起 Apple 登录、获取 identity token、调用后端 API 完成认证、保存会话。
+@MainActor
 final class AIProAuthService: NSObject {
     static let shared = AIProAuthService()
 
@@ -11,6 +12,10 @@ final class AIProAuthService: NSObject {
     private let sessionManager: AIProSessionManager
 
     private var continuation: CheckedContinuation<AuthAppleResponse, Error>?
+    private var hasResumed = false
+
+    /// Apple 登录超时时间（秒）
+    private static let signInTimeout: UInt64 = 30_000_000_000 // 30 秒
 
     private override init() {
         self.backendClient = AIProBackendClient()
@@ -20,8 +25,11 @@ final class AIProAuthService: NSObject {
     /// 发起 Sign in with Apple 登录
     ///
     /// - Returns: (bearer token, user ID)
-    /// - Throws: 用户取消、Apple 返回无效 JWT、后端认证失败
+    /// - Throws: 用户取消、Apple 返回无效 JWT、后端认证失败、超时
     func signIn() async throws -> (token: String, userID: String) {
+        hasResumed = false
+        continuation = nil
+
         let response: AuthAppleResponse = try await withCheckedThrowingContinuation { [weak self] continuation in
             guard let self else {
                 continuation.resume(throwing: AuthError.unknown)
@@ -29,6 +37,12 @@ final class AIProAuthService: NSObject {
             }
 
             self.continuation = continuation
+
+            // 超时保护：30 秒后如果 delegate 还没返回，主动恢复 continuation
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: Self.signInTimeout)
+                await self?.handleTimeout()
+            }
 
             let request = ASAuthorizationAppleIDProvider().createRequest()
             request.requestedScopes = [.email]
@@ -42,54 +56,85 @@ final class AIProAuthService: NSObject {
         sessionManager.saveSession(token: response.token, userID: response.user_id)
         return (response.token, response.user_id)
     }
+
+    private func handleTimeout() {
+        guard !hasResumed else { return }
+        hasResumed = true
+        continuation?.resume(throwing: AuthError.timeout)
+        continuation = nil
+    }
+
+    private func complete(response: AuthAppleResponse) {
+        guard !hasResumed else { return }
+        hasResumed = true
+        continuation?.resume(returning: response)
+        continuation = nil
+    }
+
+    private func fail(error: Error) {
+        guard !hasResumed else { return }
+        hasResumed = true
+        continuation?.resume(throwing: error)
+        continuation = nil
+    }
 }
 
 // MARK: - ASAuthorizationControllerDelegate
 
 extension AIProAuthService: ASAuthorizationControllerDelegate {
-    func authorizationController(
+    nonisolated func authorizationController(
         controller: ASAuthorizationController,
         didCompleteWithAuthorization authorization: ASAuthorization
     ) {
-        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-              let identityTokenData = credential.identityToken,
-              let identityToken = String(data: identityTokenData, encoding: .utf8) else {
-            continuation?.resume(throwing: AuthError.invalidIdentityToken)
-            continuation = nil
-            return
-        }
-
-        Task {
-            do {
-                let response = try await backendClient.authApple(identityToken: identityToken)
-                continuation?.resume(returning: response)
-            } catch {
-                continuation?.resume(throwing: error)
+        Task { @MainActor in
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let identityTokenData = credential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8) else {
+                self.fail(error: AuthError.invalidIdentityToken)
+                return
             }
-            continuation = nil
+
+            do {
+                let response = try await self.backendClient.authApple(identityToken: identityToken)
+                self.complete(response: response)
+            } catch {
+                self.fail(error: error)
+            }
         }
     }
 
-    func authorizationController(
+    nonisolated func authorizationController(
         controller: ASAuthorizationController,
         didCompleteWithError error: Error
     ) {
-        let nsError = error as NSError
-        if nsError.domain == ASAuthorizationError.errorDomain,
-           nsError.code == ASAuthorizationError.canceled.rawValue {
-            continuation?.resume(throwing: AuthError.userCancelled)
-        } else {
-            continuation?.resume(throwing: AuthError.appleAuthFailed(error.localizedDescription))
+        Task { @MainActor in
+            let nsError = error as NSError
+            if nsError.domain == ASAuthorizationError.errorDomain,
+               nsError.code == ASAuthorizationError.canceled.rawValue {
+                self.fail(error: AuthError.userCancelled)
+            } else {
+                self.fail(error: AuthError.appleAuthFailed(error.localizedDescription))
+            }
         }
-        continuation = nil
     }
 }
 
 // MARK: - ASAuthorizationControllerPresentationContextProviding
 
 extension AIProAuthService: ASAuthorizationControllerPresentationContextProviding {
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
+    nonisolated func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        // 主线程安全获取当前窗口（keyWindow 只能在主线程访问）
+        if Thread.isMainThread {
+            return NSApplication.shared.keyWindow
+                ?? NSApplication.shared.windows.first
+                ?? ASPresentationAnchor()
+        }
+
+        var window: NSWindow?
+        DispatchQueue.main.sync {
+            window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first
+        }
+        return window ?? ASPresentationAnchor()
     }
 }
 
@@ -100,6 +145,7 @@ extension AIProAuthService {
         case userCancelled
         case invalidIdentityToken
         case appleAuthFailed(String)
+        case timeout
         case unknown
 
         var errorDescription: String? {
@@ -110,6 +156,8 @@ extension AIProAuthService {
                 return "Apple 返回的凭据无效"
             case .appleAuthFailed(let message):
                 return "Apple 登录失败：\(message)"
+            case .timeout:
+                return "登录超时，请确认已启用 Sign in with Apple 能力并正确签名"
             case .unknown:
                 return "未知登录错误"
             }
