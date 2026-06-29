@@ -222,16 +222,15 @@ final class CaptureSessionService {
     /// 取消截图会话
     ///
     /// 清除所有待截图数据并关闭会话。
+    /// 移除状态 guard 确保任何状态下都能强制清理，避免 session 卡死。
     func cancelSession() {
         if isInScrollingCaptureMode {
             cancelScrollingCapture()
-            return
         }
 
-        guard state == .overlayPresented || state == .dragging || state == .selectionCompleted else {
-            return
-        }
-
+        isPreparingSession = false
+        isAIAnalysisInProgress = false
+        overlayService.setAIButtonEnabled(true)
         ocrPreviewWindowService.dismiss()
         aiAnalysisPreviewWindowService.dismiss()
         clearPendingCapture()
