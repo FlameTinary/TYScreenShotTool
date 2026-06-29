@@ -966,7 +966,14 @@ final class CaptureSessionService {
         do {
             let image = try await captureImageForPendingSource(source)
 
-            await performBackendAIAnalysis(image: image, source: source, mode: mode)
+            let useVision = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey)
+            print("[AI Analysis] aiUseVisionTextExtraction: \(useVision)")
+
+            if useVision {
+                await performBackendAIAnalysis(image: image, source: source, mode: mode)
+            } else {
+                await performLocalExtractBackendAnalysis(image: image, source: source, mode: mode)
+            }
         } catch {
             toastService.showToast(message: AppText.aiFailedToast)
             aiAnalysisPreviewWindowService.presentError(
@@ -1117,6 +1124,191 @@ final class CaptureSessionService {
                     self?.aiAnalysisPreviewWindowService.dismiss()
                 }
             )
+        }
+    }
+
+    /// 先本地 OCR 提取文字，然后走后端文字分析接口
+    /// 当 `aiUseVisionTextExtraction` 关闭时使用此路径
+    private func performLocalExtractBackendAnalysis(
+        image: CGImage,
+        source: PendingCaptureSource,
+        mode: AIAnalysisMode
+    ) async {
+        let selectionRect = source.selectionRect
+        let backendClient = AIProBackendClient()
+        let requestID = UUID().uuidString
+
+        // Step 1: 本地 OCR 提取文字（在当前线程执行，不会阻塞主线程）
+        print("[AI Analysis] Extracting text via local OCR for backend text analysis")
+
+        let extractedText: String
+        do {
+            extractedText = try ocrService.recognizeText(in: image)
+        } catch let error as OCRError {
+            await MainActor.run { [weak self] in
+                guard let self, self.isAIAnalysisInProgress else { return }
+
+                switch error {
+                case .noTextRecognized, .emptyText:
+                    print("[AI Analysis] Local OCR produced no text")
+                    self.toastService.showToast(message: self.emptyContentMessage(for: mode))
+                    self.aiAnalysisPreviewWindowService.dismiss()
+                case .requestFailed:
+                    print("[AI Analysis] Local OCR failed: \(error.localizedDescription)")
+                    self.toastService.showToast(message: AppText.ocrFailedToast)
+                    self.aiAnalysisPreviewWindowService.presentError(
+                        title: AppText.ocrFailedToast,
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        onRetry: { [weak self] in
+                            self?.retryAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                }
+            }
+            return
+        } catch {
+            await MainActor.run { [weak self] in
+                guard let self, self.isAIAnalysisInProgress else { return }
+
+                self.toastService.showToast(message: AppText.ocrFailedToast)
+                self.aiAnalysisPreviewWindowService.presentError(
+                    title: AppText.ocrFailedToast,
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
+            return
+        }
+
+        let trimmedText = extractedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedText.isEmpty == false else {
+            await MainActor.run { [weak self] in
+                guard let self, self.isAIAnalysisInProgress else { return }
+
+                print("[AI Analysis] Local OCR produced empty text")
+                self.toastService.showToast(message: self.emptyContentMessage(for: mode))
+                self.aiAnalysisPreviewWindowService.dismiss()
+            }
+            return
+        }
+
+        print("[AI Analysis] Local OCR succeeded, text length: \(trimmedText.count)")
+
+        // Step 2: 构建完整 prompt — 将分析指令与提取的文字一起发给后端
+        let analysisPrompt: String
+        if let backendPrompt = mode.backendPrompt {
+            let separator = AppText.aiAnalysisExtractedTextSeparator
+            analysisPrompt = "\(backendPrompt)\n\n\(separator)\n\(trimmedText)"
+        } else {
+            analysisPrompt = trimmedText
+        }
+
+        // Step 3: 走后端文字分析接口
+        do {
+            let response = try await backendClient.analyzeText(
+                requestID: requestID,
+                prompt: analysisPrompt
+            )
+
+            let result = AIAnalysisResult(
+                mode: mode,
+                statusTitle: mode.resultStatusTitle,
+                sections: [
+                    AIAnalysisSection(title: mode.resultStatusTitle, content: response.analysis)
+                ],
+                rawText: response.analysis,
+                secondaryCopyText: response.analysis
+            )
+
+            print("[AI Pro Backend] Text analysis succeeded, model: \(response.model)")
+
+            await MainActor.run { [weak self] in
+                guard let self, self.isAIAnalysisInProgress else { return }
+
+                self.aiAnalysisPreviewWindowService.presentResult(
+                    result: result,
+                    selectionRect: selectionRect,
+                    onCopyAll: { [weak self] in
+                        self?.copyAIAnalysisResult(result.formattedText)
+                    },
+                    onCopyNextSteps: { [weak self] in
+                        self?.copyAIAnalysisSecondaryText(
+                            result.secondaryCopyText,
+                            successMessage: result.mode.secondaryCopySuccessMessage
+                        )
+                    },
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
+
+        } catch let error as AIProBackendError {
+            await MainActor.run { [weak self] in
+                guard let self, self.isAIAnalysisInProgress else { return }
+
+                switch error {
+                case .authRequired, .subscriptionRequired:
+                    print("[AI Pro Backend] Backend rejected: \(error.localizedDescription)")
+                    self.toastService.showToast(message: error.localizedDescription)
+                    self.aiAnalysisPreviewWindowService.presentError(
+                        title: AppText.aiResultError,
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        onRetry: { [weak self] in
+                            self?.retryAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                default:
+                    print("[AI Pro Backend] Backend error: \(error.localizedDescription)")
+                    self.toastService.showToast(message: error.localizedDescription)
+                    self.aiAnalysisPreviewWindowService.presentError(
+                        title: AppText.aiResultError,
+                        message: error.localizedDescription,
+                        selectionRect: selectionRect,
+                        onRetry: { [weak self] in
+                            self?.retryAIAnalysis()
+                        },
+                        onClose: { [weak self] in
+                            self?.aiAnalysisPreviewWindowService.dismiss()
+                        }
+                    )
+                }
+            }
+        } catch {
+            await MainActor.run { [weak self] in
+                guard let self, self.isAIAnalysisInProgress else { return }
+
+                print("[AI Pro Backend] Unexpected error: \(error.localizedDescription)")
+                self.toastService.showToast(message: AppText.aiFailedToast)
+                self.aiAnalysisPreviewWindowService.presentError(
+                    title: AppText.aiResultError,
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+            }
         }
     }
 
