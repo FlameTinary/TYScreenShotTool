@@ -1324,16 +1324,25 @@ final class CaptureOverlayView: NSView {
                 }
 
             case .needsLogin:
-                // 先展示登录弹窗（sheet 在 overlay 窗口上，不走 app 级 runModal）
                 await AIProPromptPresenter.showLoginOnboarding(from: self)
-                // 登录完成后强制清理 session
-                onAIGateCancelled?()
-                print("[AI Pro Prompt] login onboarding completed; take a new screenshot to use AI")
+                // 登录完成后重新检查状态，如就绪则展示 AI 菜单
+                if await AIProPromptPresenter.currentAccessState() == .ready {
+                    onAIGateStarted?(true)
+                    guard presentAIMenuAtCurrentMouseLocation() else {
+                        onAIGateCancelled?()
+                        return
+                    }
+                }
 
             case .needsSubscription:
                 await AIProPromptPresenter.showSubscriptionOnboarding(from: self)
-                onAIGateCancelled?()
-                print("[AI Pro Prompt] subscription onboarding completed; take a new screenshot to use AI")
+                if await AIProPromptPresenter.currentAccessState() == .ready || AIProSessionManager.shared.isSignedIn {
+                    onAIGateStarted?(true)
+                    guard presentAIMenuAtCurrentMouseLocation() else {
+                        onAIGateCancelled?()
+                        return
+                    }
+                }
 
             case .regionUnavailable:
                 await AIProPromptPresenter.showRegionUnavailable(from: self)
