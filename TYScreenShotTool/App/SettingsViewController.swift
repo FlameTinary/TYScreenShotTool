@@ -30,6 +30,7 @@ final class SettingsViewController: NSViewController {
 
     private let loginStatusLabel = NSTextField(labelWithString: "")
     private let loginActionButton = NSButton(title: "", target: nil, action: nil)
+    private let subscribeButton = NSButton(title: "", target: nil, action: nil)
 
     private var pendingHotKey: ScreenshotHotKey?
     private var previousHotKey: ScreenshotHotKey?
@@ -121,6 +122,8 @@ extension SettingsViewController {
         languagePopUp.action = #selector(languageChanged)
         appearancePopUp.target = self
         appearancePopUp.action = #selector(appearanceChanged)
+        subscribeButton.target = self
+        subscribeButton.action = #selector(handleSubscribeAction)
         #if DEBUG
         aiVisionCheckbox.target = self
         aiVisionCheckbox.action = #selector(aiVisionChanged)
@@ -181,11 +184,13 @@ extension SettingsViewController {
             // 异步获取后端订阅状态
             Task {
                 loginStatusLabel.stringValue = AppText.settingsSubscriptionChecking
+                subscribeButton.isHidden = true
                 do {
                     let backendClient = AIProBackendClient()
                     let subStatus = try await backendClient.fetchSubscriptionStatus()
                     let userID = AIProSessionManager.shared.currentUserID ?? "--"
                     let statusText: String
+                    let isSubscribed = subStatus.status == "active" || subStatus.status == "grace_period"
                     switch subStatus.status {
                     case "active", "grace_period":
                         statusText = AppText.settingsSubscriptionActive
@@ -197,6 +202,12 @@ extension SettingsViewController {
                         statusText = AppText.settingsSubscriptionExpired
                     }
                     loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(statusText)"
+                    
+                    // 订阅状态无效时显示订阅按钮
+                    if !isSubscribed {
+                        subscribeButton.title = AppText.settingsSubscribe
+                        subscribeButton.isHidden = false
+                    }
                 } catch {
                     let userID = AIProSessionManager.shared.currentUserID ?? "--"
                     loginStatusLabel.stringValue = "\(AppText.settingsSignedInAs(userID))\n\(AppText.settingsSubscriptionFetchFailed)"
@@ -514,9 +525,15 @@ private extension SettingsViewController {
         loginActionButton.target = self
         loginActionButton.action = #selector(handleLoginAction)
 
+        subscribeButton.bezelStyle = .rounded
+        subscribeButton.target = self
+        subscribeButton.action = #selector(handleSubscribeAction)
+        subscribeButton.isHidden = true
+
         container.addSubview(sectionTitle)
         container.addSubview(loginStatusLabel)
         container.addSubview(loginActionButton)
+        container.addSubview(subscribeButton)
 
         sectionTitle.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
@@ -527,7 +544,12 @@ private extension SettingsViewController {
         }
         loginActionButton.snp.makeConstraints { make in
             make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
-            make.leading.bottom.equalToSuperview()
+            make.leading.equalToSuperview()
+        }
+        subscribeButton.snp.makeConstraints { make in
+            make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
+            make.leading.equalTo(loginActionButton.snp.trailing).offset(8)
+            make.bottom.equalToSuperview()
         }
 
         return container
@@ -646,6 +668,24 @@ private extension SettingsViewController {
                 } catch {
                     loginStatusLabel.stringValue = error.localizedDescription
                 }
+            }
+        }
+    }
+
+    @objc func handleSubscribeAction() {
+        subscribeButton.isEnabled = false
+        Task {
+            let status = await AIProSubscriptionService.shared.purchaseMonthly()
+            subscribeButton.isEnabled = true
+            
+            switch status {
+            case .subscribed:
+                // 订阅成功，刷新状态显示
+                reloadLoginStatus()
+            case .failed(let error):
+                loginStatusLabel.stringValue = error
+            default:
+                break
             }
         }
     }

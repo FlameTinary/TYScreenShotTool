@@ -356,6 +356,15 @@ enum AppText {
         fr: "Impossible de récupérer l'abonnement"
     ) }
 
+    static var settingsSubscribe: String { choose(
+        zhHans: "订阅",
+        en: "Subscribe",
+        ja: "購読",
+        ko: "구독",
+        de: "Abonnieren",
+        fr: "S'abonner"
+    ) }
+
     static var developerErrorSummaryTitle: String { choose(zhHans: "报错大意", en: "Error Summary", ja: "エラー概要", ko: "오류 요약", de: "Fehlerübersicht", fr: "Résumé de l’erreur") }
     static var developerErrorCausesTitle: String { choose(zhHans: "可能原因", en: "Possible Causes", ja: "考えられる原因", ko: "가능한 원인", de: "Mögliche Ursachen", fr: "Causes possibles") }
     static var developerErrorNextStepsTitle: String { choose(zhHans: "建议下一步", en: "Suggested Next Steps", ja: "次の推奨手順", ko: "다음 권장 단계", de: "Empfohlene nächste Schritte", fr: "Étapes suivantes suggérées") }
