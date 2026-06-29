@@ -745,7 +745,124 @@ created_at
 - 重复 `request_id` 返回 `409 duplicate_request`，不会重复调用 AI provider
 - 单元测试覆盖订阅海外用户成功获得 AI 结果、重复 request_id、月额度耗尽、AI provider 失败、未订阅和地区拦截路径
 
-### Feature 53.7：隐私、审核与上架材料
+### Feature 53.7：App 端 Apple 登录与后端会话接入
+
+目标：
+
+- App 端接入 Sign in with Apple
+- 使用 Apple `identityToken` 调用后端 `POST /v1/auth/apple`
+- 获取并保存后端 Bearer token，作为后续订阅校验、用量查询和 AI 请求凭证
+
+实现方案：
+
+- 新增 App 端登录服务，例如 `AIProAuthService`：
+  - 使用 `AuthenticationServices` 发起 Sign in with Apple
+  - 获取 `ASAuthorizationAppleIDCredential.identityToken`
+  - 将 identity token POST 到后端 `/v1/auth/apple`
+  - 解析后端返回的 `token` 与 `user_id`
+- 新增后端 API 客户端，例如 `AIProBackendClient`：
+  - 统一管理 `baseURL`
+  - 统一设置 `Authorization: Bearer <token>`
+  - 统一解析后端错误码
+- 新增会话存储：
+  - Bearer token 使用 Keychain 保存
+  - `user_id` 可保存到 UserDefaults
+  - 提供 `isSignedIn`、`currentToken`、`signOut`
+- AI Pro 入口点击时：
+  - 先经过 `AIAvailabilityService` 区域策略
+  - 中国大陆 / unknown 不触发登录
+  - 海外未登录时弹出登录提示并发起 Apple 登录
+- 不将 Apple identity token 或后端 Bearer token 写入日志、UserDefaults 明文或 App 包。
+
+验收：
+
+- 海外模式下未登录点击 AI Pro 可触发 Sign in with Apple
+- 登录成功后后端返回 Bearer token，并可调用 `/v1/usage/current`
+- 登录失败、用户取消、后端返回 `authentication_failed` 时有明确提示
+- 中国大陆 / unknown 模式下不会发起 Apple 登录或后端请求
+- 单元测试覆盖登录状态模型、token 存储包装、后端错误映射和区域策略拦截
+- 人工验证使用 Sandbox / 开发签名环境完成真实 Sign in with Apple
+
+### Feature 53.8：App 端订阅交易上报与后端订阅状态同步
+
+目标：
+
+- StoreKit 购买成功后将交易上报后端校验
+- App 端订阅状态以后端 `/v1/subscriptions/status` 为准
+- 本地 StoreKit entitlement 只作为购买恢复入口和用户提示，不作为最终 AI 权限来源
+
+实现方案：
+
+- 扩展 `AIProSubscriptionService`：
+  - 购买成功并本地 verified 后读取 `Transaction.jwsRepresentation`
+  - 调用后端 `POST /v1/subscriptions/verify`
+  - 恢复购买后遍历当前有效 entitlement，将最新交易上报后端
+  - 交易监听收到更新时，同步上报后端
+- 扩展 `AIProBackendClient`：
+  - `verifySubscription(signedTransaction:)`
+  - `fetchSubscriptionStatus()`
+  - 将后端 `active`、`grace_period`、`expired`、`refunded` 等状态映射为 App 端可展示状态
+- AI Pro 弹窗逻辑调整：
+  - 未登录时先登录
+  - 已登录但未订阅时展示订阅商品与购买 / 恢复入口
+  - 购买成功后立即上报后端并刷新后端订阅状态
+  - 后端确认 active / grace_period 后，才允许进入 AI 请求流程
+- 后端返回 `subscription_required`、`verification_failed` 或网络失败时，保留本地购买结果但提示“等待服务端校验 / 请稍后重试”。
+
+验收：
+
+- 未登录时不会发起订阅上报
+- 购买成功后会调用 `/v1/subscriptions/verify`
+- 恢复购买会尝试上报当前有效交易
+- 后端订阅状态 active / grace_period 时 App 端允许继续 AI 请求
+- 后端订阅状态 inactive / expired / refunded 时 App 端不调用 AI 后端
+- 单元测试覆盖订阅状态映射、购买后上报成功、上报失败、恢复购买和交易监听路径
+- 人工验证使用 StoreKit Sandbox / 本地 StoreKit 配置完成购买、恢复和后端订阅状态刷新
+
+### Feature 53.9：App 端 AI 点击走后端接口
+
+目标：
+
+- 普通截图和长截图的 AI 点击行为接入正式后端 AI Pro 链路
+- 订阅用户点击 AI 后调用后端 `/v1/ai/analyze-screenshot` 或 `/v1/ai/analyze-text`
+- 历史本地 API Key 链路继续仅保留为 Debug / 开发者能力，不作为正式商业路径
+
+实现方案：
+
+- 新增 App 端后端 AI 服务，例如 `AIProBackendAIService`：
+  - `analyzeScreenshot(imageBase64:prompt:requestID:)`
+  - `analyzeText(prompt:requestID:)`
+  - 统一处理 `401`、`402`、`403`、`409`、`413`、`429`、`502`
+- 普通截图：
+  - AI 按钮先执行区域策略、登录状态、后端订阅状态检查
+  - 校验通过后再展示现有 AI 模式菜单
+  - 用户选择模式后，将截图编码为 base64，并调用 `/v1/ai/analyze-screenshot`
+  - 返回结果复用现有 `AIAnalysisPreviewWindowService` 展示
+- 长截图：
+  - 与普通截图共用同一套 AI Pro flow
+  - 长图需要遵守后端 `MAX_IMAGE_BYTES`
+  - 超过大小时在 App 端提前提示，避免上传必失败图片
+- 文本类模式：
+  - 如果已有 OCR 文本或本地提取文本，可调用 `/v1/ai/analyze-text`
+  - 如需要图片理解，则调用 `/v1/ai/analyze-screenshot`
+- 请求安全：
+  - 每次请求生成唯一 `request_id`
+  - 不在 App 内保存 AI Provider API Key
+  - 中国大陆 / unknown 不发起任何后端 AI 请求
+  - 未登录、未订阅、超额、后端失败都有明确 UI 提示
+
+验收：
+
+- 中国大陆 / unknown 模式下点击 AI 不登录、不订阅、不请求后端
+- 海外未登录点击 AI 先进入 Apple 登录
+- 海外已登录未订阅点击 AI 进入订阅购买 / 恢复流程
+- 海外已登录且后端订阅 active 时，普通截图 AI 能调用后端接口
+- 长截图 AI 与普通截图使用同一套权限与错误处理逻辑
+- 后端返回 `subscription_required`、`monthly_quota_exceeded`、`daily_quota_exceeded`、`image_too_large`、`ai_provider_failed` 时 App 展示可理解提示
+- 成功结果能在现有 AI 分析预览窗口展示，并支持复制结果
+- 单元测试覆盖 App 端状态机：未登录、未订阅、已订阅、区域禁止、额度超限、后端失败、成功返回
+
+### Feature 53.10：隐私、审核与上架材料
 
 目标：
 
@@ -758,6 +875,8 @@ created_at
 - 隐私政策说明 AI 上传边界
 - 中国大陆 App Store 文案不宣传 AI
 - 海外 AI 功能说明包含订阅、上传、第三方模型处理提示
+- 首次使用 AI 前明确提示截图内容会上传至后端和第三方模型服务
+- 说明登录、订阅、额度和截图处理的用户数据边界
 
 ---
 
@@ -770,7 +889,7 @@ created_at
 - 明确区域化产品需求
 - 明确 App 端区域策略技术方案
 - 明确历史 AI 隐藏配置与商业 AI 路径边界
-- 明确 StoreKit、登录、后端、额度、隐私的后续 Feature 拆分
+- 明确 StoreKit、Apple 登录、后端会话、订阅上报、AI 请求、额度、隐私的 Feature 拆分
 - 更新当前项目文档入口
 - 将后续执行范围纳入 Roadmap
 
@@ -810,11 +929,11 @@ UI Entry / Login / Subscription / Server API
 - `TYScreenShotTool/App/`
   - Settings、菜单栏、应用装配
 - `TYScreenShotTool/Services/`
-  - AI 分析服务、截图业务编排、订阅状态服务
+  - Apple 登录服务、后端 API 客户端、AI 分析服务、截图业务编排、订阅状态服务
 - `TYScreenShotTool/Features/`
   - 普通截图工具栏、长截图控制面板、AI Pro 入口
 - `TYScreenShotToolTests/`
-  - 区域策略、功能开关、额度模型纯逻辑测试
+  - 区域策略、功能开关、登录状态、订阅状态、AI Pro flow 和额度模型纯逻辑测试
 - Serverless 后端仓库或目录
   - Cloudflare Workers、Supabase schema、API 合约
 
@@ -850,6 +969,7 @@ UI Entry / Login / Subscription / Server API
    - 未登录先提示登录
    - 未订阅先提示订阅
    - 未订阅不调用 AI API
+   - 已订阅后普通截图和长截图 AI 请求走后端接口
 
 3. 后端模式下：
    - 后端最终校验地区、登录、订阅和额度
@@ -860,7 +980,7 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 已完成全部 7 个 Feature 的开发实现：
+本 Sprint 当前已完成区域化底座、AI Pro 壳层、StoreKit 本地订阅壳层、后端登录 / 订阅 / 通知 / AI 分析 MVP；App 端正式接入后端的登录、订阅上报和 AI 请求链路仍需继续补齐：
 
 - Feature 53.1：App 区域策略底座 ✅
 - Feature 53.2：AI 入口与历史隐藏配置隔离 ✅
@@ -868,7 +988,10 @@ UI Entry / Login / Subscription / Server API
 - Feature 53.4：StoreKit 2 订阅接入 ✅
 - Feature 53.5：Serverless 后端 MVP ✅（含 Apple Sign In 登录、订阅收据验证、通知 webhook、文字分析）
 - Feature 53.6：AI 分析闭环与额度控制 ✅
-- Feature 53.7：隐私、审核与上架材料（待开始）
+- Feature 53.7：App 端 Apple 登录与后端会话接入（待开始）
+- Feature 53.8：App 端订阅交易上报与后端订阅状态同步（待开始）
+- Feature 53.9：App 端 AI 点击走后端接口（待开始）
+- Feature 53.10：隐私、审核与上架材料（待开始）
 
 后端共实现 8 个 API 端点，40 个单元测试全部通过。
 
@@ -877,4 +1000,4 @@ UI Entry / Login / Subscription / Server API
 - 当前 Sprint 文档完成
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
-- 下一步可以进入 Feature 53.7 的隐私、审核与上架材料
+- 下一步可以进入 Feature 53.7 的 App 端 Apple 登录与后端会话接入
