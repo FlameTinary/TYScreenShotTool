@@ -17,6 +17,8 @@ final class ScrollingCapturePanelService {
     var onOCRRequested: (() -> Void)?
     var onTranslateRequested: (() -> Void)?
     var onAIRequested: ((AIAnalysisMode) -> Void)?
+    var onAIGateStarted: ((Bool) -> Void)?
+    var onAIGateCancelled: (() -> Void)?
 
     private var panel: ScrollingCapturePanel?
     private let containerView = NSVisualEffectView()
@@ -73,6 +75,8 @@ final class ScrollingCapturePanelService {
         contentView.onOCR = { [weak self] in self?.onOCRRequested?() }
         contentView.onTranslate = { [weak self] in self?.onTranslateRequested?() }
         contentView.onAISelected = { [weak self] mode in self?.onAIRequested?(mode) }
+        contentView.onAIGateStarted = { [weak self] canUseCurrentCapture in self?.onAIGateStarted?(canUseCurrentCapture) }
+        contentView.onAIGateCancelled = { [weak self] in self?.onAIGateCancelled?() }
         contentView.onSave = { [weak self] in self?.onSaveRequested?() }
         contentView.onCopy = { [weak self] in self?.onCopyRequested?() }
         contentView.onTooltipShow = { [weak self] text, buttonFrame in

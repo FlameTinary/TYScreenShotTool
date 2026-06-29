@@ -40,13 +40,13 @@ final class AIProAvailabilityTests: XCTestCase {
         )
     }
 
-    func test_aiProShellActionShowsPromptInsteadOfStartingAIRequest() {
+    func test_aiProShellActionStartsGatedMenuFlowInsteadOfPromptOnly() {
         let availability = AIProShellAvailability(
             regionPolicy: RegionPolicyResolver.policy(forStorefrontCode: "USA"),
             isEntranceSettingEnabled: true
         )
 
-        XCTAssertEqual(availability.selectionBehavior, .showPrompt)
+        XCTAssertEqual(availability.selectionBehavior, .showGatedMenu)
         XCTAssertNil(availability.requestMode(for: .summary))
     }
 }

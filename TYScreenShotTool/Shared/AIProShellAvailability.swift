@@ -2,12 +2,12 @@ import Foundation
 
 enum AIProShellSelectionBehavior: Equatable {
     case hidden
-    case showPrompt
+    case showGatedMenu
 }
 
 /// 海外 AI Pro 壳层的最小状态模型。
 ///
-/// 本阶段只负责展示入口与说明，不会把点击行为转换成真实 AI 请求。
+/// 海外 AI Pro 入口点击后先经过隐私、登录、订阅 gate，再进入 AI 模式菜单。
 struct AIProShellAvailability {
     let regionPolicy: RegionPolicy
     let isEntranceSettingEnabled: Bool
@@ -17,7 +17,7 @@ struct AIProShellAvailability {
     }
 
     var selectionBehavior: AIProShellSelectionBehavior {
-        shouldShowEntry ? .showPrompt : .hidden
+        shouldShowEntry ? .showGatedMenu : .hidden
     }
 
     func requestMode(for mode: AIAnalysisMode) -> AIAnalysisMode? {

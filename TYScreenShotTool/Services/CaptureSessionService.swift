@@ -473,6 +473,15 @@ final class CaptureSessionService {
         }
     }
 
+    @MainActor
+    func hidePendingCaptureUIForAIPrompt() {
+        guard state == .selectionCompleted else {
+            return
+        }
+
+        overlayService.hideActiveOverlay()
+    }
+
     func pinPendingCapture(style: CapturePreviewStyle, annotations: [CaptureAnnotation]) {
         guard state == .selectionCompleted, let pendingCaptureSource else {
             return
@@ -767,6 +776,16 @@ final class CaptureSessionService {
         }
     }
 
+    @MainActor
+    func hideScrollingCaptureUIForAIPrompt() {
+        guard isInScrollingCaptureMode else {
+            return
+        }
+
+        scrollingCapturePanelService.dismissPanel()
+        scrollingCapturePreviewWindowService.dismissPreview()
+    }
+
     private func frozenSelectionImage(for selectionRect: CGRect) throws -> CGImage {
         guard selectionRect.width > 1, selectionRect.height > 1 else {
             throw ScreenCaptureError.invalidSelection
@@ -955,7 +974,7 @@ final class CaptureSessionService {
                 if await performBackendAIAnalysis(image: image, source: source, mode: mode) {
                     return // 后端分析成功，跳过开发者路径
                 }
-                // 后端路径失败（401/402），降级到开发者路径
+                // 未处理的后端准备失败才会继续开发者路径；后端鉴权/订阅拒绝不会降级。
             }
 
             // 开发者路径：OCR提取 → 直连 OpenAI
@@ -1047,7 +1066,7 @@ final class CaptureSessionService {
     }
 
     /// Feature 53.9: 走后端 AI 分析链路
-    /// - Returns: true 表示成功处理，false 表示需降级到开发者路径
+    /// - Returns: true 表示请求或错误已由后端路径处理，false 表示尚未发起后端请求
     @MainActor
     private func performBackendAIAnalysis(
         image: CGImage,
@@ -1118,9 +1137,20 @@ final class CaptureSessionService {
         } catch let error as AIProBackendError {
             switch error {
             case .authRequired, .subscriptionRequired:
-                // 需要重新登录或订阅，降级到开发者路径
                 print("[AI Pro Backend] Backend rejected: \(error.localizedDescription)")
-                return false
+                toastService.showToast(message: error.localizedDescription)
+                aiAnalysisPreviewWindowService.presentError(
+                    title: AppText.aiResultError,
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+                return true
             default:
                 // 显示后端错误提示
                 print("[AI Pro Backend] Backend error: \(error.localizedDescription)")
@@ -1140,7 +1170,19 @@ final class CaptureSessionService {
             }
         } catch {
             print("[AI Pro Backend] Unexpected error: \(error.localizedDescription)")
-            return false
+            toastService.showToast(message: AppText.aiFailedToast)
+            aiAnalysisPreviewWindowService.presentError(
+                title: AppText.aiResultError,
+                message: error.localizedDescription,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+            return true
         }
     }
 

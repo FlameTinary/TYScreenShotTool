@@ -25,6 +25,8 @@ final class CaptureOverlayView: NSView {
     var onOCRRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onTranslateRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onAIRequested: ((AIAnalysisMode, CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    var onAIGateStarted: ((Bool) -> Void)?
+    var onAIGateCancelled: (() -> Void)?
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     var onLongCaptureRequested: (([CaptureAnnotation]) -> Void)?
 
@@ -1313,7 +1315,18 @@ final class CaptureOverlayView: NSView {
     private func requestAI() {
         annotationCanvasView.commitActiveTextIfNeeded()
         Task {
-            await AIProPromptPresenter.show(from: self)
+            let canUseCurrentCapture = await AIProPromptPresenter.isReadyForAIMenu()
+            let canContinue = await AIProPromptPresenter.show(from: nil)
+            guard canUseCurrentCapture, canContinue else {
+                onAIGateCancelled?()
+                print("[AI Pro Prompt] onboarding completed; take a new screenshot to use AI")
+                return
+            }
+            onAIGateStarted?(true)
+            guard presentAIMenuAtCurrentMouseLocation() else {
+                onAIGateCancelled?()
+                return
+            }
         }
     }
 
@@ -1347,6 +1360,41 @@ final class CaptureOverlayView: NSView {
 
         let menuOrigin = CGPoint(x: button.frame.minX, y: button.frame.maxY + 4)
         menu.popUp(positioning: nil, at: menuOrigin, in: toolbarContainerView)
+    }
+
+    private func presentAIMenuAtCurrentMouseLocation() -> Bool {
+        let menu = makeAIMenu()
+        return menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    private func makeAIMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        for mode in AIAnalysisMode.topLevelModes {
+            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode
+            menu.addItem(item)
+        }
+
+        let translationItem = NSMenuItem(
+            title: AppText.aiTranslationMenu,
+            action: nil,
+            keyEquivalent: ""
+        )
+        let translationMenu = NSMenu()
+
+        for language in AITranslationLanguage.allCases {
+            let mode = AIAnalysisMode.translation(language)
+            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = mode
+            translationMenu.addItem(item)
+        }
+
+        menu.setSubmenu(translationMenu, for: translationItem)
+        menu.addItem(translationItem)
+        return menu
     }
 
     @objc

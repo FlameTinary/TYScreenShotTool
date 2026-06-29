@@ -22,7 +22,7 @@
 当前 Sprint：
 
 - Sprint 53 - AI 订阅服务区域化底座
-- 状态：🚧 In Progress
+- 状态：✅ Done
 - 详情：`docs/SPRINTS/Sprint-53.md`
 
 当前有效的 UI 开发口径：
@@ -45,7 +45,7 @@
 AI 订阅服务区域化底座
 
 状态：
-🚧 In Progress
+✅ Done
 
 目标：
 
@@ -58,6 +58,8 @@ AI 订阅服务区域化底座
 - Sprint 53 需求与技术方案文档
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 拆分与验收口径
+- App 端 AI Pro 登录、订阅、后端 AI 请求链路第一版闭环
+- Cloudflare Workers + Supabase 后端登录、订阅、通知、AI 转发与额度控制 MVP
 
 ---
 

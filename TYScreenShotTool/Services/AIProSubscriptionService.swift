@@ -34,8 +34,9 @@ final class AIProSubscriptionService {
                     return
                 }
                 if case .verified(let transaction) = result {
-                    await self.reportVerificationToBackend(result)
-                    await transaction.finish()
+                    if await self.reportVerificationToBackend(result) {
+                        await transaction.finish()
+                    }
                 }
                 _ = await self.refreshStatus()
             }
@@ -55,9 +56,25 @@ final class AIProSubscriptionService {
 
             monthlyProduct = product
             let viewModel = makeProductViewModel(from: product)
-            status = await hasVerifiedEntitlement(for: product.id)
-                ? .subscribed(viewModel)
-                : .unsubscribed(viewModel)
+
+            do {
+                let subscription = try await backendClient.fetchSubscriptionStatus()
+                guard subscription.product_id == nil || subscription.product_id == viewModel.id else {
+                    status = .unsubscribed(viewModel)
+                    return status
+                }
+
+                status = subscription.status == "active" || subscription.status == "grace_period"
+                    ? .subscribed(viewModel)
+                    : .unsubscribed(viewModel)
+            } catch let error as AIProBackendError {
+                switch error {
+                case .regionUnavailable:
+                    status = .regionUnavailable
+                default:
+                    status = .failed(error.localizedDescription)
+                }
+            }
             return status
         } catch {
             status = .failed(error.localizedDescription)
@@ -80,15 +97,25 @@ final class AIProSubscriptionService {
         }
 
         do {
-            let result = try await product.purchase()
+            guard let userID = AIProSessionManager.shared.currentUserID,
+                  let appAccountToken = UUID(uuidString: userID) else {
+                status = .failed(AppText.aiProLoginRequiredForPurchase)
+                return status
+            }
+
+            print("[AI Pro Subscription] Starting StoreKit purchase for \(product.id)")
+            let result = try await product.purchase(options: [.appAccountToken(appAccountToken)])
+            print("[AI Pro Subscription] StoreKit purchase returned: \(result)")
 
             switch result {
             case .success(let verification):
-                // verification 是 VerificationResult<Transaction>，从它取 JWS
-                await reportVerificationToBackend(verification)
-
                 guard case .verified(let transaction) = verification else {
                     status = .failed(AppText.aiProTransactionUnverified)
+                    return status
+                }
+
+                guard await reportVerificationToBackend(verification) else {
+                    status = .failed(AppText.aiProBackendVerificationFailed)
                     return status
                 }
 
@@ -96,6 +123,7 @@ final class AIProSubscriptionService {
                 return await refreshStatus()
 
             case .userCancelled:
+                print("[AI Pro Subscription] StoreKit purchase cancelled by user")
                 return status
             case .pending:
                 status = .failed(AppText.aiProTransactionPending)
@@ -119,7 +147,9 @@ final class AIProSubscriptionService {
                 guard case .verified(let transaction) = result else {
                     continue
                 }
-                await reportVerificationToBackend(result)
+                if await reportVerificationToBackend(result) {
+                    await transaction.finish()
+                }
             }
 
             return await refreshStatus()
@@ -140,30 +170,17 @@ private extension AIProSubscriptionService {
         )
     }
 
-    func hasVerifiedEntitlement(for productID: String) async -> Bool {
-        for await result in Transaction.currentEntitlements {
-            guard case .verified(let transaction) = result else {
-                continue
-            }
-
-            if transaction.productID == productID {
-                return true
-            }
-        }
-
-        return false
-    }
-
     /// 将 StoreKit 交易验证结果中的 signedTransaction (JWS) 上报后端
-    func reportVerificationToBackend(_ verification: VerificationResult<Transaction>) async {
+    func reportVerificationToBackend(_ verification: VerificationResult<Transaction>) async -> Bool {
         let jws = verification.jwsRepresentation
 
         do {
             let response = try await backendClient.verifySubscription(signedTransaction: jws)
             print("[AI Pro Subscription] Backend verify success: \(response.status)")
+            return response.status == "active" || response.status == "grace_period"
         } catch {
-            // 后端验证失败不影响本地状态，仅打印日志
             print("[AI Pro Subscription] Backend verify failed: \(error.localizedDescription)")
+            return false
         }
     }
 }

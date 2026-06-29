@@ -33,6 +33,10 @@ final class CaptureOverlayService {
     var onTranslateRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     /// 请求 AI 分析时的回调
     var onAIRequested: ((AIAnalysisMode, CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
+    /// 开始 AI Pro gate 前的回调，用于先隐藏截图 UI。
+    var onAIGateStarted: ((Bool) -> Void)?
+    /// AI Pro gate 或菜单取消时的回调，用于清理隐藏后的截图会话。
+    var onAIGateCancelled: (() -> Void)?
     /// 请求固定截图时的回调
     var onPinRequested: ((CapturePreviewStyle, [CaptureAnnotation]) -> Void)?
     /// 请求进入长截图模式时的回调
@@ -133,6 +137,12 @@ final class CaptureOverlayService {
             }
             overlayView.onAIRequested = { [weak self] mode, style, annotations in
                 self?.onAIRequested?(mode, style, annotations)
+            }
+            overlayView.onAIGateStarted = { [weak self] canUseCurrentCapture in
+                self?.onAIGateStarted?(canUseCurrentCapture)
+            }
+            overlayView.onAIGateCancelled = { [weak self] in
+                self?.onAIGateCancelled?()
             }
             overlayView.onPinRequested = { [weak self] in
                 self?.onPinRequested?($0, $1)

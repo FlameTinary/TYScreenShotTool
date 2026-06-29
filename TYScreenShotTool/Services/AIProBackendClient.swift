@@ -101,8 +101,15 @@ final class AIProBackendClient {
     private let sessionManager: AIProSessionManager
     private let baseURL: URL
 
+    static func makeDefaultSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        return URLSession(configuration: configuration)
+    }
+
     init(
-        session: URLSession = .shared,
+        session: URLSession = AIProBackendClient.makeDefaultSession(),
         sessionManager: AIProSessionManager = .shared,
         baseURL: URL = URL(string: AppSettings.backendBaseURLDefaultValue)!
     ) {

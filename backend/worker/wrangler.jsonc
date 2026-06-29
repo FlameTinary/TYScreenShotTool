@@ -17,6 +17,6 @@
     "AI_MODEL": "deepseek-v4-flash",
     "OPENAI_BASE_URL": "https://api.deepseek.com",
     "AI_MAX_OUTPUT_TOKENS": "1200",
-    "APPLE_BUNDLE_ID": "com.tshot.app"
+    "APPLE_BUNDLE_ID": "com.sheldon.TShot"
   }
 }

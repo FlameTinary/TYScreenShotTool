@@ -91,6 +91,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayService.onTranslateRequested = { style, annotations in
             sessionService.translatePendingCapture(style: style, annotations: annotations)
         }
+        overlayService.onAIGateStarted = { canUseCurrentCapture in
+            if canUseCurrentCapture {
+                sessionService.hidePendingCaptureUIForAIPrompt()
+            } else {
+                sessionService.cancelSession()
+            }
+        }
+        overlayService.onAIGateCancelled = {
+            sessionService.cancelSession()
+        }
         overlayService.onAIRequested = { mode, style, annotations in
             sessionService.analyzePendingCapture(
                 mode: mode,
@@ -115,6 +125,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         scrollingCapturePanelService.onTranslateRequested = {
             sessionService.translateScrollingCaptureResult()
+        }
+        scrollingCapturePanelService.onAIGateStarted = { canUseCurrentCapture in
+            if canUseCurrentCapture {
+                sessionService.hideScrollingCaptureUIForAIPrompt()
+            } else {
+                sessionService.cancelSession()
+            }
+        }
+        scrollingCapturePanelService.onAIGateCancelled = {
+            sessionService.cancelSession()
         }
         scrollingCapturePanelService.onAIRequested = { mode in
             sessionService.analyzeScrollingCaptureResult(mode: mode)

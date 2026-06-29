@@ -31,6 +31,8 @@ final class ScrollingCaptureControlPanelContentView: NSView {
     var onOCR: (() -> Void)?
     var onTranslate: (() -> Void)?
     var onAISelected: ((AIAnalysisMode) -> Void)?
+    var onAIGateStarted: ((Bool) -> Void)?
+    var onAIGateCancelled: (() -> Void)?
     var onSave: (() -> Void)?
     var onCopy: (() -> Void)?
 
@@ -85,7 +87,18 @@ private extension ScrollingCaptureControlPanelContentView {
     @objc func handleTranslate() { onTranslate?() }
     @objc func handleAI() {
         Task {
-            await AIProPromptPresenter.show(from: self)
+            let canUseCurrentCapture = await AIProPromptPresenter.isReadyForAIMenu()
+            let canContinue = await AIProPromptPresenter.show(from: nil)
+            guard canUseCurrentCapture, canContinue else {
+                onAIGateCancelled?()
+                print("[AI Pro Prompt] onboarding completed; take a new screenshot to use AI")
+                return
+            }
+            onAIGateStarted?(true)
+            guard presentAIMenuAtCurrentMouseLocation() else {
+                onAIGateCancelled?()
+                return
+            }
         }
     }
     @objc func handleSave() { onSave?() }
@@ -244,6 +257,21 @@ private extension ScrollingCaptureControlPanelContentView {
 
 private extension ScrollingCaptureControlPanelContentView {
     func presentAIMenu() {
+        let menu = makeAIMenu()
+
+        if let event = NSApp.currentEvent {
+            NSMenu.popUpContextMenu(menu, with: event, for: aiButton)
+        } else {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: aiButton.bounds.height), in: aiButton)
+        }
+    }
+
+    func presentAIMenuAtCurrentMouseLocation() -> Bool {
+        let menu = makeAIMenu()
+        return menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    func makeAIMenu() -> NSMenu {
         let menu = NSMenu()
 
         for mode in AIAnalysisMode.topLevelModes {
@@ -265,12 +293,7 @@ private extension ScrollingCaptureControlPanelContentView {
         translationItem.submenu = translationMenu
         menu.addItem(.separator())
         menu.addItem(translationItem)
-
-        if let event = NSApp.currentEvent {
-            NSMenu.popUpContextMenu(menu, with: event, for: aiButton)
-        } else {
-            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: aiButton.bounds.height), in: aiButton)
-        }
+        return menu
     }
 
     @objc func handleAIMenuSelection(_ sender: NSMenuItem) {

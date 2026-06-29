@@ -2,7 +2,7 @@
 
 ## Status
 
-🚧 In Progress
+✅ Done
 
 ## Goal
 
@@ -796,28 +796,29 @@ created_at
 实现记录：
 
 - 修改 `CaptureSessionService.performAIAnalysis()`：已登录时优先走后端 `/v1/ai/analyze-screenshot`，将截图编码为 base64 发送后端
-- 后端返回 `401` / `402` 时降级到现有开发者直连 OpenAI 路径；其他错误（`429`、`502` 等）展示后端提示
+- 后端返回 `401` / `402` 时展示登录 / 订阅提示，不降级到开发者直连 OpenAI 路径；其他错误（`429`、`502` 等）展示后端提示
 - 新增 `AIAnalysisMode.backendPrompt` 属性，根据不同模式传递不同分析意图给后端
-- 长截图 AI 共用同一套权限与降级逻辑
+- 长截图 AI 共用同一套权限与后端错误处理逻辑
 - 现有 `AIAnalysisService` / `AIImageTextExtractionService` 保持不动，继续作为 Debug / 开发者能力存在
+- 点击普通截图 / 长截图工具栏 AI 按钮后，先隐藏当前截图 UI，再展示 AI Pro 数据处理、登录或订阅弹窗；通过 gate 后再展示 AI 模式菜单
 
 验收：
 
 - 海外已登录且有有效订阅时，AI 分析走后端接口
-- 401（未登录/Token 过期）时降级到开发者路径
-- 402（订阅过期）时降级到开发者路径
+- 401（未登录/Token 过期）时提示重新登录，不降级到开发者路径
+- 402（订阅过期）时提示订阅状态，不降级到开发者路径
 - 429（额度用尽）时展示额度不足提示
 - 502（后端异常）时展示服务暂不可用提示
 - 中国大陆 / unknown 模式不走任何后端 AI 请求（入口不可见）
 
-### Feature 53.10：隐私、审核与上架材料 ✅
+### Feature 53.9 补充实现记录：App 端后端 AI 服务 ✅
 
 - 新增 App 端后端 AI 服务，例如 `AIProBackendAIService`：
   - `analyzeScreenshot(imageBase64:prompt:requestID:)`
   - `analyzeText(prompt:requestID:)`
   - 统一处理 `401`、`402`、`403`、`409`、`413`、`429`、`502`
 - 普通截图：
-  - AI 按钮先执行区域策略、登录状态、后端订阅状态检查
+  - AI 按钮先关闭截图 UI，再执行区域策略、首次使用同意、登录状态、后端订阅状态检查
   - 校验通过后再展示现有 AI 模式菜单
   - 用户选择模式后，将截图编码为 base64，并调用 `/v1/ai/analyze-screenshot`
   - 返回结果复用现有 `AIAnalysisPreviewWindowService` 展示
@@ -832,7 +833,7 @@ created_at
   - 每次请求生成唯一 `request_id`
   - 不在 App 内保存 AI Provider API Key
   - 中国大陆 / unknown 不发起任何后端 AI 请求
-  - 未登录、未订阅、超额、后端失败都有明确 UI 提示
+- 未登录、未订阅、超额、后端失败都有明确 UI 提示
 
 验收：
 
@@ -843,7 +844,7 @@ created_at
 - 长截图 AI 与普通截图使用同一套权限与错误处理逻辑
 - 后端返回 `subscription_required`、`monthly_quota_exceeded`、`daily_quota_exceeded`、`image_too_large`、`ai_provider_failed` 时 App 展示可理解提示
 - 成功结果能在现有 AI 分析预览窗口展示，并支持复制结果
-- 单元测试覆盖 App 端状态机：未登录、未订阅、已订阅、区域禁止、额度超限、后端失败、成功返回
+- 单元测试覆盖 App 端状态机关键模型；登录、订阅、额度超限、后端失败和成功返回需要继续通过 Sandbox / TestFlight 做人工端到端验证
 
 ### Feature 53.10：隐私、审核与上架材料 ✅
 
@@ -970,7 +971,7 @@ UI Entry / Login / Subscription / Server API
 
 ## Result
 
-本 Sprint 当前已完成区域化底座、AI Pro 壳层、StoreKit 本地订阅壳层、后端登录 / 订阅 / 通知 / AI 分析 MVP；App 端正式接入后端的登录、订阅上报和 AI 请求链路仍需继续补齐：
+本 Sprint 当前已完成区域化底座、AI Pro 壳层、StoreKit 2 订阅、后端登录 / 订阅 / 通知 / AI 分析 MVP，以及 App 端登录、订阅上报、后端订阅状态同步和后端 AI 请求链路第一版闭环：
 
 - Feature 53.1：App 区域策略底座 ✅
 - Feature 53.2：AI 入口与历史隐藏配置隔离 ✅
@@ -991,4 +992,4 @@ UI Entry / Login / Subscription / Server API
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
 - Sprint 53 全部 10 个 Feature 已实现：区域底座、AI 入口隔离、海外 AI Pro 壳层、StoreKit 本地订阅、后端 MVP、AI 分析闭环、Apple 登录、订阅上报、AI 走后端、隐私与文案
-- 下一步可以进入隐私与审核流程，准备 App Store Connect 商品配置和正式上架材料
+- 下一步可以进入真实 Sandbox / TestFlight 验证、App Store Connect 商品配置和正式上架前风险收敛

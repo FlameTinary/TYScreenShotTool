@@ -9,36 +9,77 @@ import AppKit
 /// 4. 展示订阅商品 / 购买 / 恢复弹窗
 @MainActor
 enum AIProPromptPresenter {
+    private static var isPresenting = false
+
+    static func isReadyForAIMenu() async -> Bool {
+        guard AIAvailabilityService().isSubscriptionAllowed else {
+            return false
+        }
+        guard UserDefaults.standard.bool(forKey: AppSettings.aiFirstUseConsentKey) else {
+            return false
+        }
+        guard AIProSessionManager.shared.isSignedIn else {
+            return false
+        }
+
+        do {
+            let subscription = try await AIProBackendClient().fetchSubscriptionStatus()
+            return subscription.status == "active" || subscription.status == "grace_period"
+        } catch {
+            print("[AI Pro Prompt] preflight subscription check failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     static func show(
         from view: NSView?,
         subscriptionService: AIProSubscriptionService? = nil
-    ) async {
+    ) async -> Bool {
+        guard isPresenting == false else {
+            print("[AI Pro Prompt] ignored duplicate prompt request")
+            return false
+        }
+        isPresenting = true
+        defer {
+            isPresenting = false
+        }
+
         let subscriptionService = subscriptionService ?? .shared
 
         // 1. 区域策略
         guard AIAvailabilityService().isSubscriptionAllowed else {
-            await showPrompt(
+            print("[AI Pro Prompt] blocked by region policy")
+            _ = await showPrompt(
                 from: view,
                 content: AIProSubscriptionPromptContent(status: .regionUnavailable),
                 subscriptionService: subscriptionService
             )
-            return
+            return false
         }
 
         // 2. 首次使用同意提示（Feature 53.10）
         guard await showConsentIfNeeded(from: view) else {
-            return
+            print("[AI Pro Prompt] user cancelled first-use consent")
+            return false
         }
+        print("[AI Pro Prompt] first-use consent accepted")
 
         // 3. Apple 登录检查（Feature 53.7）
         guard await showLoginIfNeeded(from: view) else {
-            return
+            print("[AI Pro Prompt] user cancelled or failed login")
+            return false
         }
+        print("[AI Pro Prompt] login check passed")
 
         // 4. 加载订阅并展示
         subscriptionService.startTransactionListener()
         let status = await subscriptionService.refreshStatus()
-        await showPrompt(
+        print("[AI Pro Prompt] subscription status: \(status)")
+        guard status.isSubscribed == false else {
+            return true
+        }
+
+        return await showPrompt(
             from: view,
             content: AIProSubscriptionPromptContent(status: status),
             subscriptionService: subscriptionService
@@ -61,18 +102,8 @@ private extension AIProPromptPresenter {
         alert.informativeText = AppText.aiFirstUseConsentMessage
         alert.alertStyle = .informational
 
-        // 注意：NSAlert 使用 addButton 顺序是 从右到左
-        // 按钮1（最右边）："查看隐私政策"
-        // 按钮2（中间）："取消"
-        // 按钮3（最左边）："同意并继续"
-        let privacyButton = alert.addButton(withTitle: AppText.aiFirstUseConsentPrivacyButton)
-        let cancelButton = alert.addButton(withTitle: AppText.cancelButton)
-        let agreeButton = alert.addButton(withTitle: AppText.aiFirstUseConsentAgreeButton)
-
-        // 设置按钮标识
-        agreeButton.tag = 1
-        cancelButton.tag = 2
-        privacyButton.tag = 3
+        alert.addButton(withTitle: AppText.aiFirstUseConsentAgreeButton)
+        alert.addButton(withTitle: AppText.cancelButton)
 
         let response: NSApplication.ModalResponse
         if let window = view?.window {
@@ -81,24 +112,14 @@ private extension AIProPromptPresenter {
             response = alert.runModal()
         }
 
-        // NSAlert 按钮布局（addButton 顺序 = 从右到左）：
-        //   第一次 addButton → 最右边 → .alertFirstButtonReturn (1000) → "查看隐私政策"
-        //   第二次 addButton → 中间   → .alertSecondButtonReturn (1001) → "取消"
-        //   第三次 addButton → 最左边 → .alertThirdButtonReturn (1002) → "同意并继续"
-
-        switch response.rawValue {
-        case NSApplication.ModalResponse.alertThirdButtonReturn.rawValue: // 1002 = "同意并继续"
+        switch response {
+        case .alertFirstButtonReturn:
             UserDefaults.standard.set(true, forKey: AppSettings.aiFirstUseConsentKey)
+            print("[AI Pro Prompt] consent alert returned first button")
             return true
 
-        case NSApplication.ModalResponse.alertFirstButtonReturn.rawValue: // 1000 = "查看隐私政策"
-            if let url = URL(string: "https://tshot.app/privacy") {
-                NSWorkspace.shared.open(url)
-            }
-            // 不记录同意，让用户再选一次
-            return await showConsentIfNeeded(from: view)
-
-        default: // 1001 = "取消" 或关闭弹窗
+        default:
+            print("[AI Pro Prompt] consent alert cancelled: \(response.rawValue)")
             return false
         }
     }
@@ -119,11 +140,8 @@ private extension AIProPromptPresenter {
         alert.informativeText = AppText.aiProLoginPromptMessage
         alert.alertStyle = .informational
 
-        let cancelButton = alert.addButton(withTitle: AppText.cancelButton)
-        let loginButton = alert.addButton(withTitle: AppText.aiProLoginButton)
-
-        loginButton.tag = 1
-        cancelButton.tag = 2
+        alert.addButton(withTitle: AppText.aiProLoginButton)
+        alert.addButton(withTitle: AppText.cancelButton)
 
         let response: NSApplication.ModalResponse
         if let window = view?.window {
@@ -132,18 +150,18 @@ private extension AIProPromptPresenter {
             response = alert.runModal()
         }
 
-        // NSAlert 按钮布局（从右到左）：
-        //   第一次 addButton → 最右边 → 1000 → "取消"
-        //   第二次 addButton → 最左边 → 1001 → "使用 Apple 登录"
-        guard response.rawValue == NSApplication.ModalResponse.alertSecondButtonReturn.rawValue else {
+        guard response == .alertFirstButtonReturn else {
+            print("[AI Pro Prompt] login alert cancelled: \(response.rawValue)")
             return false
         }
 
         // 发起 Apple 登录
         do {
+            print("[AI Pro Prompt] starting Sign in with Apple")
             _ = try await AIProAuthService.shared.signIn()
             return true
         } catch {
+            print("[AI Pro Prompt] Sign in with Apple failed: \(error.localizedDescription)")
             // 显示错误并给用户重试机会
             let errorAlert = NSAlert()
             errorAlert.messageText = AppText.aiProLoginFailedTitle
@@ -176,7 +194,7 @@ private extension AIProPromptPresenter {
         from view: NSView?,
         content: AIProSubscriptionPromptContent,
         subscriptionService: AIProSubscriptionService
-    ) async {
+    ) async -> Bool {
         let alert = NSAlert()
         alert.messageText = content.title
         alert.informativeText = content.message
@@ -199,7 +217,7 @@ private extension AIProPromptPresenter {
         }
 
         let action = action(for: response, content: content)
-        await handle(action, from: view, subscriptionService: subscriptionService)
+        return await handle(action, from: view, subscriptionService: subscriptionService)
     }
 
     static func action(
@@ -221,7 +239,7 @@ private extension AIProPromptPresenter {
         _ action: AIProSubscriptionPromptAction,
         from view: NSView?,
         subscriptionService: AIProSubscriptionService
-    ) async {
+    ) async -> Bool {
         let nextStatus: AIProSubscriptionStatus
 
         switch action {
@@ -230,13 +248,12 @@ private extension AIProPromptPresenter {
         case .restore:
             nextStatus = await subscriptionService.restorePurchases()
         case .dismiss:
-            return
+            return false
         }
 
-        await showPrompt(
-            from: view,
-            content: AIProSubscriptionPromptContent(status: nextStatus),
-            subscriptionService: subscriptionService
-        )
+        if case .failed(let message) = nextStatus {
+            print("[AI Pro Prompt] subscription action failed: \(message)")
+        }
+        return nextStatus.isSubscribed
     }
 }
