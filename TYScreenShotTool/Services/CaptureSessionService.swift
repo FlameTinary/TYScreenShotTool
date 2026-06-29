@@ -955,10 +955,8 @@ final class CaptureSessionService {
         mode: AIAnalysisMode
     ) async {
         let selectionRect = source.selectionRect
-        let strategy = currentAITextInputStrategy()
 
         print("[AI Analysis] mode: \(mode.menuTitle)")
-        print("[AI Analysis] strategy: \(strategy.logName)")
 
         defer {
             isAIAnalysisInProgress = false
@@ -968,86 +966,7 @@ final class CaptureSessionService {
         do {
             let image = try await captureImageForPendingSource(source)
 
-            // Feature 53.9: 已登录时走后端 AI 分析链路
-            if AIProSessionManager.shared.isSignedIn {
-                if await performBackendAIAnalysis(image: image, source: source, mode: mode) {
-                    return // 后端分析成功，跳过开发者路径
-                }
-                // 未处理的后端准备失败才会继续开发者路径；后端鉴权/订阅拒绝不会降级。
-            }
-
-            // 开发者路径：OCR提取 → 直连 OpenAI
-            let text = try await resolveAIText(from: image, strategy: strategy)
-            let result = try await aiAnalysisService.analyze(text: text, mode: mode)
-
-            aiAnalysisPreviewWindowService.presentResult(
-                result: result,
-                selectionRect: selectionRect,
-                onCopyAll: { [weak self] in
-                    self?.copyAIAnalysisResult(result.formattedText)
-                },
-                onCopyNextSteps: { [weak self] in
-                    self?.copyAIAnalysisSecondaryText(
-                        result.secondaryCopyText,
-                        successMessage: result.mode.secondaryCopySuccessMessage
-                    )
-                },
-                onRetry: { [weak self] in
-                    self?.retryAIAnalysis()
-                },
-                onClose: { [weak self] in
-                    self?.aiAnalysisPreviewWindowService.dismiss()
-                }
-            )
-        } catch let error as OCRError {
-            switch error {
-            case .noTextRecognized, .emptyText:
-                print("[AI Analysis] Local OCR produced no useful text: \(error.localizedDescription)")
-                toastService.showToast(message: emptyContentMessage(for: mode))
-                aiAnalysisPreviewWindowService.dismiss()
-            case .requestFailed:
-                toastService.showToast(message: AppText.ocrFailedToast)
-                aiAnalysisPreviewWindowService.presentError(
-                    title: AppText.ocrFailedToast,
-                    message: error.localizedDescription,
-                    selectionRect: selectionRect,
-                    onRetry: { [weak self] in
-                        self?.retryAIAnalysis()
-                    },
-                    onClose: { [weak self] in
-                        self?.aiAnalysisPreviewWindowService.dismiss()
-                    }
-                )
-            }
-        } catch let error as AIImageTextExtractionError {
-            handleVisionAIExtractionError(
-                error,
-                selectionRect: selectionRect,
-                mode: mode,
-                onRetry: { [weak self] in
-                    self?.retryAIAnalysis()
-                }
-            )
-        } catch let error as AIAnalysisError {
-            switch error {
-            case .emptyInput, .lowQualityOutput:
-                print("[AI Analysis] Interface structure produced no useful content: \(error.localizedDescription)")
-                toastService.showToast(message: emptyContentMessage(for: mode))
-                aiAnalysisPreviewWindowService.dismiss()
-            case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
-                toastService.showToast(message: AppText.aiFailedToast)
-                aiAnalysisPreviewWindowService.presentError(
-                    title: AppText.aiResultError,
-                    message: error.localizedDescription,
-                    selectionRect: selectionRect,
-                    onRetry: { [weak self] in
-                        self?.retryAIAnalysis()
-                    },
-                    onClose: { [weak self] in
-                        self?.aiAnalysisPreviewWindowService.dismiss()
-                    }
-                )
-            }
+            await performBackendAIAnalysis(image: image, source: source, mode: mode)
         } catch {
             toastService.showToast(message: AppText.aiFailedToast)
             aiAnalysisPreviewWindowService.presentError(
@@ -1064,19 +983,17 @@ final class CaptureSessionService {
         }
     }
 
-    /// Feature 53.9: 走后端 AI 分析链路
-    /// - Returns: true 表示请求或错误已由后端路径处理，false 表示尚未发起后端请求
+    /// 走后端 AI 分析链路（唯一路径）
     @MainActor
     private func performBackendAIAnalysis(
         image: CGImage,
         source: PendingCaptureSource,
         mode: AIAnalysisMode
-    ) async -> Bool {
+    ) async {
         let selectionRect = source.selectionRect
         let backendClient = AIProBackendClient()
         let requestID = UUID().uuidString
 
-        // 编码截图
         let mutableData = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             mutableData,
@@ -1084,11 +1001,35 @@ final class CaptureSessionService {
             1,
             nil
         ) else {
-            return false
+            toastService.showToast(message: AppText.aiFailedToast)
+            aiAnalysisPreviewWindowService.presentError(
+                title: AppText.aiResultError,
+                message: AppText.aiFailedToast,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+            return
         }
         CGImageDestinationAddImage(destination, image, nil)
         guard CGImageDestinationFinalize(destination) else {
-            return false
+            toastService.showToast(message: AppText.aiFailedToast)
+            aiAnalysisPreviewWindowService.presentError(
+                title: AppText.aiResultError,
+                message: AppText.aiFailedToast,
+                selectionRect: selectionRect,
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+            return
         }
         let imageBase64 = (mutableData as Data).base64EncodedString()
 
@@ -1099,7 +1040,6 @@ final class CaptureSessionService {
                 prompt: mode.backendPrompt
             )
 
-            // 包装为 AIAnalysisResult（后端返回完整文本，作为单段结果展示）
             let result = AIAnalysisResult(
                 mode: mode,
                 statusTitle: mode.resultStatusTitle,
@@ -1131,7 +1071,6 @@ final class CaptureSessionService {
                     self?.aiAnalysisPreviewWindowService.dismiss()
                 }
             )
-            return true
 
         } catch let error as AIProBackendError {
             switch error {
@@ -1149,9 +1088,7 @@ final class CaptureSessionService {
                         self?.aiAnalysisPreviewWindowService.dismiss()
                     }
                 )
-                return true
             default:
-                // 显示后端错误提示
                 print("[AI Pro Backend] Backend error: \(error.localizedDescription)")
                 toastService.showToast(message: error.localizedDescription)
                 aiAnalysisPreviewWindowService.presentError(
@@ -1165,7 +1102,6 @@ final class CaptureSessionService {
                         self?.aiAnalysisPreviewWindowService.dismiss()
                     }
                 )
-                return true // 已处理错误，不需要降级
             }
         } catch {
             print("[AI Pro Backend] Unexpected error: \(error.localizedDescription)")
@@ -1181,7 +1117,6 @@ final class CaptureSessionService {
                     self?.aiAnalysisPreviewWindowService.dismiss()
                 }
             )
-            return true
         }
     }
 

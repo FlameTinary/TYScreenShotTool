@@ -1314,41 +1314,38 @@ final class CaptureOverlayView: NSView {
     @objc
     private func requestAI() {
         annotationCanvasView.commitActiveTextIfNeeded()
+        // 简化：直接弹出菜单，跳过权限检查
+        presentAIMenu(relativeTo: aiButton)
+        
+        /* 原有权限检查逻辑（已注释）
         Task {
             switch await AIProPromptPresenter.currentAccessState() {
             case .ready:
-                onAIGateStarted?(true)
-                guard presentAIMenuAtCurrentMouseLocation() else {
-                    onAIGateCancelled?()
-                    return
+                await MainActor.run {
+                    presentAIMenuAtCurrentMouseLocation()
                 }
 
             case .needsLogin:
                 await AIProPromptPresenter.showLoginOnboarding(from: self)
-                // 登录完成后重新检查状态，如就绪则展示 AI 菜单
                 if await AIProPromptPresenter.currentAccessState() == .ready {
-                    onAIGateStarted?(true)
-                    guard presentAIMenuAtCurrentMouseLocation() else {
-                        onAIGateCancelled?()
-                        return
+                    await MainActor.run {
+                        presentAIMenuAtCurrentMouseLocation()
                     }
                 }
 
             case .needsSubscription:
                 await AIProPromptPresenter.showSubscriptionOnboarding(from: self)
                 if await AIProPromptPresenter.currentAccessState() == .ready || AIProSessionManager.shared.isSignedIn {
-                    onAIGateStarted?(true)
-                    guard presentAIMenuAtCurrentMouseLocation() else {
-                        onAIGateCancelled?()
-                        return
+                    await MainActor.run {
+                        presentAIMenuAtCurrentMouseLocation()
                     }
                 }
 
             case .regionUnavailable:
                 await AIProPromptPresenter.showRegionUnavailable(from: self)
-                onAIGateCancelled?()
             }
         }
+        */
     }
 
     private func presentAIMenu(relativeTo button: NSButton) {
@@ -1383,40 +1380,40 @@ final class CaptureOverlayView: NSView {
         menu.popUp(positioning: nil, at: menuOrigin, in: toolbarContainerView)
     }
 
-    private func presentAIMenuAtCurrentMouseLocation() -> Bool {
-        let menu = makeAIMenu()
-        return menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-    }
+    // private func presentAIMenuAtCurrentMouseLocation() -> Bool {
+    //     let menu = makeAIMenu()
+    //     return menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    // }
 
-    private func makeAIMenu() -> NSMenu {
-        let menu = NSMenu()
+    // private func makeAIMenu() -> NSMenu {
+    //     let menu = NSMenu()
 
-        for mode in AIAnalysisMode.topLevelModes {
-            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode
-            menu.addItem(item)
-        }
+    //     for mode in AIAnalysisMode.topLevelModes {
+    //         let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+    //         item.target = self
+    //         item.representedObject = mode
+    //         menu.addItem(item)
+    //     }
 
-        let translationItem = NSMenuItem(
-            title: AppText.aiTranslationMenu,
-            action: nil,
-            keyEquivalent: ""
-        )
-        let translationMenu = NSMenu()
+    //     let translationItem = NSMenuItem(
+    //         title: AppText.aiTranslationMenu,
+    //         action: nil,
+    //         keyEquivalent: ""
+    //     )
+    //     let translationMenu = NSMenu()
 
-        for language in AITranslationLanguage.allCases {
-            let mode = AIAnalysisMode.translation(language)
-            let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode
-            translationMenu.addItem(item)
-        }
+    //     for language in AITranslationLanguage.allCases {
+    //         let mode = AIAnalysisMode.translation(language)
+    //         let item = NSMenuItem(title: mode.menuTitle, action: #selector(handleAIMenuSelection(_:)), keyEquivalent: "")
+    //         item.target = self
+    //         item.representedObject = mode
+    //         translationMenu.addItem(item)
+    //     }
 
-        menu.setSubmenu(translationMenu, for: translationItem)
-        menu.addItem(translationItem)
-        return menu
-    }
+    //     menu.setSubmenu(translationMenu, for: translationItem)
+    //     menu.addItem(translationItem)
+    //     return menu
+    // }
 
     @objc
     private func handleAIMenuSelection(_ sender: NSMenuItem) {
