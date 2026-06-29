@@ -96,21 +96,18 @@ private extension ScrollingCaptureControlPanelContentView {
                 }
 
             case .needsLogin:
+                await AIProPromptPresenter.showLoginOnboarding(from: self)
                 onAIGateCancelled?()
-                await Task.yield()
-                await AIProPromptPresenter.showLoginOnboarding()
                 print("[AI Pro Prompt] login onboarding completed; take a new screenshot to use AI")
 
             case .needsSubscription:
+                await AIProPromptPresenter.showSubscriptionOnboarding(from: self)
                 onAIGateCancelled?()
-                await Task.yield()
-                await AIProPromptPresenter.showSubscriptionOnboarding()
                 print("[AI Pro Prompt] subscription onboarding completed; take a new screenshot to use AI")
 
             case .regionUnavailable:
+                await AIProPromptPresenter.showRegionUnavailable(from: self)
                 onAIGateCancelled?()
-                await Task.yield()
-                await AIProPromptPresenter.showRegionUnavailable()
             }
         }
     }
