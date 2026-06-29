@@ -81,23 +81,26 @@ private extension AIProPromptPresenter {
             response = alert.runModal()
         }
 
-        // 用户点击"同意并继续"
-        if response.rawValue == 1000 { // 第一个按钮（最左边）
+        // NSAlert 按钮布局（addButton 顺序 = 从右到左）：
+        //   第一次 addButton → 最右边 → .alertFirstButtonReturn (1000) → "查看隐私政策"
+        //   第二次 addButton → 中间   → .alertSecondButtonReturn (1001) → "取消"
+        //   第三次 addButton → 最左边 → .alertThirdButtonReturn (1002) → "同意并继续"
+
+        switch response.rawValue {
+        case NSApplication.ModalResponse.alertThirdButtonReturn.rawValue: // 1002 = "同意并继续"
             UserDefaults.standard.set(true, forKey: AppSettings.aiFirstUseConsentKey)
             return true
-        }
 
-        // 用户点击"查看隐私政策"（第三个按钮，最右边）
-        if response.rawValue == 1002 {
+        case NSApplication.ModalResponse.alertFirstButtonReturn.rawValue: // 1000 = "查看隐私政策"
             if let url = URL(string: "https://tshot.app/privacy") {
                 NSWorkspace.shared.open(url)
             }
             // 不记录同意，让用户再选一次
             return await showConsentIfNeeded(from: view)
-        }
 
-        // 用户取消
-        return false
+        default: // 1001 = "取消" 或关闭弹窗
+            return false
+        }
     }
 }
 
@@ -129,7 +132,10 @@ private extension AIProPromptPresenter {
             response = alert.runModal()
         }
 
-        guard response.rawValue == 1000 else {
+        // NSAlert 按钮布局（从右到左）：
+        //   第一次 addButton → 最右边 → 1000 → "取消"
+        //   第二次 addButton → 最左边 → 1001 → "使用 Apple 登录"
+        guard response.rawValue == NSApplication.ModalResponse.alertSecondButtonReturn.rawValue else {
             return false
         }
 
