@@ -949,6 +949,16 @@ final class CaptureSessionService {
 
         do {
             let image = try await captureImageForPendingSource(source)
+
+            // Feature 53.9: 已登录时走后端 AI 分析链路
+            if AIProSessionManager.shared.isSignedIn {
+                if await performBackendAIAnalysis(image: image, source: source, mode: mode) {
+                    return // 后端分析成功，跳过开发者路径
+                }
+                // 后端路径失败（401/402），降级到开发者路径
+            }
+
+            // 开发者路径：OCR提取 → 直连 OpenAI
             let text = try await resolveAIText(from: image, strategy: strategy)
             let result = try await aiAnalysisService.analyze(text: text, mode: mode)
 
@@ -1033,6 +1043,104 @@ final class CaptureSessionService {
                     self?.aiAnalysisPreviewWindowService.dismiss()
                 }
             )
+        }
+    }
+
+    /// Feature 53.9: 走后端 AI 分析链路
+    /// - Returns: true 表示成功处理，false 表示需降级到开发者路径
+    @MainActor
+    private func performBackendAIAnalysis(
+        image: CGImage,
+        source: PendingCaptureSource,
+        mode: AIAnalysisMode
+    ) async -> Bool {
+        let selectionRect = source.selectionRect
+        let backendClient = AIProBackendClient()
+        let requestID = UUID().uuidString
+
+        // 编码截图
+        let mutableData = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            mutableData,
+            "public.png" as CFString,
+            1,
+            nil
+        ) else {
+            return false
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            return false
+        }
+        let imageBase64 = (mutableData as Data).base64EncodedString()
+
+        do {
+            let response = try await backendClient.analyzeScreenshot(
+                requestID: requestID,
+                imageBase64: imageBase64,
+                prompt: mode.backendPrompt
+            )
+
+            // 包装为 AIAnalysisResult（后端返回完整文本，作为单段结果展示）
+            let result = AIAnalysisResult(
+                mode: mode,
+                statusTitle: mode.resultStatusTitle,
+                sections: [
+                    AIAnalysisSection(title: mode.resultStatusTitle, content: response.analysis)
+                ],
+                rawText: response.analysis,
+                secondaryCopyText: response.analysis
+            )
+
+            print("[AI Pro Backend] Analysis success, model: \(response.model)")
+
+            aiAnalysisPreviewWindowService.presentResult(
+                result: result,
+                selectionRect: selectionRect,
+                onCopyAll: { [weak self] in
+                    self?.copyAIAnalysisResult(result.formattedText)
+                },
+                onCopyNextSteps: { [weak self] in
+                    self?.copyAIAnalysisSecondaryText(
+                        result.secondaryCopyText,
+                        successMessage: result.mode.secondaryCopySuccessMessage
+                    )
+                },
+                onRetry: { [weak self] in
+                    self?.retryAIAnalysis()
+                },
+                onClose: { [weak self] in
+                    self?.aiAnalysisPreviewWindowService.dismiss()
+                }
+            )
+            return true
+
+        } catch let error as AIProBackendError {
+            switch error {
+            case .authRequired, .subscriptionRequired:
+                // 需要重新登录或订阅，降级到开发者路径
+                print("[AI Pro Backend] Backend rejected: \(error.localizedDescription)")
+                return false
+            default:
+                // 显示后端错误提示
+                print("[AI Pro Backend] Backend error: \(error.localizedDescription)")
+                toastService.showToast(message: error.localizedDescription)
+                aiAnalysisPreviewWindowService.presentError(
+                    title: AppText.aiResultError,
+                    message: error.localizedDescription,
+                    selectionRect: selectionRect,
+                    onRetry: { [weak self] in
+                        self?.retryAIAnalysis()
+                    },
+                    onClose: { [weak self] in
+                        self?.aiAnalysisPreviewWindowService.dismiss()
+                    }
+                )
+                return true // 已处理错误，不需要降级
+            }
+        } catch {
+            print("[AI Pro Backend] Unexpected error: \(error.localizedDescription)")
+            return false
         }
     }
 

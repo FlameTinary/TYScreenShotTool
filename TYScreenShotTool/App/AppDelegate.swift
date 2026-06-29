@@ -8,6 +8,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         AppThemeCoordinator.shared.applyCurrentAppearance()
+
+        // 恢复后端会话（Keychain 中的 Bearer Token）
+        AIProSessionManager.shared.restoreSession()
 #if DEBUG
         if runStoreKitDebugVerificationIfRequested() {
             return

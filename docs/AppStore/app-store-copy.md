@@ -15,6 +15,27 @@
 
 ---
 
+## 海外版文案（English）
+
+For regions outside China Mainland:
+
+TShot is a native macOS screenshot tool with AI Pro powered by Sign in with Apple and subscription.
+
+Key features:
+
+- Quick screenshot capture via menu bar or global hotkeys
+- In-editor annotations: rectangle, ellipse, arrow, pen, mosaic, and text
+- Scrollable long capture for web pages and documents
+- OCR text recognition
+- Pin screenshots as floating windows
+- **AI Pro** (subscription): Analyze screenshots using AI, with backend subscription verification, usage quota management, and privacy-first design.
+- Screenshot content is uploaded to the backend and processed by third-party AI models (e.g. DeepSeek) only for the specific analysis request.
+- Monthly and daily usage limits apply.
+
+Not available in China Mainland.
+
+---
+
 ## 推广文本
 
 TShot 让 macOS 截图从“保存一张图”升级为“继续处理这张图”：支持标注、马赛克、长截图、OCR 和 Pin 悬浮查看。

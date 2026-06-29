@@ -70,6 +70,25 @@ enum AIAnalysisMode {
         }
     }
 
+    /// Feature 53.9：传递给后端的 prompt，用于 AI 分析时说明请求意图
+    var backendPrompt: String? {
+        switch self {
+        case .developerError:
+            return "分析这个截图中出现的开发报错信息，给出原因和解决建议。"
+        case .summary:
+            return "总结这个截图中的主要内容，提取关键要点。"
+        case .translation(let language):
+            switch language {
+            case .simplifiedChinese:
+                return "将截图中的文字翻译成简体中文。"
+            case .english:
+                return "将截图中的文字翻译成英文。"
+            }
+        case .interfaceStructure:
+            return "分析这个截图的界面结构，描述其中的组件、布局和交互方式。"
+        }
+    }
+
     var secondaryCopyButtonTitle: String {
         switch self {
         case .developerError:

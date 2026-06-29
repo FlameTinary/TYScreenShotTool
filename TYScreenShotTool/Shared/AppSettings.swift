@@ -52,6 +52,20 @@ enum AppSettings {
     /// Debug StoreKit 测试开关，仅用于本机签名环境下的购买验证。
     static let debugRunStoreKitSandboxTestsKey = "debug.runStoreKitSandboxTests"
 
+    // MARK: - AI Pro Backend
+
+    /// 后端 API 基础 URL
+    static let backendBaseURLKey = "settings.backendBaseURL"
+    /// 后端 API 基础 URL 默认值
+    static let backendBaseURLDefaultValue = "https://tshot-ai-backend.tshot.workers.dev"
+
+    // MARK: - AI Pro First Use Consent
+
+    /// 首次使用 AI Pro 是否已同意数据上传提示
+    static let aiFirstUseConsentKey = "settings.aiFirstUseConsent"
+    /// 首次使用 AI Pro 同意状态默认值
+    static let aiFirstUseConsentDefaultValue = false
+
     /// Release 模式下永远返回 false；Debug 模式下先经过区域策略，再读取 UserDefaults 开关。
     ///
     /// Release 构建时即使 UserDefaults 意外写入 true，此方法也返回 false，

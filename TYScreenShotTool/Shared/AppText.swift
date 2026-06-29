@@ -176,6 +176,91 @@ enum AppText {
     static var aiVisionExtractionInstructions: String { choose(zhHans: "你负责从截图图片中提取文字。", en: "You extract text from screenshots.", ja: "スクリーンショット画像から文字を抽出してください。", ko: "스크린샷 이미지에서 문자를 추출하세요.", de: "Du extrahierst Text aus Screenshots.", fr: "Tu extrais le texte des captures d’écran.") }
     static var aiVisionExtractionPrompt: String { choose(zhHans: "你负责从截图中尽量忠实提取可见文字。\n要求：\n- 只输出截图中的文字内容\n- 不要解释、不要总结、不要补充前言\n- 不要输出 Markdown 代码块\n- 保持关键信息原始顺序\n- 如果没有可识别的有效文字，返回空字符串", en: "Extract the visible text from the screenshot as faithfully as possible.\nRequirements:\n- Output only the text from the screenshot\n- Do not explain, summarize, or add any introduction\n- Do not output Markdown code blocks\n- Preserve the original order of key information\n- Return an empty string if there is no recognizable useful text", ja: "スクリーンショット内の見える文字をできるだけ忠実に抽出してください。\n要件:\n- スクリーンショット内の文字だけを出力する\n- 説明、要約、前置きは加えない\n- Markdown のコードブロックを出力しない\n- 重要な情報の元の順序を保つ\n- 有効な文字が認識できない場合は空文字を返す", ko: "스크린샷에 보이는 문자를 가능한 한 정확하게 추출하세요.\n요구 사항:\n- 스크린샷의 문자만 출력합니다\n- 설명, 요약, 서두를 추가하지 않습니다\n- Markdown 코드 블록을 출력하지 않습니다\n- 핵심 정보의 원래 순서를 유지합니다\n- 인식 가능한 유효 문자가 없으면 빈 문자열을 반환합니다", de: "Extrahiere den sichtbaren Text aus dem Screenshot so originalgetreu wie möglich.\nAnforderungen:\n- Gib nur den Text aus dem Screenshot aus\n- Erkläre nicht, fasse nicht zusammen und füge keine Einleitung hinzu\n- Gib keine Markdown-Codeblöcke aus\n- Behalte die ursprüngliche Reihenfolge wichtiger Informationen bei\n- Gib einen leeren String zurück, wenn kein brauchbarer Text erkennbar ist", fr: "Extrait le texte visible de la capture aussi fidèlement que possible.\nExigences :\n- N’affiche que le texte présent dans la capture\n- N’explique pas, ne résume pas et n’ajoute pas d’introduction\n- N’affiche pas de blocs de code Markdown\n- Conserve l’ordre d’origine des informations importantes\n- Renvoie une chaîne vide s’il n’y a aucun texte utile reconnaissable") }
 
+    // MARK: - Feature 53.10: 首次 AI Pro 使用同意提示
+
+    static var aiFirstUseConsentTitle: String { choose(
+        zhHans: "AI Pro 数据处理提示",
+        en: "AI Pro Data Processing Notice",
+        ja: "AI Pro データ処理について",
+        ko: "AI Pro 데이터 처리 안내",
+        de: "Hinweis zur Datenverarbeitung von AI Pro",
+        fr: "Avis sur le traitement des données AI Pro"
+    ) }
+
+    static var aiFirstUseConsentMessage: String { choose(
+        zhHans: "使用 AI Pro 功能前，请了解以下信息：\n\n1. 截图内容将上传至后端服务器进行分析\n2. 后端会将截图发送给第三方 AI 模型服务（如 DeepSeek）进行处理\n3. 上传内容仅用于本次 AI 分析请求，不会长期保留，不会用于模型训练\n4. 您需要通过 Sign in with Apple 登录，并订阅 AI Pro Monthly 后方可使用\n5. 每月和每日有固定使用额度限制\n\n继续使用即表示您同意以上数据处理方式。",
+        en: "Before using AI Pro, please be aware:\n\n1. Screenshot content will be uploaded to the backend server for analysis\n2. The backend sends screenshots to third-party AI model services (e.g. DeepSeek)\n3. Uploaded content is used only for the current AI analysis request, is not retained long-term, and is not used for model training\n4. You need to sign in with Apple and subscribe to AI Pro Monthly\n5. Monthly and daily usage limits apply\n\nBy continuing, you agree to this data processing.",
+        ja: "AI Pro 機能をご利用いただく前に、以下の点をご確認ください：\n\n1. スクリーンショットの内容は分析のためサーバーにアップロードされます\n2. サーバーはスクリーンショットを第三者AIモデルサービス（DeepSeek等）に送信します\n3. アップロードされた内容は今回のAI分析リクエストにのみ使用され、長期保存やモデル訓練には使用されません\n4. Sign in with Apple でのログインと AI Pro Monthly の登録が必要です\n5. 月間および日間の利用制限があります\n\n続行することで、上記のデータ処理に同意したものとみなされます。",
+        ko: "AI Pro 기능을 사용하기 전에 다음 정보를 확인해 주세요:\n\n1. 스크린샷 내용이 분석을 위해 백엔드 서버에 업로드됩니다\n2. 백엔드는 스크린샷을 타사 AI 모델 서비스(예: DeepSeek)에 전송합니다\n3. 업로드된 내용은 현재 AI 분석 요청에만 사용되며, 장기 보관되거나 모델 훈련에 사용되지 않습니다\n4. Sign in with Apple로 로그인하고 AI Pro Monthly를 구독해야 합니다\n5. 월간 및 일간 사용량 제한이 적용됩니다\n\n계속하면 위 데이터 처리 방식에 동의하는 것으로 간주됩니다.",
+        de: "Bevor Sie AI Pro nutzen, beachten Sie bitte:\n\n1. Screenshot-Inhalte werden zur Analyse an den Backend-Server hochgeladen\n2. Das Backend sendet Screenshots an KI-Modelldienste Dritter (z.B. DeepSeek)\n3. Hochgeladene Inhalte werden nur für die aktuelle KI-Analyse verwendet, nicht langfristig gespeichert und nicht für Modelltraining genutzt\n4. Sie müssen sich mit Sign in with Apple anmelden und AI Pro Monthly abonnieren\n5. Monatliche und tägliche Nutzungslimits gelten\n\nMit der Fortsetzung stimmen Sie dieser Datenverarbeitung zu.",
+        fr: "Avant d'utiliser AI Pro, veuillez noter :\n\n1. Le contenu de la capture sera téléversé vers le serveur pour analyse\n2. Le serveur envoie les captures aux services d'IA tiers (ex. DeepSeek)\n3. Le contenu téléversé est utilisé uniquement pour la demande d'analyse en cours, n'est pas conservé à long terme et n'est pas utilisé pour l'entraînement de modèles\n4. Vous devez vous connecter avec Sign in with Apple et vous abonner à AI Pro Monthly\n5. Des limites d'utilisation mensuelles et quotidiennes s'appliquent\n\nEn continuant, vous acceptez ce traitement des données."
+    ) }
+
+    static var aiFirstUseConsentAgreeButton: String { choose(
+        zhHans: "同意并继续",
+        en: "Agree & Continue",
+        ja: "同意して続ける",
+        ko: "동의하고 계속",
+        de: "Zustimmen und fortsetzen",
+        fr: "Accepter et continuer"
+    ) }
+
+    static var aiFirstUseConsentPrivacyButton: String { choose(
+        zhHans: "查看隐私政策",
+        en: "View Privacy Policy",
+        ja: "プライバシーポリシーを見る",
+        ko: "개인정보 처리방침 보기",
+        de: "Datenschutzerklärung anzeigen",
+        fr: "Voir la politique de confidentialité"
+    ) }
+
+    // MARK: - Feature 53.7: Apple 登录提示
+
+    static var aiProLoginPromptTitle: String { choose(
+        zhHans: "需要登录",
+        en: "Sign In Required",
+        ja: "ログインが必要です",
+        ko: "로그인이 필요합니다",
+        de: "Anmeldung erforderlich",
+        fr: "Connexion requise"
+    ) }
+
+    static var aiProLoginPromptMessage: String { choose(
+        zhHans: "使用 AI Pro 功能需要先通过 Sign in with Apple 登录。\n\n登录后，您的订阅状态和 AI 使用额度将从服务器同步。",
+        en: "To use AI Pro, please sign in with Apple first.\n\nAfter signing in, your subscription status and AI usage quota will sync from the server.",
+        ja: "AI Pro をご利用いただくには、Sign in with Apple でログインしてください。\n\nログイン後、サブスクリプション状況と AI 利用枠がサーバーから同期されます。",
+        ko: "AI Pro 기능을 사용하려면 먼저 Sign in with Apple로 로그인해 주세요.\n\n로그인 후 구독 상태와 AI 사용 할당량이 서버에서 동기화됩니다.",
+        de: "Für die Nutzung von AI Pro melden Sie sich bitte zuerst mit Sign in with Apple an.\n\nNach der Anmeldung werden Ihr Abonnementstatus und Ihr KI-Kontingent vom Server synchronisiert.",
+        fr: "Pour utiliser AI Pro, veuillez d'abord vous connecter avec Sign in with Apple.\n\nAprès la connexion, votre statut d'abonnement et votre quota d'utilisation IA seront synchronisés depuis le serveur."
+    ) }
+
+    static var aiProLoginButton: String { choose(
+        zhHans: "使用 Apple 登录",
+        en: "Sign in with Apple",
+        ja: "Apple でサインイン",
+        ko: "Apple로 로그인",
+        de: "Mit Apple anmelden",
+        fr: "Connexion avec Apple"
+    ) }
+
+    static var aiProLoginFailedTitle: String { choose(
+        zhHans: "登录失败",
+        en: "Sign In Failed",
+        ja: "ログインに失敗しました",
+        ko: "로그인 실패",
+        de: "Anmeldung fehlgeschlagen",
+        fr: "Échec de la connexion"
+    ) }
+
+    static var aiProRetryLoginButton: String { choose(
+        zhHans: "重试",
+        en: "Retry",
+        ja: "再試行",
+        ko: "다시 시도",
+        de: "Erneut versuchen",
+        fr: "Réessayer"
+    ) }
+
     static var developerErrorSummaryTitle: String { choose(zhHans: "报错大意", en: "Error Summary", ja: "エラー概要", ko: "오류 요약", de: "Fehlerübersicht", fr: "Résumé de l’erreur") }
     static var developerErrorCausesTitle: String { choose(zhHans: "可能原因", en: "Possible Causes", ja: "考えられる原因", ko: "가능한 원인", de: "Mögliche Ursachen", fr: "Causes possibles") }
     static var developerErrorNextStepsTitle: String { choose(zhHans: "建议下一步", en: "Suggested Next Steps", ja: "次の推奨手順", ko: "다음 권장 단계", de: "Empfohlene nächste Schritte", fr: "Étapes suivantes suggérées") }

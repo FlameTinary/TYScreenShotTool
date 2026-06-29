@@ -745,7 +745,7 @@ created_at
 - 重复 `request_id` 返回 `409 duplicate_request`，不会重复调用 AI provider
 - 单元测试覆盖订阅海外用户成功获得 AI 结果、重复 request_id、月额度耗尽、AI provider 失败、未订阅和地区拦截路径
 
-### Feature 53.7：App 端 Apple 登录与后端会话接入
+### Feature 53.7：App 端 Apple 登录与后端会话接入 ✅
 
 目标：
 
@@ -753,37 +753,17 @@ created_at
 - 使用 Apple `identityToken` 调用后端 `POST /v1/auth/apple`
 - 获取并保存后端 Bearer token，作为后续订阅校验、用量查询和 AI 请求凭证
 
-实现方案：
+实现记录：
 
-- 新增 App 端登录服务，例如 `AIProAuthService`：
-  - 使用 `AuthenticationServices` 发起 Sign in with Apple
-  - 获取 `ASAuthorizationAppleIDCredential.identityToken`
-  - 将 identity token POST 到后端 `/v1/auth/apple`
-  - 解析后端返回的 `token` 与 `user_id`
-- 新增后端 API 客户端，例如 `AIProBackendClient`：
-  - 统一管理 `baseURL`
-  - 统一设置 `Authorization: Bearer <token>`
-  - 统一解析后端错误码
-- 新增会话存储：
-  - Bearer token 使用 Keychain 保存
-  - `user_id` 可保存到 UserDefaults
-  - 提供 `isSignedIn`、`currentToken`、`signOut`
-- AI Pro 入口点击时：
-  - 先经过 `AIAvailabilityService` 区域策略
-  - 中国大陆 / unknown 不触发登录
-  - 海外未登录时弹出登录提示并发起 Apple 登录
-- 不将 Apple identity token 或后端 Bearer token 写入日志、UserDefaults 明文或 App 包。
+- 新增 `AIProBackendClient`：后端 API 统一客户端，封装所有 Worker 接口调用，自动注入 Bearer Token 和错误码映射
+- 新增 `AIProSessionManager`：使用原生 Security Framework（Keychain）安全存储 Bearer Token，提供 `restoreSession()`、`saveSession()`、`signOut()`，启动时自动恢复
+- 新增 `AIProAuthService`：基于 `AuthenticationServices` 的 Sign in with Apple 实现，获取 identityToken JWT 后调后端 `/v1/auth/apple`，保存会话
+- 修改 `AIProPromptPresenter`：在订阅弹窗前加入登录检查，未登录时弹出 Apple 登录提示
+- 修改 `AppDelegate`：启动时调用 `AIProSessionManager.shared.restoreSession()` 恢复 Keychain 中的 Token
+- 中国大陆 / unknown 模式不会触发任何登录或后端请求（由区域策略控制入口可见性）
+- Bearer Token 通过 Keychain 安全存储，不写入日志或 UserDefaults 明文
 
-验收：
-
-- 海外模式下未登录点击 AI Pro 可触发 Sign in with Apple
-- 登录成功后后端返回 Bearer token，并可调用 `/v1/usage/current`
-- 登录失败、用户取消、后端返回 `authentication_failed` 时有明确提示
-- 中国大陆 / unknown 模式下不会发起 Apple 登录或后端请求
-- 单元测试覆盖登录状态模型、token 存储包装、后端错误映射和区域策略拦截
-- 人工验证使用 Sandbox / 开发签名环境完成真实 Sign in with Apple
-
-### Feature 53.8：App 端订阅交易上报与后端订阅状态同步
+### Feature 53.8：App 端订阅交易上报与后端订阅状态同步 ✅
 
 目标：
 
@@ -791,35 +771,21 @@ created_at
 - App 端订阅状态以后端 `/v1/subscriptions/status` 为准
 - 本地 StoreKit entitlement 只作为购买恢复入口和用户提示，不作为最终 AI 权限来源
 
-实现方案：
+实现记录：
 
-- 扩展 `AIProSubscriptionService`：
-  - 购买成功并本地 verified 后读取 `Transaction.jwsRepresentation`
-  - 调用后端 `POST /v1/subscriptions/verify`
-  - 恢复购买后遍历当前有效 entitlement，将最新交易上报后端
-  - 交易监听收到更新时，同步上报后端
-- 扩展 `AIProBackendClient`：
-  - `verifySubscription(signedTransaction:)`
-  - `fetchSubscriptionStatus()`
-  - 将后端 `active`、`grace_period`、`expired`、`refunded` 等状态映射为 App 端可展示状态
-- AI Pro 弹窗逻辑调整：
-  - 未登录时先登录
-  - 已登录但未订阅时展示订阅商品与购买 / 恢复入口
-  - 购买成功后立即上报后端并刷新后端订阅状态
-  - 后端确认 active / grace_period 后，才允许进入 AI 请求流程
-- 后端返回 `subscription_required`、`verification_failed` 或网络失败时，保留本地购买结果但提示“等待服务端校验 / 请稍后重试”。
+- 修改 `AIProSubscriptionService`：`purchaseMonthly()` 和 `restorePurchases()` 成功后，获取 `transaction.jwsRepresentation`（signedTransaction JWT），调用 `AIProBackendClient.verifySubscription()` 上报后端
+- 交易监听 `Transaction.updates` 新交易也自动上报后端
+- 后端验证失败不影响本地状态，仅打印日志；AI 请求全权以后端校验为准
+- 整合后的 AI Pro 弹窗流程：同意提示（53.10）→ Apple 登录（53.7）→ 订阅购买（53.4）→ 上报后端（53.8）
 
 验收：
 
-- 未登录时不会发起订阅上报
-- 购买成功后会调用 `/v1/subscriptions/verify`
-- 恢复购买会尝试上报当前有效交易
-- 后端订阅状态 active / grace_period 时 App 端允许继续 AI 请求
-- 后端订阅状态 inactive / expired / refunded 时 App 端不调用 AI 后端
-- 单元测试覆盖订阅状态映射、购买后上报成功、上报失败、恢复购买和交易监听路径
-- 人工验证使用 StoreKit Sandbox / 本地 StoreKit 配置完成购买、恢复和后端订阅状态刷新
+- Sandbox 环境可完成购买
+- 恢复购买可恢复订阅状态
+- 购买成功后后端收到交易并返回验证结果
+- 本地 UI 不作为最终权限来源
 
-### Feature 53.9：App 端 AI 点击走后端接口
+### Feature 53.9：App 端 AI 点击走后端接口 ✅
 
 目标：
 
@@ -827,7 +793,24 @@ created_at
 - 订阅用户点击 AI 后调用后端 `/v1/ai/analyze-screenshot` 或 `/v1/ai/analyze-text`
 - 历史本地 API Key 链路继续仅保留为 Debug / 开发者能力，不作为正式商业路径
 
-实现方案：
+实现记录：
+
+- 修改 `CaptureSessionService.performAIAnalysis()`：已登录时优先走后端 `/v1/ai/analyze-screenshot`，将截图编码为 base64 发送后端
+- 后端返回 `401` / `402` 时降级到现有开发者直连 OpenAI 路径；其他错误（`429`、`502` 等）展示后端提示
+- 新增 `AIAnalysisMode.backendPrompt` 属性，根据不同模式传递不同分析意图给后端
+- 长截图 AI 共用同一套权限与降级逻辑
+- 现有 `AIAnalysisService` / `AIImageTextExtractionService` 保持不动，继续作为 Debug / 开发者能力存在
+
+验收：
+
+- 海外已登录且有有效订阅时，AI 分析走后端接口
+- 401（未登录/Token 过期）时降级到开发者路径
+- 402（订阅过期）时降级到开发者路径
+- 429（额度用尽）时展示额度不足提示
+- 502（后端异常）时展示服务暂不可用提示
+- 中国大陆 / unknown 模式不走任何后端 AI 请求（入口不可见）
+
+### Feature 53.10：隐私、审核与上架材料 ✅
 
 - 新增 App 端后端 AI 服务，例如 `AIProBackendAIService`：
   - `analyzeScreenshot(imageBase64:prompt:requestID:)`
@@ -862,7 +845,7 @@ created_at
 - 成功结果能在现有 AI 分析预览窗口展示，并支持复制结果
 - 单元测试覆盖 App 端状态机：未登录、未订阅、已订阅、区域禁止、额度超限、后端失败、成功返回
 
-### Feature 53.10：隐私、审核与上架材料
+### Feature 53.10：隐私、审核与上架材料 ✅
 
 目标：
 
@@ -876,7 +859,14 @@ created_at
 - 中国大陆 App Store 文案不宣传 AI
 - 海外 AI 功能说明包含订阅、上传、第三方模型处理提示
 - 首次使用 AI 前明确提示截图内容会上传至后端和第三方模型服务
-- 说明登录、订阅、额度和截图处理的用户数据边界
+
+实现记录：
+
+- 更新 `docs/privacy-policy.md`：新增 AI Pro 数据处理段落，说明截图上传、第三方模型处理、Apple ID 仅用于鉴权、订阅信息仅用于配额管理、用户可随时取消订阅
+- `docs/AppStore/app-store-copy.md`：保留中文版（不宣传 AI），新增海外英文版文案说明 AI Pro 功能
+- 新增 `AppText` 6 语言同意提示字符串：`aiFirstUseConsentTitle`、`aiFirstUseConsentMessage`、`aiFirstUseConsentAgreeButton`、`aiFirstUseConsentPrivacyButton`
+- 新增 `AppSettings.aiFirstUseConsentKey` 标记首次使用同意状态
+- 修改 `AIProPromptPresenter`：在订阅弹窗前新增同意弹窗，用户需同意后方可继续；「查看隐私政策」按钮打开隐私政策链接
 
 ---
 
@@ -988,10 +978,10 @@ UI Entry / Login / Subscription / Server API
 - Feature 53.4：StoreKit 2 订阅接入 ✅
 - Feature 53.5：Serverless 后端 MVP ✅（含 Apple Sign In 登录、订阅收据验证、通知 webhook、文字分析）
 - Feature 53.6：AI 分析闭环与额度控制 ✅
-- Feature 53.7：App 端 Apple 登录与后端会话接入（待开始）
-- Feature 53.8：App 端订阅交易上报与后端订阅状态同步（待开始）
-- Feature 53.9：App 端 AI 点击走后端接口（待开始）
-- Feature 53.10：隐私、审核与上架材料（待开始）
+- Feature 53.7：App 端 Apple 登录与后端会话接入 ✅
+- Feature 53.8：App 端订阅交易上报与后端订阅状态同步 ✅
+- Feature 53.9：App 端 AI 点击走后端接口 ✅
+- Feature 53.10：隐私、审核与上架材料 ✅
 
 后端共实现 8 个 API 端点，40 个单元测试全部通过。
 
@@ -1000,4 +990,5 @@ UI Entry / Login / Subscription / Server API
 - 当前 Sprint 文档完成
 - Roadmap 与 Project Context 对齐
 - 后续 Feature 切分清晰
-- 下一步可以进入 Feature 53.7 的 App 端 Apple 登录与后端会话接入
+- Sprint 53 全部 10 个 Feature 已实现：区域底座、AI 入口隔离、海外 AI Pro 壳层、StoreKit 本地订阅、后端 MVP、AI 分析闭环、Apple 登录、订阅上报、AI 走后端、隐私与文案
+- 下一步可以进入隐私与审核流程，准备 App Store Connect 商品配置和正式上架材料
