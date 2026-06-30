@@ -125,6 +125,13 @@ final class AIProSubscriptionService {
                     return status
                 }
 
+                print("[AI Pro Subscription] Purchase transaction received:")
+                print("  - id: \(transaction.id)")
+                print("  - productID: \(transaction.productID)")
+                print("  - purchaseDate: \(transaction.purchaseDate)")
+                print("  - appAccountToken: \(transaction.appAccountToken?.uuidString ?? "nil")")
+                print("  - jwsRepresentation: \(verification.jwsRepresentation.prefix(100))...")
+
                 let backendConfirmed = await reportVerificationToBackend(verification)
                 if backendConfirmed {
                     await transaction.finish()
@@ -167,7 +174,12 @@ final class AIProSubscriptionService {
                     continue
                 }
                 
-                print("[AI Pro Subscription] Restored transaction for \(transaction.productID)")
+                print("[AI Pro Subscription] Restored transaction for \(transaction.productID):")
+                print("  - id: \(transaction.id)")
+                print("  - productID: \(transaction.productID)")
+                print("  - purchaseDate: \(transaction.purchaseDate)")
+                print("  - appAccountToken: \(transaction.appAccountToken?.uuidString ?? "nil")")
+                print("  - jwsRepresentation: \(result.jwsRepresentation.prefix(100))...")
 
                 if await reportVerificationToBackend(result) {
                     let product = await monthlyProductViewModel(fallbackID: transaction.productID)
@@ -190,6 +202,7 @@ final class AIProSubscriptionService {
             }
             return refreshedStatus
         } catch {
+            print("[AI Pro Subscription] Restore purchases failed: \(error.localizedDescription)")
             status = .failed(error.localizedDescription)
             return status
         }

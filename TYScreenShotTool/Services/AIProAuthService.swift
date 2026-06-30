@@ -96,7 +96,33 @@ extension AIProAuthService: ASAuthorizationControllerDelegate {
             }
 
             do {
-                print("[AI Pro Auth] Apple login credential received")
+                print("[AI Pro Auth] Apple login credential received:")
+                print("  - user: \(credential.user)")
+                print("  - identityToken: \(identityToken.prefix(50))...")
+                
+                if let authCodeData = credential.authorizationCode,
+                   let authCode = String(data: authCodeData, encoding: .utf8) {
+                    print("  - authorizationCode: \(authCode.prefix(50))...")
+                } else {
+                    print("  - authorizationCode: nil")
+                }
+                
+                print("  - email: \(credential.email ?? "nil")")
+                
+                if let fullName = credential.fullName {
+                    print("  - fullName.givenName: \(fullName.givenName ?? "nil")")
+                    print("  - fullName.familyName: \(fullName.familyName ?? "nil")")
+                    print("  - fullName.middleName: \(fullName.middleName ?? "nil")")
+                    print("  - fullName.namePrefix: \(fullName.namePrefix ?? "nil")")
+                    print("  - fullName.nameSuffix: \(fullName.nameSuffix ?? "nil")")
+                    print("  - fullName.nickname: \(fullName.nickname ?? "nil")")
+                } else {
+                    print("  - fullName: nil")
+                }
+                
+                print("  - realUserStatus: \(credential.realUserStatus.rawValue)")
+                print("  - state: \(credential.state ?? "nil")")
+                
                 let response = try await self.backendClient.authApple(identityToken: identityToken)
                 self.complete(response: response)
             } catch {
