@@ -399,16 +399,26 @@ final class AIProBackendClient {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
+        // 日志：发送请求前
+        TYLogger.info("Sending \(method) request to: \(url.absoluteString)", tag: "AI Pro Backend")
+        if let body {
+            TYLogger.debug("Request body: \(body)", tag: "AI Pro Backend")
+        }
+
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            TYLogger.error("Request failed: \(error.localizedDescription)", tag: "AI Pro Backend", error: error)
             throw AIProBackendError.serverError(error.localizedDescription)
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIProBackendError.serverError("Invalid response")
         }
+
+        // 日志：响应状态
+        TYLogger.info("Response received: HTTP \(httpResponse.statusCode)", tag: "AI Pro Backend")
 
         try mapHTTPError(statusCode: httpResponse.statusCode, data: data)
         return data

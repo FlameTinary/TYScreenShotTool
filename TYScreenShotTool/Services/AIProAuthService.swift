@@ -146,9 +146,15 @@ extension AIProAuthService: ASAuthorizationControllerDelegate {
             do {
                 TYLogger.logAppleCredential(credential)
                 
+                TYLogger.info("Starting backend authApple request...", tag: "AI Pro Auth")
                 let response = try await self.backendClient.authApple(identityToken: identityToken)
+                TYLogger.info("Backend authApple request completed successfully", tag: "AI Pro Auth")
+                TYLogger.debug("Bearer token received: \(response.token.prefix(20))...", tag: "AI Pro Auth")
+                TYLogger.debug("User ID: \(response.user_id)", tag: "AI Pro Auth")
+                
                 self.complete(response: response)
             } catch {
+                TYLogger.error("Backend authApple request failed", tag: "AI Pro Auth", error: error)
                 self.fail(error: error)
             }
         }
