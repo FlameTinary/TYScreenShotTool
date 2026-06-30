@@ -416,14 +416,50 @@ defaults delete com.sheldon.TShot debug.runStoreKitSandboxTests
 - 当前 API 可校验 Bearer 登录态、地区 allowlist、订阅状态、日/月额度、`request_id` 幂等和图片大小
 - `POST /v1/ai/analyze-screenshot` 在通过前置校验后会调用后端配置的 OpenAI Responses API，并写入 `usage_records`、扣减 `monthly_quotas`
 - Sign in with Apple、StoreKit signed transaction 校验、Apple Server Notifications V2 和 App 端 AI Pro 接入已完成代码链路；正式上线前仍需用 Sandbox / TestFlight 和 App Store Connect 商品做真实端到端验证
+- Debug 构建默认请求本地 Worker：`http://127.0.0.1:8787`
+- Release 构建默认请求正式 Worker：`https://tshot-ai-backend.tshot.workers.dev`
+- Worker dev 环境通过 `wrangler dev --env dev` 启动，并连接本地 Supabase：`http://127.0.0.1:54321`
+- Worker 正式环境连接正式 Supabase 项目，`SUPABASE_URL` 与 `SUPABASE_SERVICE_ROLE_KEY` 通过 Cloudflare secrets 配置
 
 后端本地验证：
 
+推荐使用一键脚本：
+
 ```bash
+./scripts/start_local_backend.sh
+
 cd backend/worker
-npm install
 npm test
 npm run typecheck
+```
+
+如果不使用一键脚本，手动启动顺序如下：
+
+```bash
+colima start
+
+cd backend/supabase
+supabase start
+
+cd ../worker
+cp .dev.vars.example .dev.vars # 首次需要，然后填入本地 SERVICE_ROLE_KEY
+npm run dev
+```
+
+停止本地后端：
+
+```bash
+./scripts/stop_local_backend.sh
+```
+
+如果不使用一键脚本，手动停止顺序如下：
+
+```bash
+screen -S tshot-worker-dev -X quit # 如果 Worker 是通过一键脚本启动的
+# 或在运行 npm run dev 的终端按 Ctrl+C
+
+cd backend/supabase
+supabase stop
 ```
 
 可选配置 `Base URL`：

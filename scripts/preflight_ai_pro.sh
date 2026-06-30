@@ -90,13 +90,18 @@ require_contains "$LOCAL_STOREKIT_MIGRATION_FILE" "'LocalTesting'" "Supabase sub
 if rg -q "StoreKitConfigurationFileReference" "$RELEASE_SCHEME_FILE"; then
   fail "Release scheme must not use a local StoreKit configuration; Sandbox/TestFlight verification needs App Store StoreKit."
 fi
-if rg -q '"ALLOW_LOCAL_STOREKIT_TRANSACTIONS"\s*:\s*"(true|1)"' "$WRANGLER_FILE"; then
+default_worker_config="$(
+  awk '
+    index($0, "\"env\"") { exit }
+    { print }
+  ' "$WRANGLER_FILE"
+)"
+if [[ "$default_worker_config" =~ \"ALLOW_LOCAL_STOREKIT_TRANSACTIONS\"[[:space:]]*:[[:space:]]*\"(true|1)\" ]]; then
   fail "Worker default config must not enable local Xcode StoreKit transaction verification."
 fi
-if rg -q 'ALLOW_LOCAL_STOREKIT_TRANSACTIONS' "$WORKER_TYPES_FILE"; then
-  fail "Generated Worker types must not include local Xcode StoreKit transaction verification in default vars."
-fi
-pass "Worker defaults are suitable for AI Pro screenshot analysis."
+require_contains "$WORKER_TYPES_FILE" 'interface DevEnv' "Generated Worker types must include the dev environment after wrangler env changes."
+require_contains "$WORKER_TYPES_FILE" 'SUPABASE_URL: "http://127.0.0.1:54321"' "Generated Worker dev types must point to local Supabase."
+pass "Worker default config is production-safe, and dev config points to local Supabase."
 
 require_contains "$PACKAGE_FILE" '"@apple/app-store-server-library"' "Apple App Store Server library dependency is missing."
 if rg -q '^import \{ Environment, SignedDataVerifier \} from "@apple/app-store-server-library";' "$ROOT_DIR/backend/worker/src/appleAuth.ts"; then

@@ -60,6 +60,7 @@ AI 订阅服务区域化底座
 - 后续 Feature 拆分与验收口径
 - App 端 AI Pro 登录、订阅、后端 AI 请求链路第一版闭环
 - Cloudflare Workers + Supabase 后端登录、订阅、通知、AI 转发与额度控制 MVP
+- Debug / Release 后端环境分流：Debug 默认连接本地 Worker dev + 本地 Supabase，Release 默认连接正式 Worker + 正式 Supabase
 
 ---
 

@@ -105,6 +105,8 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
   - 单元测试与测试辅助
 - `backend/`
   - Cloudflare Workers 后端 MVP、Supabase schema 与后端测试
+  - Debug 本地开发默认使用 Worker dev 环境和本地 Supabase
+  - Release 默认使用正式 Worker 和正式 Supabase
 
 最关键的编排核心是 `CaptureSessionService`：
 
@@ -221,6 +223,8 @@ TShot 是一个面向真实用户持续演进的 macOS 原生截图产品，而�
 - 中国大陆模式与 unknown / nil storefront 下，即使写入本地 API Key，也不能发起商业 AI 请求
 - 海外模式下 AI Pro 入口已接入首次使用同意、Sign in with Apple、StoreKit 2 购买 / 恢复、后端订阅状态同步和后端 AI 分析请求
 - `backend/` 已提供 Cloudflare Workers + Supabase 后端 MVP，可测试登录态、地区、订阅、额度、幂等、图片大小、AI 转发、usage 记录和月额度扣减；已包含 Apple 登录 JWT 校验、App Store signed transaction 校验和 App Store Server Notification webhook
+- Debug 构建默认连接本机 Worker dev 环境 `http://127.0.0.1:8787`，Worker dev 环境连接本地 Supabase `http://127.0.0.1:54321`
+- Release 构建默认连接正式 Worker `https://tshot-ai-backend.tshot.workers.dev`，正式 Worker 通过 Cloudflare secrets 连接正式 Supabase
 - AI 链路要特别注意失败回退、无结果语义和人工验证
 
 Sprint 53 起，AI 商业化方向采用区域化策略：

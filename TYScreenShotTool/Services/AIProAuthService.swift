@@ -144,32 +144,11 @@ extension AIProAuthService: ASAuthorizationControllerDelegate {
             }
 
             do {
-                print("[AI Pro Auth] Apple login credential received:")
-                print("  - user: \(credential.user)")
-                print("  - identityToken: \(identityToken.prefix(50))...")
-                
-                if let authCodeData = credential.authorizationCode,
-                   let authCode = String(data: authCodeData, encoding: .utf8) {
-                    print("  - authorizationCode: \(authCode.prefix(50))...")
-                } else {
-                    print("  - authorizationCode: nil")
-                }
-                
-                print("  - email: \(credential.email ?? "nil")")
-                
-                if let fullName = credential.fullName {
-                    print("  - fullName.givenName: \(fullName.givenName ?? "nil")")
-                    print("  - fullName.familyName: \(fullName.familyName ?? "nil")")
-                    print("  - fullName.middleName: \(fullName.middleName ?? "nil")")
-                    print("  - fullName.namePrefix: \(fullName.namePrefix ?? "nil")")
-                    print("  - fullName.nameSuffix: \(fullName.nameSuffix ?? "nil")")
-                    print("  - fullName.nickname: \(fullName.nickname ?? "nil")")
-                } else {
-                    print("  - fullName: nil")
-                }
-                
+                // Apple 登录凭据包含 identity token、authorization code、邮箱和姓名等敏感信息。
+                // 这里仅记录不可反推出用户身份的状态字段，避免 Debug 日志泄露认证材料。
+                print("[AI Pro Auth] Apple login credential received")
                 print("  - realUserStatus: \(credential.realUserStatus.rawValue)")
-                print("  - state: \(credential.state ?? "nil")")
+                print("  - hasState: \(credential.state?.isEmpty == false)")
                 
                 let response = try await self.backendClient.authApple(identityToken: identityToken)
                 self.complete(response: response)

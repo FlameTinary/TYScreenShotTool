@@ -21,6 +21,8 @@ xcuserdata/
 # Node / backend
 node_modules/
 backend/worker/node_modules/
+backend/supabase/.branches/
+backend/supabase/.temp/
 backend/worker/supabase/.temp/
 .wrangler/
 

@@ -1,0 +1,13 @@
+# Copy this file to `.dev.vars` for local `wrangler dev --env dev`.
+#
+# `SUPABASE_URL` is defined in `wrangler.jsonc` dev vars as http://127.0.0.1:54321.
+# Keep `SUPABASE_SERVICE_ROLE_KEY` out of git and copy the local value from:
+#
+#   cd backend/supabase
+#   supabase status
+
+SUPABASE_SERVICE_ROLE_KEY=replace-with-local-service-role-key
+OPENAI_API_KEY=replace-with-local-or-test-openai-key
+APPLE_ROOT_CERTIFICATES_PEM="-----BEGIN CERTIFICATE-----
+replace-with-apple-root-certificate-pem
+-----END CERTIFICATE-----"

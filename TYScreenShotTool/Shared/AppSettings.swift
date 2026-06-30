@@ -59,8 +59,15 @@ enum AppSettings {
 
     /// 后端 API 基础 URL
     static let backendBaseURLKey = "settings.backendBaseURL"
-    /// 后端 API 基础 URL 默认值
+    /// 后端 API 基础 URL 默认值。
+    ///
+    /// Debug 构建默认连接本机 `wrangler dev --env dev`，该 Worker dev 环境再连接本地 Supabase。
+    /// Release 构建默认连接正式 Cloudflare Worker，避免正式用户误连本地或开发服务。
+    #if DEBUG
+    static let backendBaseURLDefaultValue = "http://127.0.0.1:8787"
+    #else
     static let backendBaseURLDefaultValue = "https://tshot-ai-backend.tshot.workers.dev"
+    #endif
     /// AI Pro 订阅状态缓存，用于启动后快速判断工具栏 AI 入口权限。
     static let aiProSubscriptionStatusCacheKey = "aiPro.subscriptionStatusCache"
 

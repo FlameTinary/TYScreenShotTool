@@ -22,6 +22,10 @@ Worker 仅在通过身份验证、地区、订阅、配额、请求格式、幂�
 
 ```bash
 npm install
+# 一键启动本地 Supabase + Worker dev
+../../scripts/start_local_backend.sh
+# 一键停止本地 Supabase + Worker dev
+../../scripts/stop_local_backend.sh
 # 运行单元测试
 npm test
 # 类型检查
@@ -44,6 +48,14 @@ npx wrangler deploy
 - `APPLE_BUNDLE_ID`：Apple 登录、StoreKit 交易和 App Store Server Notifications 校验使用的 Bundle ID，当前为 `com.sheldon.TShot`。
 - `APPLE_APP_ID`：App Store Connect 中的 Apple App ID；生产环境 StoreKit / 通知 JWS 校验需要，Sandbox 可为空。
 - `ALLOW_LOCAL_STOREKIT_TRANSACTIONS`：仅本地开发 / 临时测试使用。设为 `true` 或 `1` 时允许 Xcode / LocalTesting StoreKit 交易写入订阅；生产环境必须保持未设置或 `false`。
+
+环境约定：
+
+- Debug App 默认请求 `http://127.0.0.1:8787`。
+- Worker dev 环境通过 `npm run dev` 启动，即 `wrangler dev --env dev`。
+- Worker dev 环境的 `SUPABASE_URL` 固定为本地 Supabase API：`http://127.0.0.1:54321`。
+- Release App 默认请求正式 Worker：`https://tshot-ai-backend.tshot.workers.dev`。
+- Worker 默认环境为正式环境，Supabase 连接信息通过 Cloudflare secrets 指向正式 Supabase 项目。
 
 密钥必须通过 Wrangler 设置，不可提交：
 
@@ -175,14 +187,64 @@ curl -i -X POST https://tshot-ai-backend.tshot.workers.dev/v1/ai/analyze-screens
 
 本地开发：
 
+推荐使用一键脚本：
+
 ```bash
-# 启动本地开发服务器
-npx wrangler dev
+# 启动本地 Supabase + Worker dev。需要 Colima/Docker 已可用。
+./scripts/start_local_backend.sh
+```
+
+如果不使用一键脚本，手动启动顺序如下：
+
+```bash
+# 1. 启动容器运行时。
+colima start
+
+# 2. 启动本地 Supabase。
+cd backend/supabase
+supabase start
+
+# 3. 首次启动时创建 Worker 本地密钥文件。
+supabase status --output json
+cd ../worker
+cp .dev.vars.example .dev.vars
+
+# 4. 将 supabase status 输出中的 SERVICE_ROLE_KEY 写入 .dev.vars。
+#    .dev.vars 被 git 忽略，不要提交真实密钥。
+
+# 5. 启动 Worker dev 环境。
+npm run dev
 ```
 
 本地服务启动后，可通过以下地址访问：
 
 - http://localhost:8787
+- http://127.0.0.1:8787
+
+本地 Supabase 服务地址：
+
+- API：`http://127.0.0.1:54321`
+- DB：`postgresql://postgres:postgres@127.0.0.1:54322/postgres`
+- Studio：`http://127.0.0.1:54323`
+
+停止本地开发服务：
+
+推荐使用一键脚本：
+
+```bash
+./scripts/stop_local_backend.sh
+```
+
+如果不使用一键脚本，手动停止顺序如下：
+
+```bash
+# 如果 Worker 在当前终端前台运行，按 Ctrl+C。
+# 如果 Worker 是通过一键脚本启动的 detached screen session：
+screen -S tshot-worker-dev -X quit
+
+cd backend/supabase
+supabase stop
+```
 
 测试API调用：
 
