@@ -23,6 +23,7 @@ node_modules/
 backend/worker/node_modules/
 backend/supabase/.branches/
 backend/supabase/.temp/
+backend/supabase/snippets/*
 backend/worker/supabase/.temp/
 .wrangler/
 
