@@ -67,6 +67,7 @@ final class AIProAuthService: NSObject {
     private func complete(response: AuthAppleResponse) {
         guard !hasResumed else { return }
         hasResumed = true
+        sessionManager.saveSession(token: response.token, userID: response.user_id)
         continuation?.resume(returning: response)
         continuation = nil
     }
@@ -95,6 +96,7 @@ extension AIProAuthService: ASAuthorizationControllerDelegate {
             }
 
             do {
+                print("[AI Pro Auth] Apple login credential received")
                 let response = try await self.backendClient.authApple(identityToken: identityToken)
                 self.complete(response: response)
             } catch {

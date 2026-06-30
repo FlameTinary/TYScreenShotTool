@@ -43,6 +43,7 @@ npx wrangler deploy
 - `AI_MAX_OUTPUT_TOKENS`：每次请求的最大输出 token 数。
 - `APPLE_BUNDLE_ID`：Apple 登录、StoreKit 交易和 App Store Server Notifications 校验使用的 Bundle ID，当前为 `com.sheldon.TShot`。
 - `APPLE_APP_ID`：App Store Connect 中的 Apple App ID；生产环境 StoreKit / 通知 JWS 校验需要，Sandbox 可为空。
+- `ALLOW_LOCAL_STOREKIT_TRANSACTIONS`：仅本地开发 / 临时测试使用。设为 `true` 或 `1` 时允许 Xcode / LocalTesting StoreKit 交易写入订阅；生产环境必须保持未设置或 `false`。
 
 密钥必须通过 Wrangler 设置，不可提交：
 
@@ -248,7 +249,7 @@ defaults write com.sheldon.TShot settings.backendBaseURL -string "https://tshot-
 
 ## Supabase
 
-迁移文件路径：`backend/supabase/migrations/202606280001_ai_backend_mvp.sql`
+迁移文件路径：`backend/supabase/migrations/202606280001_ai_backend_mvp.sql`、`backend/supabase/migrations/202606300001_allow_local_storekit_subscription_environment.sql`
 
 该架构为所有基础表启用了行级安全（RLS）。Worker 使用来自 Cloudflare 密钥的 Supabase 服务角色密钥，因此在 MVP 阶段，终端用户客户端不应获得直接的表访问权限。
 

@@ -64,7 +64,7 @@ export interface StoreKitTransactionPayload {
   /** 应用的 Bundle Identifier */
   bundleId: string;
   /** 交易环境 */
-  environment: "Sandbox" | "Production";
+  environment: "Sandbox" | "Production" | "Xcode" | "LocalTesting";
   /** 订阅到期时间（Unix 毫秒时间戳），仅自动续期订阅有此字段 */
   expiresDate?: number | undefined;
   /** 购买时间（Unix 毫秒时间戳） */
@@ -101,6 +101,8 @@ export interface AppStoreSignedDataVerificationConfig {
   rootCertificatesPem?: string;
   /** App Store Connect 中的 Apple App ID。生产环境 JWS 校验需要该值。 */
   appAppleId?: string;
+  /** 是否允许 Xcode / LocalTesting StoreKit 交易。仅限本地开发和测试环境开启。 */
+  allowLocalTestingTransactions?: boolean;
 }
 
 /** 公钥缓存 */
@@ -175,7 +177,7 @@ export async function verifyStoreKitTransactionJWT(
   if (!originalTransactionId) throw new Error("StoreKit JWT missing originalTransactionId");
   if (!productId) throw new Error("StoreKit JWT missing productId");
 
-  const normalizedEnv = environment === "Sandbox" ? "Sandbox" : "Production";
+  const normalizedEnv = normalizeStoreKitEnvironment(environment);
 
   return {
     transactionId,
@@ -276,14 +278,41 @@ async function makeSignedDataVerifiers(
   config: AppStoreSignedDataVerificationConfig
 ){
   const { Environment, SignedDataVerifier } = await import("@apple/app-store-server-library");
+  const localTestingVerifiers = config.allowLocalTestingTransactions
+    ? [
+        new SignedDataVerifier([], false, Environment.XCODE, bundleId),
+        new SignedDataVerifier([], false, Environment.LOCAL_TESTING, bundleId)
+      ]
+    : [];
+
+  if (!config.rootCertificatesPem?.trim()) {
+    if (localTestingVerifiers.length > 0) {
+      return localTestingVerifiers;
+    }
+    throw new Error("Missing APPLE_ROOT_CERTIFICATES_PEM for App Store signed data verification");
+  }
+
   const rootCertificates = parseRootCertificates(config.rootCertificatesPem);
   const appAppleId = parseAppAppleId(config.appAppleId);
   const enableOnlineChecks = true;
 
   return [
+    ...localTestingVerifiers,
     new SignedDataVerifier(rootCertificates, enableOnlineChecks, Environment.SANDBOX, bundleId),
     new SignedDataVerifier(rootCertificates, enableOnlineChecks, Environment.PRODUCTION, bundleId, appAppleId)
   ];
+}
+
+function normalizeStoreKitEnvironment(environment: unknown): StoreKitTransactionPayload["environment"] {
+  switch (environment) {
+    case "Sandbox":
+    case "Production":
+    case "Xcode":
+    case "LocalTesting":
+      return environment;
+    default:
+      return "Production";
+  }
 }
 
 function parseRootCertificates(rootCertificatesPem?: string): Buffer[] {

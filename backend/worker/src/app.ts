@@ -1,5 +1,7 @@
 import { verifyAppleJWT, verifyAppStoreNotificationJWT, verifyStoreKitTransactionJWT, type AppStoreNotificationPayload, type AppStoreSignedDataVerificationConfig, type StoreKitTransactionPayload } from "./appleAuth";
 
+const AI_PRO_MONTHLY_PRODUCT_ID = "tshot.pro.monthly";
+
 /**
  * 用户订阅状态枚举
  * @enum {string}
@@ -213,6 +215,8 @@ export interface BackendEnv {
   APPLE_ROOT_CERTIFICATES_PEM?: string;
   /** App Store Connect 中的 Apple App ID，生产环境 JWS 校验需要 */
   APPLE_APP_ID?: string;
+  /** 是否允许 Xcode / LocalTesting StoreKit 交易，仅限本地开发或测试环境开启 */
+  ALLOW_LOCAL_STOREKIT_TRANSACTIONS?: string;
 }
 
 /**
@@ -537,6 +541,16 @@ async function handleVerifySubscription(context: AuthenticatedContext): Promise<
     return json({ error: "verification_failed" }, 401);
   }
 
+  if (transaction.productId !== AI_PRO_MONTHLY_PRODUCT_ID) {
+    console.error(
+      JSON.stringify({
+        event: "storekit_unknown_product",
+        product_id: transaction.productId
+      })
+    );
+    return json({ error: "invalid_product" }, 400);
+  }
+
   // 判断订阅状态：根据 expiresDate 判断是否有效
   const now = Date.now();
   const status = transaction.expiresDate && transaction.expiresDate > now ? "active" : "expired";
@@ -609,6 +623,16 @@ async function handleAppleNotification(context: RequestContext): Promise<Respons
       JSON.stringify({
         event: "apple_notification_transaction_verification_failed",
         error: error instanceof Error ? error.message : "unknown"
+      })
+    );
+    return json({}, 200);
+  }
+
+  if (transaction.productId !== AI_PRO_MONTHLY_PRODUCT_ID) {
+    console.error(
+      JSON.stringify({
+        event: "apple_notification_unknown_product",
+        product_id: transaction.productId
       })
     );
     return json({}, 200);
@@ -953,8 +977,18 @@ function appStoreSignedDataConfig(env: BackendEnv): AppStoreSignedDataVerificati
     ...(env.APPLE_ROOT_CERTIFICATES_PEM !== undefined
       ? { rootCertificatesPem: env.APPLE_ROOT_CERTIFICATES_PEM }
       : {}),
-    ...(env.APPLE_APP_ID !== undefined ? { appAppleId: env.APPLE_APP_ID } : {})
+    ...(env.APPLE_APP_ID !== undefined ? { appAppleId: env.APPLE_APP_ID } : {}),
+    ...(parseBooleanEnv(env.ALLOW_LOCAL_STOREKIT_TRANSACTIONS)
+      ? { allowLocalTestingTransactions: true }
+      : {})
   };
+}
+
+function parseBooleanEnv(value?: string): boolean {
+  if (!value) {
+    return false;
+  }
+  return value.trim().toLowerCase() === "true" || value.trim() === "1";
 }
 
 /**

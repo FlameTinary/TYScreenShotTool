@@ -151,7 +151,8 @@ final class AIProSubscriptionService {
             return status
         }
     }
-
+    /// 恢复订阅
+    /// - Returns: 订阅状态
     func restorePurchases() async -> AIProSubscriptionStatus {
         do {
             status = .loading
@@ -165,6 +166,9 @@ final class AIProSubscriptionService {
                       transaction.productID == AIProSubscriptionProductID.monthly else {
                     continue
                 }
+                
+                print("[AI Pro Subscription] Restored transaction for \(transaction.productID)")
+
                 if await reportVerificationToBackend(result) {
                     let product = await monthlyProductViewModel(fallbackID: transaction.productID)
                     let restoredStatus = AIProSubscriptionStatus.subscribed(product)
@@ -224,7 +228,7 @@ private extension AIProSubscriptionService {
     /// 将 StoreKit 交易验证结果中的 signedTransaction (JWS) 上报后端
     func reportVerificationToBackend(_ verification: VerificationResult<Transaction>) async -> Bool {
         let jws = verification.jwsRepresentation
-
+        print("[AI Pro Subscription] Reporting StoreKit verification to backend")
         do {
             let response = try await backendClient.verifySubscription(signedTransaction: jws)
             print("[AI Pro Subscription] Backend verify success: \(response.status)")

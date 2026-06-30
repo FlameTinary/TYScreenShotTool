@@ -284,6 +284,24 @@ enum AppText {
         fr: "Déconnexion"
     ) }
 
+    static var settingsSwitchAppleAccount: String { choose(
+        zhHans: "使用其他 Apple 账号登录",
+        en: "Use Another Apple Account",
+        ja: "別の Apple アカウントでログイン",
+        ko: "다른 Apple 계정으로 로그인",
+        de: "Anderes Apple Konto verwenden",
+        fr: "Utiliser un autre compte Apple"
+    ) }
+
+    static var settingsSandboxAccountHint: String { choose(
+        zhHans: "调试说明：App Store 沙盒账户只用于 StoreKit 订阅购买和恢复购买测试；Sign in with Apple 会使用当前 macOS 系统 Apple Account。若购买弹窗显示 [Environment: Xcode]，说明当前使用的是本地 StoreKit；真实 App Store Connect 沙盒验证请使用 Release scheme 或 TestFlight。",
+        en: "Debug note: App Store sandbox accounts are only used for StoreKit subscription purchase and restore tests; Sign in with Apple uses the current macOS system Apple Account. If the purchase sheet shows [Environment: Xcode], you are using local StoreKit. Use the Release scheme or TestFlight for real App Store Connect Sandbox testing.",
+        ja: "デバッグ注記：App Store サンドボックスアカウントは StoreKit のサブスクリプション購入と復元テストにのみ使用されます。Sign in with Apple は現在の macOS システムの Apple Account を使用します。[Environment: Xcode] が表示される場合はローカル StoreKit です。実際の App Store Connect Sandbox テストには Release scheme または TestFlight を使用してください。",
+        ko: "디버그 참고: App Store 샌드박스 계정은 StoreKit 구독 구매 및 복원 테스트에만 사용됩니다. Sign in with Apple은 현재 macOS 시스템 Apple Account를 사용합니다. 구매 창에 [Environment: Xcode]가 표시되면 로컬 StoreKit입니다. 실제 App Store Connect Sandbox 테스트에는 Release scheme 또는 TestFlight를 사용하세요.",
+        de: "Debug-Hinweis: App Store Sandbox-Accounts werden nur fuer StoreKit-Abokaeufe und Wiederherstellungstests verwendet; Sign in with Apple nutzt den aktuellen macOS-System-Apple-Account. Wenn der Kaufdialog [Environment: Xcode] zeigt, verwenden Sie lokales StoreKit. Nutzen Sie das Release scheme oder TestFlight fuer echte App Store Connect Sandbox-Tests.",
+        fr: "Note de debogage : les comptes sandbox App Store servent uniquement aux tests d'achat et de restauration StoreKit ; Sign in with Apple utilise l'Apple Account systeme macOS actuel. Si la fenetre d'achat affiche [Environment: Xcode], vous utilisez StoreKit local. Utilisez le Release scheme ou TestFlight pour tester le vrai sandbox App Store Connect."
+    ) }
+
     static func settingsSignedInAs(_ userID: String) -> String { choose(
         zhHans: "已登录：\(userID)",
         en: "Signed in: \(userID)",

@@ -12,10 +12,14 @@ final class AIProSessionManager {
 
     private let tokenKey = "bearer-token"
     private let userIDKey = "aiProUserID"
-    private let keychainService = "com.tshot.app.aiProSession"
+    private let keychainService: String
 
-    private init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        keychainService: String = "com.tshot.app.aiProSession"
+    ) {
         self.userDefaults = userDefaults
+        self.keychainService = keychainService
     }
 
     // MARK: - Public API
@@ -28,17 +32,30 @@ final class AIProSessionManager {
 
     /// 是否已登录
     var isSignedIn: Bool {
-        currentToken != nil
+        currentToken != nil && currentUserID != nil
     }
 
     /// 从 Keychain 恢复会话（App 启动时调用）
     func restoreSession() {
-        currentToken = readFromKeychain(key: tokenKey)
-        currentUserID = userDefaults.string(forKey: userIDKey)
+        guard let token = readFromKeychain(key: tokenKey),
+              !token.isEmpty,
+              let userID = userDefaults.string(forKey: userIDKey),
+              Self.isValidBackendUserID(userID) else {
+            signOut()
+            return
+        }
+
+        currentToken = token
+        currentUserID = userID
     }
 
     /// 保存登录成功后的会话
     func saveSession(token: String, userID: String) {
+        guard !token.isEmpty, Self.isValidBackendUserID(userID) else {
+            signOut()
+            return
+        }
+
         currentToken = token
         currentUserID = userID
         writeToKeychain(key: tokenKey, value: token)
@@ -51,6 +68,10 @@ final class AIProSessionManager {
         currentUserID = nil
         deleteFromKeychain(key: tokenKey)
         userDefaults.removeObject(forKey: userIDKey)
+    }
+
+    static func isValidBackendUserID(_ userID: String) -> Bool {
+        UUID(uuidString: userID) != nil
     }
 
     // MARK: - Keychain Helpers

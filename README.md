@@ -387,6 +387,11 @@ StoreKit 本地验证：
 - 当前只配置一个自动续期订阅商品：`tshot.pro.monthly`
 - 默认与 Debug scheme 已关联该配置，默认测试 scheme 也已关联该配置
 - 海外 Debug 策略下可从 AI Pro 壳层进入订阅 / 恢复入口
+- App Store 沙盒账户只用于 StoreKit 订阅购买和恢复购买；Sign in with Apple 会使用当前 macOS 系统 Apple Account，不会使用 App Store 沙盒测试账号
+- 端到端验证时应先用当前系统 Apple Account 完成 Sign in with Apple 登录，再在购买 / 恢复购买弹窗中使用 App Store 沙盒账户验证订阅交易
+- 主 scheme / Debug scheme 关联了本地 `TShot.storekit`，购买弹窗显示 `[Environment: Xcode]` 时代表当前是 Xcode 本地 StoreKit 交易，不是 App Store Connect 沙盒交易。要重置这类本地订阅，应在 Xcode 的 StoreKit transaction manager 中清除交易，或通过 StoreKitTest `SKTestSession.clearTransactions()` 清理后重新安装 / 启动测试。
+- 真实 App Store Connect 沙盒验证应使用未关联本地 StoreKit 配置的 `TYScreenShotTool_Release` scheme，或使用 TestFlight / App Store Connect 分发构建；购买弹窗不应显示 `[Environment: Xcode]`。
+- 如需把 Xcode 本地 StoreKit 交易临时写回开发后端用于联调，可在开发 Worker 环境设置 `ALLOW_LOCAL_STOREKIT_TRANSACTIONS=true` 后点击「恢复订阅」。该开关只允许用于本地 / 开发环境，生产环境必须关闭。
 - StoreKit 购买验证默认跳过；如需本机签名环境验证本地购买交易，可执行：
 
 ```bash
@@ -407,7 +412,7 @@ defaults delete com.sheldon.TShot debug.runStoreKitSandboxTests
 后端 MVP：
 
 - Worker 目录：`backend/worker`
-- Supabase migration：`backend/supabase/migrations/202606280001_ai_backend_mvp.sql`
+- Supabase migrations：`backend/supabase/migrations/202606280001_ai_backend_mvp.sql`、`backend/supabase/migrations/202606300001_allow_local_storekit_subscription_environment.sql`
 - 当前 API 可校验 Bearer 登录态、地区 allowlist、订阅状态、日/月额度、`request_id` 幂等和图片大小
 - `POST /v1/ai/analyze-screenshot` 在通过前置校验后会调用后端配置的 OpenAI Responses API，并写入 `usage_records`、扣减 `monthly_quotas`
 - Sign in with Apple、StoreKit signed transaction 校验、Apple Server Notifications V2 和 App 端 AI Pro 接入已完成代码链路；正式上线前仍需用 Sandbox / TestFlight 和 App Store Connect 商品做真实端到端验证

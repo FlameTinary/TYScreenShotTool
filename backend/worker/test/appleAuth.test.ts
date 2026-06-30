@@ -87,6 +87,25 @@ async function createTestJWT(
   return `${signingInput}.${signatureB64}`;
 }
 
+function createUnsignedStoreKitTransactionJWT(payloadOverrides: Record<string, unknown> = {}): string {
+  const header = { alg: "none" };
+  const payload = {
+    transactionId: "xcode-transaction-001",
+    originalTransactionId: "xcode-original-transaction-001",
+    productId: "tshot.pro.monthly",
+    bundleId: "com.tshot.app",
+    environment: "Xcode",
+    expiresDate: Date.now() + 86_400_000,
+    purchaseDate: Date.now(),
+    signedDate: Date.now(),
+    ...payloadOverrides
+  };
+
+  const headerB64 = base64URLEncode(new TextEncoder().encode(JSON.stringify(header)));
+  const payloadB64 = base64URLEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  return `${headerB64}.${payloadB64}.`;
+}
+
 describe("Apple JWT verification", () => {
   it("verifies a valid Apple JWT successfully", async () => {
     const keyPair = await generateTestKeyPair();
@@ -229,5 +248,24 @@ describe("Apple JWT verification", () => {
         appAppleId: "not-a-number"
       })
     ).rejects.toThrow("APPLE_APP_ID must be a positive integer");
+  });
+
+  it("accepts Xcode StoreKit transactions only when local testing is explicitly enabled", async () => {
+    const signedTransaction = createUnsignedStoreKitTransactionJWT();
+
+    await expect(
+      verifyStoreKitTransactionJWT(signedTransaction, "com.tshot.app")
+    ).rejects.toThrow("Missing APPLE_ROOT_CERTIFICATES_PEM");
+
+    await expect(
+      verifyStoreKitTransactionJWT(signedTransaction, "com.tshot.app", {
+        allowLocalTestingTransactions: true
+      })
+    ).resolves.toMatchObject({
+      transactionId: "xcode-transaction-001",
+      originalTransactionId: "xcode-original-transaction-001",
+      productId: "tshot.pro.monthly",
+      environment: "Xcode"
+    });
   });
 });

@@ -51,10 +51,29 @@ final class AIProSubscriptionTests: XCTestCase {
         XCTAssertFalse(AppText.settingsRestoreSubscription.isEmpty)
     }
 
+    func test_settingsSandboxAccountHintExplainsStoreKitAndAppleSignInSeparation() {
+        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("StoreKit"))
+        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("Sign in with Apple"))
+        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("[Environment: Xcode]"))
+        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("Release"))
+    }
+
     func test_settingsSuccessfulSignInRefreshesSubscriptionStatusWithoutAutoRestoringPurchases() {
         XCTAssertEqual(
             AIProSettingsSignInCompletionBehavior.afterSuccessfulSignIn,
             .refreshSubscriptionStatus
+        )
+    }
+
+    func test_settingsSwitchAppleAccountClearsCurrentSessionBeforeSystemSignIn() {
+        XCTAssertEqual(
+            AIProSettingsAccountSwitchBehavior.steps,
+            [
+                .signOutCurrentSession,
+                .clearSubscriptionCache,
+                .startSystemAppleSignIn,
+                .refreshSubscriptionStatus
+            ]
         )
     }
 
@@ -136,6 +155,13 @@ final class AIProSubscriptionTests: XCTestCase {
             ),
             .needsSubscription
         )
+    }
+
+    func test_cachedSubscriptionStatesDoNotBlockToolbarAIOnNetworkRefresh() {
+        XCTAssertFalse(AIProSubscriptionStatus.subscribed(Self.monthlyProduct).needsNetworkRefresh)
+        XCTAssertFalse(AIProSubscriptionStatus.unsubscribed(Self.monthlyProduct).needsNetworkRefresh)
+        XCTAssertTrue(AIProSubscriptionStatus.notLoaded.needsNetworkRefresh)
+        XCTAssertTrue(AIProSubscriptionStatus.failed("offline").needsNetworkRefresh)
     }
 
     func test_purchaseConfirmationRequiresBackendActiveStatus() {

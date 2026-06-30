@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		086F7EC32FE8EC800004C83A /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = 086F7EC22FE8EC800004C83A /* SnapKit */; };
+		08FF800B2FF3647700EA8A3B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08FF800A2FF3647700EA8A3B /* StoreKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -23,6 +24,7 @@
 /* Begin PBXFileReference section */
 		08E7B3A42FD276F200BC7687 /* TShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		08E7B3C02FD276F200BC7687 /* TYScreenShotToolTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TYScreenShotToolTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		08FF800A2FF3647700EA8A3B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,6 +46,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				086F7EC32FE8EC800004C83A /* SnapKit in Frameworks */,
+				08FF800B2FF3647700EA8A3B /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -63,6 +66,7 @@
 				08E7B3A62FD276F200BC7687 /* TYScreenShotTool */,
 				08E7B3A52FD276F200BC7687 /* Products */,
 				08FC8ADF2FEA80B300CB99E3 /* Recovered References */,
+				08FF80092FF3647700EA8A3B /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -81,6 +85,14 @@
 				08E7B3C12FD276F200BC7687 /* TYScreenShotToolTests */,
 			);
 			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		08FF80092FF3647700EA8A3B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				08FF800A2FF3647700EA8A3B /* StoreKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

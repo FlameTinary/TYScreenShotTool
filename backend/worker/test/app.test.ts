@@ -3,11 +3,10 @@
  * 测试核心业务逻辑：认证、地区限制、订阅验证、配额检查、AI 调用和用量记录
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/appleAuth", () => ({
-  verifyAppleJWT: () => Promise.resolve({ sub: "test-apple-user-001", email: "test@example.com" }),
-  verifyStoreKitTransactionJWT: () => Promise.resolve({
+const appleAuthMocks = vi.hoisted(() => {
+  const storeKitPayload = () => ({
     transactionId: "test-txn-001",
     originalTransactionId: "test-original-txn-001",
     productId: "tshot.pro.monthly",
@@ -16,27 +15,42 @@ vi.mock("../src/appleAuth", () => ({
     expiresDate: Date.now() + 86400000,
     purchaseDate: Date.now(),
     signedDate: Date.now(),
-    appAccountToken: "user-from-notification"
-  }),
-  verifyAppStoreNotificationJWT: () => Promise.resolve({
-    notificationType: "DID_RENEW",
-    subtype: undefined,
-    bundleId: "com.tshot.app",
-    environment: "Sandbox" as const,
-    signedTransactionInfo: "mock-transaction-jwt",
-    notificationUUID: "test-uuid-001",
-    signedDate: Date.now()
-  }),
-  resetAppleKeyCache: () => {}
-}));
+    appAccountToken: "old-user-id-from-storekit"
+  });
+
+  return {
+    verifyAppleJWT: vi.fn(() => Promise.resolve({ sub: "test-apple-user-001", email: "test@example.com" })),
+    verifyStoreKitTransactionJWT: vi.fn(() => Promise.resolve(storeKitPayload())),
+    verifyAppStoreNotificationJWT: vi.fn(() => Promise.resolve({
+      notificationType: "DID_RENEW",
+      subtype: undefined,
+      bundleId: "com.tshot.app",
+      environment: "Sandbox" as const,
+      signedTransactionInfo: "mock-transaction-jwt",
+      notificationUUID: "test-uuid-001",
+      signedDate: Date.now()
+    })),
+    resetAppleKeyCache: vi.fn()
+  };
+});
+
+vi.mock("../src/appleAuth", () => appleAuthMocks);
 
 import { createApp,
   type AIProvider,
   type BackendEnv,
   type BackendRepository,
+  type SubscriptionTransactionInput,
   type UsageRecordInput,
   type UserProfile
 } from "../src/app";
+
+beforeEach(() => {
+  appleAuthMocks.verifyAppleJWT.mockClear();
+  appleAuthMocks.verifyStoreKitTransactionJWT.mockClear();
+  appleAuthMocks.verifyAppStoreNotificationJWT.mockClear();
+  appleAuthMocks.resetAppleKeyCache.mockClear();
+});
 
 /**
  * 默认环境变量配置
@@ -87,6 +101,10 @@ function repository(profile: UserProfile | null, options: {
   createdToken?: string;
   /** 收集 Apple 登录传入的数据 */
   authInputs?: Array<{ appleUserId: string; email?: string; storefront?: string }>;
+  /** 收集订阅写入数据 */
+  subscriptionWrites?: Array<{ userId: string; transaction: SubscriptionTransactionInput }>;
+  /** 模拟订阅写入失败 */
+  subscriptionWriteError?: Error;
 } = {}): BackendRepository {
   return {
     async findUserByBearerToken() {
@@ -141,8 +159,11 @@ function repository(profile: UserProfile | null, options: {
     async createSession(_userId: string) {
       return options.createdToken ?? "mock-session-token-001";
     },
-    async createOrUpdateSubscription(_userId: string, _transaction: unknown) {
-      // 空实现 — 测试中验证副作用通过 response status 间接验证
+    async createOrUpdateSubscription(userId: string, transaction: SubscriptionTransactionInput) {
+      if (options.subscriptionWriteError) {
+        throw options.subscriptionWriteError;
+      }
+      options.subscriptionWrites?.push({ userId, transaction });
     }
   };
 }
@@ -373,6 +394,120 @@ describe("TShot AI backend app", () => {
   });
 
   /**
+   * 测试：客户端恢复购买时，订阅应写给当前 Bearer Token 对应的登录用户。
+   * 这覆盖删除 Supabase 用户 / 订阅后重新登录生成新 user_id 的恢复场景。
+   */
+  it("claims a restored subscription for the currently authenticated user", async () => {
+    const subscriptionWrites: Array<{ userId: string; transaction: SubscriptionTransactionInput }> = [];
+    const app = createApp(
+      repository(
+        user({
+          id: "new-user-after-db-reset",
+          storefront: "USA",
+          subscriptionStatus: "inactive"
+        }),
+        { subscriptionWrites }
+      )
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ signed_transaction: "valid.storekit.jwt" })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(200);
+    expect(subscriptionWrites).toHaveLength(1);
+    expect(subscriptionWrites[0]).toMatchObject({
+      userId: "new-user-after-db-reset",
+      transaction: {
+        originalTransactionId: "test-original-txn-001",
+        latestTransactionId: "test-txn-001",
+        productId: "tshot.pro.monthly",
+        environment: "Sandbox"
+      }
+    });
+  });
+
+  it("rejects subscription verification for products outside AI Pro", async () => {
+    appleAuthMocks.verifyStoreKitTransactionJWT.mockResolvedValueOnce({
+      transactionId: "other-txn-001",
+      originalTransactionId: "other-original-txn-001",
+      productId: "other.product",
+      bundleId: "com.tshot.app",
+      environment: "Sandbox",
+      expiresDate: Date.now() + 86400000,
+      purchaseDate: Date.now(),
+      signedDate: Date.now(),
+      appAccountToken: "new-user-after-db-reset"
+    });
+    const subscriptionWrites: Array<{ userId: string; transaction: SubscriptionTransactionInput }> = [];
+    const app = createApp(
+      repository(
+        user({
+          id: "new-user-after-db-reset",
+          storefront: "USA",
+          subscriptionStatus: "inactive"
+        }),
+        { subscriptionWrites }
+      )
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ signed_transaction: "valid.other-product.jwt" })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(400);
+    expect(await json(response)).toMatchObject({ error: "invalid_product" });
+    expect(subscriptionWrites).toHaveLength(0);
+  });
+
+  /**
+   * 测试：只有开发环境显式打开本地 StoreKit 开关时，才把 Xcode / LocalTesting
+   * 交易许可传给 Apple signed data 校验器。
+   */
+  it("passes local StoreKit verification opt-in to subscription verification", async () => {
+    const app = createApp(repository(user({ storefront: "USA", subscriptionStatus: "inactive" })));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ signed_transaction: "valid.xcode.storekit.jwt" })
+      }),
+      {
+        ...defaultEnv,
+        APPLE_BUNDLE_ID: "com.tshot.app",
+        ALLOW_LOCAL_STOREKIT_TRANSACTIONS: "true"
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(appleAuthMocks.verifyStoreKitTransactionJWT).toHaveBeenLastCalledWith(
+      "valid.xcode.storekit.jwt",
+      "com.tshot.app",
+      expect.objectContaining({ allowLocalTestingTransactions: true })
+    );
+  });
+
+  /**
    * 测试：缺失 signedPayload 的通知应返回 200（Apple 期望确认）
    */
   it("returns 200 for Apple notification without signedPayload", async () => {
@@ -410,6 +545,57 @@ describe("TShot AI backend app", () => {
     );
 
     // 始终返回 200 确认收到
+    expect(response.status).toBe(200);
+  });
+
+  it("ignores Apple notifications for products outside AI Pro", async () => {
+    appleAuthMocks.verifyStoreKitTransactionJWT.mockResolvedValueOnce({
+      transactionId: "other-txn-001",
+      originalTransactionId: "other-original-txn-001",
+      productId: "other.product",
+      bundleId: "com.tshot.app",
+      environment: "Sandbox",
+      expiresDate: Date.now() + 86400000,
+      purchaseDate: Date.now(),
+      signedDate: Date.now(),
+      appAccountToken: "old-user-id-from-storekit"
+    });
+    const subscriptionWrites: Array<{ userId: string; transaction: SubscriptionTransactionInput }> = [];
+    const app = createApp(repository(user(), { subscriptionWrites }));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/apple/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signedPayload: "valid.notification.jwt"
+        })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(200);
+    expect(subscriptionWrites).toHaveLength(0);
+  });
+
+  it("acknowledges Apple notifications even when subscription persistence fails", async () => {
+    const app = createApp(
+      repository(user(), {
+        subscriptionWriteError: new Error("supabase rejected subscription update")
+      })
+    );
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/apple/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signedPayload: "valid.notification.jwt"
+        })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
     expect(response.status).toBe(200);
   });
 
