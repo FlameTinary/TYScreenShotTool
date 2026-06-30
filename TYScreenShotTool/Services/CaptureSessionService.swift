@@ -1494,7 +1494,7 @@ final class CaptureSessionService {
 
                 switch error {
                 case .noTextRecognized, .emptyText:
-                    TYLogger.warn("Scrolling local OCR produced no useful text", tag: "AI Analysis", error: error)
+                    TYLogger.error("Scrolling local OCR produced no useful text", tag: "AI Analysis", error: error)
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .requestFailed:
@@ -1555,7 +1555,7 @@ final class CaptureSessionService {
 
                 switch error {
                 case .emptyInput, .lowQualityOutput:
-                    TYLogger.warn("Scrolling interface structure produced no useful content", tag: "AI Analysis", error: error)
+                    TYLogger.error("Scrolling interface structure produced no useful content", tag: "AI Analysis", error: error)
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
