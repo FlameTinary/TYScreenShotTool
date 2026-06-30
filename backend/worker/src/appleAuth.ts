@@ -3,7 +3,44 @@ import { Buffer } from "node:buffer";
 /**
  * Apple Sign In JWT 验证模块
  * 验证 Apple 返回的 identity token（JWT），确保签名和 claims 合法
+ *
+ * ⚠️ 注意：workerd 运行时内置的 HTTP 客户端可能被 Apple CDN 的 WAF 拦截（返回 403），
+ * 因此内嵌了一份备用的 Apple 公钥（EMBEDDED_APPLE_KEYS），
+ * 当 fetch 远端失败时自动降级使用。
  */
+
+/**
+ * 内嵌备用 Apple 公钥（2026-06-30 抓取）
+ * 当 workerd 的 fetch 被 Apple CDN 拦截时自动降级使用。
+ */
+const EMBEDDED_APPLE_KEYS: AppleKeysResponse = {
+  keys: [
+    {
+      kty: "RSA",
+      kid: "1E6VioIaNI",
+      use: "sig",
+      alg: "RS256",
+      n: "ttL4HNkWLS_Oh0GADZqA4lTM8Y8UyaCR2NfIcvxby6quhwIISI9o9iCw3ggMYnqEG-dfRHcpsWLp2MZH_CNC-2pB0l_tDKeLi1eytR0_3YUHQBBQlkDjDP-hlyS0xJD1ds0un4mOIhc-oPHK2xiYbSVbJcBTKYA6FPoAa7u_YbsKN1YnUqzoRf2iOpARBurhCkvmJKjXwcH6RNGM9iScOO-U9orB5-EQivCKdDnMiwsPaA6_Jx1DzKyaZI6UCV_CZV3k59XvbeYGV3JXJMtKjlwaIumX3i5ecT4lz_XUr7ZYf1tA1v4ewGnrb5TFr86U-NE6uhvEtpA-_uVWPMmy_Q",
+      e: "AQAB"
+    },
+    {
+      kty: "RSA",
+      kid: "5iq33lJBYj",
+      use: "sig",
+      alg: "RS256",
+      n: "vcDUGnc9ITh348cRCn6CENlcFzOm4X_sxDyPumPZrM3YhH_zXfjNhBCQnvTGNFqGzsqok87ufbWSEqYiYQDsh8DMTT_tx5bcuRJI-LmuX3CkLOKq0KXVUzijpj45mTvdGoC_dL2ei_nGs9yz0EJwilNpwPZxkGxNhWi7MWobOd4BjzBIkqDw_HqKZ_486EKHhyV0qgXfwQYgnKT9blBYc6ZNej9MPHyve5lZs084uEiY_UYjV0rlxfZdYa0g3scG7wc2dWMlqZ4QvbPMj0KTzMNtO-9cr3aruTTPQ2qDqFAThZDNrPaScJIXAcgrARvqy1CAMT_8gSYFbb4Ld0tRbQ",
+      e: "AQAB"
+    },
+    {
+      kty: "RSA",
+      kid: "5RFOSiNIUm",
+      use: "sig",
+      alg: "RS256",
+      n: "qaLbQzOrRmIXwJkuWpRu7T6ApMcoBA_QxFUO4foV5A1JhEE_Gg4uOCQ8kDSPJHGhPl8RBZ0o4niyUWYkS3IIgjUq3pMAwSDxczqKq00Z82gCN6nYAwlI-_iMsepM5kk86XjB_MJMVdU3NGCHReITotsyXnZ0A7v0RU_LYLzdgoobsK1jh5y4XsgiDf25ZGILiYjxVzYNcaJ5G01Rg9j0ydEJYMOC_dT9xcfQzy2LiOlhGn3rDpQIyhVuqprvUeLAJPEFQoH486VjcnDxKMLCs2L5aSlTj78BxgYNV24FRRTl8QAyhIMi4e0Ja_4i59OCOVZMbR4p1_o_cszhOGIlmw",
+      e: "AQAB"
+    }
+  ]
+};
 
 /** Apple JWK 公钥结构 */
 interface AppleJWK {
@@ -387,34 +424,57 @@ async function verifyJWTSignature(jwt: string): Promise<{ header: JWTHeader; pay
 
 /**
  * 从 Apple 公钥端点获取并匹配 JWK
+ * 优先在线获取，失败时降级到内嵌备用密钥
  * 使用内存缓存，TTL 1 小时
  */
 async function findMatchingKey(kid?: string): Promise<AppleJWK> {
   const now = Date.now();
 
+  async function fetchKeysOrFallback(): Promise<AppleJWK[]> {
+    try {
+      const response = await fetch("https://appleid.apple.com/auth/keys", {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "TShotWorker/1.0"
+        }
+      });
+      if (response.ok) {
+        const body = (await response.json()) as AppleKeysResponse;
+        if (body.keys?.length) return body.keys;
+      }
+      // 获取失败时记录日志并降级
+      const responseText = await response.text().catch(() => "(no body)");
+      console.warn(
+        JSON.stringify({
+          event: "apple_keys_fetch_failed_fallback_to_embedded",
+          status: response.status,
+          body: responseText.slice(0, 200)
+        })
+      );
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          event: "apple_keys_fetch_error_fallback_to_embedded",
+          error: err instanceof Error ? err.message : String(err)
+        })
+      );
+    }
+    console.warn(JSON.stringify({ event: "apple_keys_using_embedded_fallback" }));
+    return [...EMBEDDED_APPLE_KEYS.keys];
+  }
+
   if (!cachedKeys || now > cachedKeys.expiresAt) {
-    const response = await fetch("https://appleid.apple.com/auth/keys");
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Apple keys: ${response.status}`);
-    }
-    const body = (await response.json()) as AppleKeysResponse;
-    if (!body.keys?.length) {
-      throw new Error("Apple returned empty keys");
-    }
-    cachedKeys = { keys: body.keys, expiresAt: now + CACHE_TTL_MS };
+    const keys = await fetchKeysOrFallback();
+    cachedKeys = { keys, expiresAt: now + CACHE_TTL_MS };
   }
 
   if (kid) {
     const found = cachedKeys.keys.find((k) => k.kid === kid);
     if (found) return found;
-    // kid 未命中但缓存过期了 → 刷新缓存重试一次
-    if (cachedKeys && now > cachedKeys.expiresAt) {
-      const response = await fetch("https://appleid.apple.com/auth/keys");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Apple keys: ${response.status}`);
-      }
-      const body = (await response.json()) as AppleKeysResponse;
-      cachedKeys = { keys: body.keys, expiresAt: Date.now() + CACHE_TTL_MS };
+    // kid 未命中但缓存过期了 → 刷新重试一次（含降级）
+    if (now > cachedKeys.expiresAt) {
+      const keys = await fetchKeysOrFallback();
+      cachedKeys = { keys, expiresAt: Date.now() + CACHE_TTL_MS };
       const retry = cachedKeys.keys.find((k) => k.kid === kid);
       if (retry) return retry;
     }

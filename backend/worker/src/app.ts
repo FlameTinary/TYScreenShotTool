@@ -474,16 +474,28 @@ async function handleAuthApple(context: RequestContext): Promise<Response> {
   // 解析请求体
   const body = await parseJsonBody(context.request);
   if (!body || typeof body.identity_token !== "string" || !body.identity_token.trim()) {
+    console.error(JSON.stringify({ event: "auth_apple_invalid_request", reason: "missing or invalid identity_token" }));
     return json({ error: "invalid_request" }, 400);
   }
 
   const identityToken = body.identity_token.trim();
   const storefront = typeof body.storefront === "string" ? body.storefront.trim() : undefined;
 
+  console.log(JSON.stringify({ 
+    event: "auth_apple_start", 
+    identity_token_length: identityToken.length, 
+    storefront, 
+    bundle_id: context.env.APPLE_BUNDLE_ID 
+  }));
+
   // 验证 Apple JWT
   let claims: { sub: string; email?: string; emailVerified?: boolean };
   try {
     claims = await verifyAppleJWT(identityToken, context.env.APPLE_BUNDLE_ID);
+    console.log(JSON.stringify({ 
+      event: "auth_apple_jwt_verified", 
+      claims: { sub: claims.sub, email: claims.email } 
+    }));
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -496,9 +508,11 @@ async function handleAuthApple(context: RequestContext): Promise<Response> {
 
   // 查找或创建用户（传入 storefront）
   const user = await context.repository.findOrCreateUser(claims.sub, claims.email, storefront);
+  console.log(JSON.stringify({ event: "auth_apple_user_found_or_created", user_id: user.id }));
 
   // 创建会话并生成 Bearer Token
   const token = await context.repository.createSession(user.id);
+  console.log(JSON.stringify({ event: "auth_apple_session_created", token_prefix: token.substring(0, 20) + "..." }));
 
   // 返回响应
   return json({
