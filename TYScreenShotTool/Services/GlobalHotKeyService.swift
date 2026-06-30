@@ -76,12 +76,12 @@ final class GlobalHotKeyService {
         guard registerCurrentHotKey() else {
             hotKey = previousHotKey
             _ = registerCurrentHotKey()
-            print("Failed to update global hot key. Restored previous value: \(previousHotKey.displayName)")
+            TYLogger.warn("Failed to update global hot key. Restored previous value: \(previousHotKey.displayName)", tag: "GlobalHotKey")
             return false
         }
 
-        print("HotKey Update Success")
-        print("value: \(newHotKey.displayName)")
+        TYLogger.info("HotKey Update Success", tag: "GlobalHotKey")
+        TYLogger.debug("value: \(newHotKey.displayName)", tag: "GlobalHotKey")
         return true
     }
 
@@ -105,7 +105,7 @@ final class GlobalHotKeyService {
         )
 
         guard handlerStatus == noErr else {
-            print("Failed to install hot key event handler: \(handlerStatus)")
+            TYLogger.error("Failed to install hot key event handler: \(handlerStatus)", tag: "GlobalHotKey")
             return false
         }
 
@@ -128,7 +128,7 @@ final class GlobalHotKeyService {
         )
 
         guard registerStatus == noErr else {
-            print("Failed to register global hot key: \(registerStatus)")
+            TYLogger.error("Failed to register global hot key: \(registerStatus)", tag: "GlobalHotKey")
             return false
         }
 
@@ -161,7 +161,7 @@ final class GlobalHotKeyService {
         )
 
         guard status == noErr else {
-            print("Failed to read hot key event: \(status)")
+            TYLogger.error("Failed to read hot key event: \(status)", tag: "GlobalHotKey")
             return status
         }
 

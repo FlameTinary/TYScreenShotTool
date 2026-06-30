@@ -144,11 +144,7 @@ extension AIProAuthService: ASAuthorizationControllerDelegate {
             }
 
             do {
-                // Apple 登录凭据包含 identity token、authorization code、邮箱和姓名等敏感信息。
-                // 这里仅记录不可反推出用户身份的状态字段，避免 Debug 日志泄露认证材料。
-                print("[AI Pro Auth] Apple login credential received")
-                print("  - realUserStatus: \(credential.realUserStatus.rawValue)")
-                print("  - hasState: \(credential.state?.isEmpty == false)")
+                TYLogger.logAppleCredential(credential)
                 
                 let response = try await self.backendClient.authApple(identityToken: identityToken)
                 self.complete(response: response)

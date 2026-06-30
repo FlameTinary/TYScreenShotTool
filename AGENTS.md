@@ -347,6 +347,26 @@ Feature
 
 ---
 
+## 日志输出规则
+
+所有代码中涉及打印内容必须使用 `TYLogger` 输出，禁止直接使用 `print` 语句。
+
+`TYLogger` 提供以下日志级别：
+
+* `TYLogger.debug(_:tag:)` - 调试信息，仅开发环境输出
+* `TYLogger.info(_:tag:)` - 一般信息，仅开发环境输出
+* `TYLogger.warn(_:tag:)` - 警告信息，仅开发环境输出
+* `TYLogger.error(_:tag:error:)` - 错误信息，仅开发环境输出
+
+使用规范：
+
+* 必须指定 `tag` 参数，用于日志分类（如 `"CaptureSession"`、`"AI Vision"`、`"LocalTranslation"`）
+* 错误日志应传递 `error` 参数，便于追踪错误详情
+* `TYLogger` 通过条件编译确保 Release 环境不输出任何日志
+* Debug 模式下无需检查打印信息是否包含敏感信息（日志仅在开发环境输出，不会进入 Release 版本）
+
+---
+
 ## 代码注释规则
 
 AI 在新增或修改代码时，必须同步补充完整且规范的注释。

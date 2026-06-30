@@ -888,7 +888,7 @@ private extension SettingsViewController {
             UserDefaults.standard.set(selectedDirectoryURL.path, forKey: AppSettings.saveDirectoryPathKey)
             saveDirectoryLabel.stringValue = selectedDirectoryURL.path
         } catch {
-            print("Save directory bookmark creation failed: \(error.localizedDescription)")
+            TYLogger.error("Save directory bookmark creation failed", tag: "Settings", error: error)
         }
     }
 

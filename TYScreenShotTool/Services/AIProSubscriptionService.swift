@@ -192,9 +192,9 @@ final class AIProSubscriptionService {
 
             // 步骤3：调用 StoreKit 发起购买
             // appAccountToken 将交易与用户关联，恢复购买时后端用此匹配
-            print("[AI Pro Subscription] Starting StoreKit purchase for \(product.id)")
+            TYLogger.info("Starting StoreKit purchase for \(product.id)", tag: "AI Pro Subscription")
             let result = try await product.purchase(options: [.appAccountToken(appAccountToken)])
-            print("[AI Pro Subscription] StoreKit purchase returned: \(result)")
+            TYLogger.info("StoreKit purchase returned: \(result)", tag: "AI Pro Subscription")
 
             // 步骤4：处理购买结果
             switch result {
@@ -206,12 +206,12 @@ final class AIProSubscriptionService {
                 }
 
                 // 打印交易信息用于调试
-                print("[AI Pro Subscription] Purchase transaction received:")
-                print("  - id: \(transaction.id)")
-                print("  - productID: \(transaction.productID)")
-                print("  - purchaseDate: \(transaction.purchaseDate)")
-                print("  - appAccountToken: \(transaction.appAccountToken?.uuidString ?? "nil")")
-                print("  - jwsRepresentation: \(verification.jwsRepresentation.prefix(100))...")
+                TYLogger.debug("Purchase transaction received:", tag: "AI Pro Subscription")
+                TYLogger.debug("  - id: \(transaction.id)", tag: "AI Pro Subscription")
+                TYLogger.debug("  - productID: \(transaction.productID)", tag: "AI Pro Subscription")
+                TYLogger.debug("  - purchaseDate: \(transaction.purchaseDate)", tag: "AI Pro Subscription")
+                TYLogger.debug("  - appAccountToken: \(transaction.appAccountToken?.uuidString ?? "nil")", tag: "AI Pro Subscription")
+                TYLogger.debug("  - jwsRepresentation: \(verification.jwsRepresentation.prefix(100))...", tag: "AI Pro Subscription")
 
                 // 步骤5：上报后端验证
                 let backendConfirmed = await reportVerificationToBackend(verification)
@@ -229,7 +229,7 @@ final class AIProSubscriptionService {
 
             case .userCancelled:
                 // 用户取消购买
-                print("[AI Pro Subscription] StoreKit purchase cancelled by user")
+                TYLogger.info("StoreKit purchase cancelled by user", tag: "AI Pro Subscription")
                 return status
             case .pending:
                 // 交易待处理（如需要家长批准）
@@ -289,12 +289,12 @@ final class AIProSubscriptionService {
                 }
                 
                 // 打印恢复的交易信息用于调试
-                print("[AI Pro Subscription] Restored transaction for \(transaction.productID):")
-                print("  - id: \(transaction.id)")
-                print("  - productID: \(transaction.productID)")
-                print("  - purchaseDate: \(transaction.purchaseDate)")
-                print("  - appAccountToken: \(transaction.appAccountToken?.uuidString ?? "nil")")
-                print("  - jwsRepresentation: \(result.jwsRepresentation.prefix(100))...")
+                TYLogger.debug("Restored transaction for \(transaction.productID):", tag: "AI Pro Subscription")
+                TYLogger.debug("  - id: \(transaction.id)", tag: "AI Pro Subscription")
+                TYLogger.debug("  - productID: \(transaction.productID)", tag: "AI Pro Subscription")
+                TYLogger.debug("  - purchaseDate: \(transaction.purchaseDate)", tag: "AI Pro Subscription")
+                TYLogger.debug("  - appAccountToken: \(transaction.appAccountToken?.uuidString ?? "nil")", tag: "AI Pro Subscription")
+                TYLogger.debug("  - jwsRepresentation: \(result.jwsRepresentation.prefix(100))...", tag: "AI Pro Subscription")
 
                 // 步骤4：上报后端验证
                 if await reportVerificationToBackend(result) {
@@ -328,7 +328,7 @@ final class AIProSubscriptionService {
             return refreshedStatus
         } catch {
             // 处理恢复过程中的错误（如 AppStore.sync() 失败）
-            print("[AI Pro Subscription] Restore purchases failed: \(error.localizedDescription)")
+            TYLogger.error("Restore purchases failed", tag: "AI Pro Subscription", error: error)
             status = .failed(error.localizedDescription)
             return status
         }
@@ -367,13 +367,13 @@ private extension AIProSubscriptionService {
     /// 将 StoreKit 交易验证结果中的 signedTransaction (JWS) 上报后端
     func reportVerificationToBackend(_ verification: VerificationResult<Transaction>) async -> Bool {
         let jws = verification.jwsRepresentation
-        print("[AI Pro Subscription] Reporting StoreKit verification to backend")
+        TYLogger.info("Reporting StoreKit verification to backend", tag: "AI Pro Subscription")
         do {
             let response = try await backendClient.verifySubscription(signedTransaction: jws)
-            print("[AI Pro Subscription] Backend verify success: \(response.status)")
+            TYLogger.info("Backend verify success: \(response.status)", tag: "AI Pro Subscription")
             return response.status == "active" || response.status == "grace_period"
         } catch {
-            print("[AI Pro Subscription] Backend verify failed: \(error.localizedDescription)")
+            TYLogger.error("Backend verify failed", tag: "AI Pro Subscription", error: error)
             return false
         }
     }

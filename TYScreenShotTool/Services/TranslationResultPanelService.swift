@@ -150,10 +150,10 @@ final class TranslationResultPanelService {
     }
 
     func dismiss() {
-        print("[LocalTranslation] translation window will close")
+        TYLogger.debug("translation window will close", tag: "LocalTranslation")
         panel.close()
         hostingController = nil
-        print("[LocalTranslation] translation window closed")
+        TYLogger.debug("translation window closed", tag: "LocalTranslation")
     }
 
     // MARK: - Private
@@ -330,15 +330,15 @@ struct TranslationResultSwiftUIView: View {
             rebuildTranslationConfiguration()
         }
         .onDisappear {
-            print("[LocalTranslation] translation view disappeared")
+            TYLogger.debug("translation view disappeared", tag: "LocalTranslation")
         }
     }
 
     // MARK: - Translation Setup
 
     private func setupInitialTranslation() {
-        print("[LocalTranslation] translation view appeared")
-        print("[LocalTranslation] source text count:", sourceText.count)
+        TYLogger.debug("translation view appeared", tag: "LocalTranslation")
+        TYLogger.debug("source text count: \(sourceText.count)", tag: "LocalTranslation")
 
         // 如果已经有预置译文，不启动翻译
         if preTranslatedText != nil {
@@ -359,8 +359,8 @@ struct TranslationResultSwiftUIView: View {
             return
         }
 
-        print("[LocalTranslation] rebuild configuration")
-        print("[LocalTranslation] selected target language:", selectedTargetLanguage.languageIdentifier)
+        TYLogger.debug("rebuild configuration", tag: "LocalTranslation")
+        TYLogger.debug("selected target language: \(selectedTargetLanguage.languageIdentifier)", tag: "LocalTranslation")
 
         // Reset state for new translation
         translatedText = ""
@@ -371,8 +371,8 @@ struct TranslationResultSwiftUIView: View {
         let detectedSource = LocalTranslationService.fallbackSourceLanguage(for: trimmedText)
         sourceLanguage = detectedSource
 
-        print("[LocalTranslation] source language:", detectedSource?.languageCode?.identifier ?? "nil")
-        print("[LocalTranslation] target language:", selectedTargetLanguage.languageIdentifier)
+        TYLogger.debug("source language: \(detectedSource?.languageCode?.identifier ?? "nil")", tag: "LocalTranslation")
+        TYLogger.debug("target language: \(selectedTargetLanguage.languageIdentifier)", tag: "LocalTranslation")
 
         // 同语言无需翻译
         if isSameLanguage(source: detectedSource, target: selectedTargetLanguage) {
@@ -387,7 +387,7 @@ struct TranslationResultSwiftUIView: View {
             source: detectedSource,
             target: selectedTargetLanguage.localeLanguage
         )
-        print("[LocalTranslation] configuration created, requestID:", currentRequestID)
+        TYLogger.debug("configuration created, requestID: \(currentRequestID)", tag: "LocalTranslation")
     }
 
     /// 判断源语言和目标语言是否相同（避免无意义翻译）
@@ -413,7 +413,7 @@ struct TranslationResultSwiftUIView: View {
     @MainActor
     private func performTranslation(_ session: TranslationSession) async {
         let requestID = currentRequestID
-        print("[LocalTranslation] translationTask started, requestID:", requestID)
+        TYLogger.debug("translationTask started, requestID: \(requestID)", tag: "LocalTranslation")
 
         let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
@@ -427,35 +427,35 @@ struct TranslationResultSwiftUIView: View {
 
         do {
             if sourceLanguage != nil {
-                print("[LocalTranslation] prepareTranslation started")
+                TYLogger.debug("prepareTranslation started", tag: "LocalTranslation")
                 try await session.prepareTranslation()
-                print("[LocalTranslation] prepareTranslation finished")
+                TYLogger.debug("prepareTranslation finished", tag: "LocalTranslation")
             } else {
-                print("[LocalTranslation] skip prepareTranslation because source language is nil")
+                TYLogger.debug("skip prepareTranslation because source language is nil", tag: "LocalTranslation")
             }
 
-            print("[LocalTranslation] translate started")
+            TYLogger.debug("translate started", tag: "LocalTranslation")
             let response = try await session.translate(trimmedText)
-            print("[LocalTranslation] translate finished")
-            print("[LocalTranslation] translated text count:", response.targetText.count)
+            TYLogger.debug("translate finished", tag: "LocalTranslation")
+            TYLogger.debug("translated text count: \(response.targetText.count)", tag: "LocalTranslation")
 
             // 防止旧任务覆盖新结果
             guard requestID == currentRequestID else {
-                print("[LocalTranslation] ignore stale translation result")
+                TYLogger.debug("ignore stale translation result", tag: "LocalTranslation")
                 return
             }
 
             translatedText = response.targetText
         } catch {
-            print("[LocalTranslation] failed:", error)
+            TYLogger.error("translation failed", tag: "LocalTranslation", error: error)
             let nsError = error as NSError
-            print("[LocalTranslation] error domain:", nsError.domain)
-            print("[LocalTranslation] error code:", nsError.code)
-            print("[LocalTranslation] error:", nsError)
+            TYLogger.debug("error domain: \(nsError.domain)", tag: "LocalTranslation")
+            TYLogger.debug("error code: \(nsError.code)", tag: "LocalTranslation")
+            TYLogger.debug("error: \(nsError)", tag: "LocalTranslation")
 
             // 防止旧任务覆盖新结果
             guard requestID == currentRequestID else {
-                print("[LocalTranslation] ignore stale translation error")
+                TYLogger.debug("ignore stale translation error", tag: "LocalTranslation")
                 return
             }
 

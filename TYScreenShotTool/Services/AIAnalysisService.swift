@@ -460,7 +460,7 @@ final class AIAnalysisService {
             throw AIAnalysisError.lowQualityOutput
         }
 
-        print("[AI Analysis] Translation output missing explicit section header, fallback to raw translated text")
+        TYLogger.warn("Translation output missing explicit section header, fallback to raw translated text", tag: "AI Analysis")
 
         let sections = [
             AIAnalysisSection(title: AppText.translationSectionTitle, content: normalized),
@@ -488,7 +488,7 @@ final class AIAnalysisService {
             throw AIAnalysisError.lowQualityOutput
         }
 
-        print("[AI Analysis] Interface structure output missing explicit section header, fallback to raw structured text")
+        TYLogger.warn("Interface structure output missing explicit section header, fallback to raw structured text", tag: "AI Analysis")
 
         let sections = [
             AIAnalysisSection(title: AppText.interfaceStructureTitle, content: normalized),

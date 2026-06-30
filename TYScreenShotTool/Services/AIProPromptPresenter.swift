@@ -79,7 +79,7 @@ enum AIProPromptPresenter {
 
         // 步骤2：首次使用同意提示
         guard await showConsentIfNeeded(from: view) else {
-            print("[AI Pro Prompt] user cancelled first-use consent")
+            TYLogger.info("user cancelled first-use consent", tag: "AI Pro Prompt")
             return
         }
 
@@ -144,7 +144,7 @@ private extension AIProPromptPresenter {
 
         // 1. 区域策略
         guard AIAvailabilityService().isSubscriptionAllowed else {
-            print("[AI Pro Prompt] blocked by region policy")
+            TYLogger.warn("blocked by region policy", tag: "AI Pro Prompt")
             _ = await showPrompt(
                 from: view,
                 content: AIProSubscriptionPromptContent(status: .regionUnavailable),
@@ -155,22 +155,22 @@ private extension AIProPromptPresenter {
 
         // 2. 首次使用同意提示（Feature 53.10）
         guard await showConsentIfNeeded(from: view) else {
-            print("[AI Pro Prompt] user cancelled first-use consent")
+            TYLogger.info("user cancelled first-use consent", tag: "AI Pro Prompt")
             return false
         }
-        print("[AI Pro Prompt] first-use consent accepted")
+        TYLogger.info("first-use consent accepted", tag: "AI Pro Prompt")
 
         // 3. Apple 登录检查（Feature 53.7）
         guard await showLoginIfNeeded(from: view) else {
-            print("[AI Pro Prompt] user cancelled or failed login")
+            TYLogger.info("user cancelled or failed login", tag: "AI Pro Prompt")
             return false
         }
-        print("[AI Pro Prompt] login check passed")
+        TYLogger.info("login check passed", tag: "AI Pro Prompt")
 
         // 4. 加载订阅并展示
         subscriptionService.startTransactionListener()
         let status = await subscriptionService.refreshStatus()
-        print("[AI Pro Prompt] subscription status: \(status)")
+        TYLogger.debug("subscription status: \(status)", tag: "AI Pro Prompt")
         guard status.isSubscribed == false else {
             return true
         }
@@ -186,7 +186,7 @@ private extension AIProPromptPresenter {
 private extension AIProPromptPresenter {
     static func beginPresenting() -> Bool {
         guard isPresenting == false else {
-            print("[AI Pro Prompt] ignored duplicate prompt request")
+            TYLogger.warn("ignored duplicate prompt request", tag: "AI Pro Prompt")
             return false
         }
         isPresenting = true
@@ -226,11 +226,11 @@ private extension AIProPromptPresenter {
         switch response {
         case .alertFirstButtonReturn:
             UserDefaults.standard.set(true, forKey: AppSettings.aiFirstUseConsentKey)
-            print("[AI Pro Prompt] consent alert returned first button")
+            TYLogger.info("consent alert returned first button", tag: "AI Pro Prompt")
             return true
 
         default:
-            print("[AI Pro Prompt] consent alert cancelled: \(response.rawValue)")
+            TYLogger.info("consent alert cancelled: \(response.rawValue)", tag: "AI Pro Prompt")
             return false
         }
     }
@@ -262,17 +262,17 @@ private extension AIProPromptPresenter {
         }
 
         guard response == .alertFirstButtonReturn else {
-            print("[AI Pro Prompt] login alert cancelled: \(response.rawValue)")
+            TYLogger.info("login alert cancelled: \(response.rawValue)", tag: "AI Pro Prompt")
             return false
         }
 
         do {
-            print("[AI Pro Prompt] starting Sign in with Apple")
+            TYLogger.info("starting Sign in with Apple", tag: "AI Pro Prompt")
             _ = try await AIProAuthService.shared.signIn()
             _ = await AIProSubscriptionService.shared.refreshStatus()
             return true
         } catch {
-            print("[AI Pro Prompt] Sign in with Apple failed: \(error.localizedDescription)")
+            TYLogger.error("Sign in with Apple failed", tag: "AI Pro Prompt", error: error)
             // 显示错误并给用户重试机会
             let errorAlert = NSAlert()
             errorAlert.messageText = AppText.aiProLoginFailedTitle
@@ -363,7 +363,7 @@ private extension AIProPromptPresenter {
         }
 
         if case .failed(let message) = nextStatus {
-            print("[AI Pro Prompt] subscription action failed: \(message)")
+            TYLogger.error("subscription action failed: \(message)", tag: "AI Pro Prompt")
         }
         return nextStatus.isSubscribed
     }

@@ -14,20 +14,20 @@ enum AIProStoreKitDebugVerifier {
     }
 
     static func run(mode: Mode, subscriptionService: AIProSubscriptionService) async {
-        print("[AIProStoreKitVerification] mode: \(mode.rawValue)")
+        TYLogger.info("mode: \(mode.rawValue)", tag: "AIProStoreKitVerification")
         subscriptionService.startTransactionListener()
 
         switch mode {
         case .load:
             let status = await subscriptionService.refreshStatus()
-            print("[AIProStoreKitVerification] refreshStatus: \(status.debugSummary)")
+            TYLogger.info("refreshStatus: \(status.debugSummary)", tag: "AIProStoreKitVerification")
         case .purchase:
             _ = await subscriptionService.refreshStatus()
             let status = await subscriptionService.purchaseMonthly()
-            print("[AIProStoreKitVerification] purchaseMonthly: \(status.debugSummary)")
+            TYLogger.info("purchaseMonthly: \(status.debugSummary)", tag: "AIProStoreKitVerification")
         case .restore:
             let status = await subscriptionService.restorePurchases()
-            print("[AIProStoreKitVerification] restorePurchases: \(status.debugSummary)")
+            TYLogger.info("restorePurchases: \(status.debugSummary)", tag: "AIProStoreKitVerification")
         }
     }
 }

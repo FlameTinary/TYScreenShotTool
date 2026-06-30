@@ -70,19 +70,19 @@ extension AIImageTextExtractionService {
         let model = resolvedModel()
         let request = try makeRequest(apiKey: apiKey, imageDataURL: dataURL)
 
-        print("[AI Vision] Start text extraction")
-        print("[AI Vision] model: \(model)")
-        print("[AI Vision] image: \(image.width)x\(image.height)")
+        TYLogger.info("Start text extraction", tag: "AI Vision")
+        TYLogger.debug("model: \(model)", tag: "AI Vision")
+        TYLogger.debug("image: \(image.width)x\(image.height)", tag: "AI Vision")
 
         do {
             let (data, response) = try await session.data(for: request)
             try validateHTTPResponse(response, data: data)
             let result = try parseExtractionResult(from: data)
-            print("[AI Vision] Extraction success")
-            print("[AI Vision] normalized text length: \(result.text.count)")
+            TYLogger.info("Extraction success", tag: "AI Vision")
+            TYLogger.debug("normalized text length: \(result.text.count)", tag: "AI Vision")
             return result
         } catch let error as AIImageTextExtractionError {
-            print("[AI Vision] Extraction failed: \(error.localizedDescription)")
+            TYLogger.error("Extraction failed", tag: "AI Vision", error: error)
             throw error
         } catch let error as DecodingError {
             throw AIImageTextExtractionError.requestFailed(
@@ -221,7 +221,7 @@ private extension AIImageTextExtractionService {
             throw AIImageTextExtractionError.invalidResponse
         }
 
-        print("[AI Vision] HTTP status: \(httpResponse.statusCode)")
+        TYLogger.debug("HTTP status: \(httpResponse.statusCode)", tag: "AI Vision")
 
         guard 200 ..< 300 ~= httpResponse.statusCode else {
             let message = String(data: data, encoding: .utf8) ?? AppText.aiUnknownServerError
@@ -241,13 +241,13 @@ private extension AIImageTextExtractionService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard rawText.isEmpty == false else {
-            print("[AI Vision] Response returned empty output text, treating as no useful text")
+            TYLogger.warn("Response returned empty output text, treating as no useful text", tag: "AI Vision")
             throw AIImageTextExtractionError.noUsefulText
         }
 
         let normalized = normalizeExtractedText(rawText)
         guard normalized.isEmpty == false else {
-            print("[AI Vision] Response text normalized to empty text")
+            TYLogger.warn("Response text normalized to empty text", tag: "AI Vision")
             throw AIImageTextExtractionError.noUsefulText
         }
 

@@ -130,10 +130,10 @@ final class CaptureSessionService {
                 self.transition(to: .overlayPresented)
                 self.overlayService.presentOverlay(screenImages: self.pendingScreenImages)
             } catch ScreenCaptureError.permissionRequired {
-                print("Screen Recording permission required.")
-                print("Please restart the app after granting permission.")
+                TYLogger.warn("Screen Recording permission required.", tag: "CaptureSession")
+                TYLogger.warn("Please restart the app after granting permission.", tag: "CaptureSession")
             } catch {
-                print("Capture prepare failed: \(error.localizedDescription)")
+                TYLogger.error("Capture prepare failed", tag: "CaptureSession", error: error)
             }
         }
     }
@@ -166,7 +166,7 @@ final class CaptureSessionService {
         }
 
         guard rect.width > 1, rect.height > 1 else {
-            print("Capture skipped: invalid selection")
+            TYLogger.warn("Capture skipped: invalid selection", tag: "CaptureSession")
             overlayService.dismissOverlay()
             transition(to: .selectionCompleted)
             transition(to: .idle)
@@ -260,7 +260,7 @@ final class CaptureSessionService {
                     previewSize: selectionRect.size
                 )
                 try clipboardService.copyImage(exportedImage)
-                print("Clipboard Copy Success")
+                TYLogger.info("Clipboard Copy Success", tag: "CaptureSession")
                 await MainActor.run {
                     toastService.showToast(message: AppText.screenshotCopiedToast)
                     overlayService.dismissOverlay()
@@ -268,11 +268,11 @@ final class CaptureSessionService {
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
-                print("Capture skipped: invalid selection")
+                TYLogger.warn("Capture skipped: invalid selection", tag: "CaptureSession")
             } catch let error as ClipboardError {
-                print("Clipboard copy failed: \(error.localizedDescription)")
+                TYLogger.error("Clipboard copy failed", tag: "CaptureSession", error: error)
             } catch {
-                print("Clipboard copy failed: \(error.localizedDescription)")
+                TYLogger.error("Clipboard copy failed", tag: "CaptureSession", error: error)
             }
         }
     }
@@ -305,8 +305,8 @@ final class CaptureSessionService {
                 )
                 temporaryFileURL = try imageSaveService.saveTemporaryPNG(exportedImage)
                 let savedFileURL = try imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
-                print("Save Success")
-                print("path: \(savedFileURL.path)")
+                TYLogger.info("Save Success", tag: "CaptureSession")
+                TYLogger.debug("path: \(savedFileURL.path)", tag: "CaptureSession")
                 await MainActor.run {
                     toastService.showToast(message: AppText.screenshotSavedToast)
                     overlayService.dismissOverlay()
@@ -314,20 +314,20 @@ final class CaptureSessionService {
                 clearPendingCapture()
                 transition(to: .idle)
             } catch ScreenCaptureError.invalidSelection {
-                print("Capture skipped: invalid selection")
+                TYLogger.warn("Capture skipped: invalid selection", tag: "CaptureSession")
             } catch let error as ImageSaveError {
                 if let temporaryFileURL {
                     cleanupTemporaryImage(at: temporaryFileURL)
                 }
                 finishFailedSaveSession()
-                print("Save failed: \(error.localizedDescription)")
+                TYLogger.error("Save failed", tag: "CaptureSession", error: error)
                 presentSaveAlertIfNeeded(for: error)
             } catch {
                 if let temporaryFileURL {
                     cleanupTemporaryImage(at: temporaryFileURL)
                 }
                 finishFailedSaveSession()
-                print("Save failed: \(error.localizedDescription)")
+                TYLogger.error("Save failed", tag: "CaptureSession", error: error)
             }
         }
     }
@@ -385,7 +385,7 @@ final class CaptureSessionService {
                     )
                 }
             } catch {
-                print("Translation OCR failed: \(error.localizedDescription)")
+                TYLogger.error("Translation OCR failed", tag: "CaptureSession", error: error)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     toastService.showToast(message: AppText.ocrFailedToast)
@@ -410,8 +410,8 @@ final class CaptureSessionService {
                 let selectionRect = pendingCaptureSource.selectionRect
                 let image = try await captureImageForPendingSource(pendingCaptureSource)
                 let text = try ocrService.recognizeText(in: image)
-                print("OCR Success")
-                print("text: \(text)")
+                TYLogger.info("OCR Success", tag: "CaptureSession")
+                TYLogger.debug("text: \(text)", tag: "CaptureSession")
                 await MainActor.run {
                     ocrPreviewWindowService.present(
                         text: text,
@@ -425,7 +425,7 @@ final class CaptureSessionService {
                     )
                 }
             } catch {
-                print("OCR failed: \(error.localizedDescription)")
+                TYLogger.error("OCR failed", tag: "CaptureSession", error: error)
                 await MainActor.run {
                     toastService.showToast(message: AppText.ocrFailedToast)
                 }
@@ -494,12 +494,12 @@ final class CaptureSessionService {
                     annotations: annotations
                 )
                 pinWindowService.presentPinnedImage(exportedImage, sourceRect: selectionRect)
-                print("Pin Success")
+                TYLogger.info("Pin Success", tag: "CaptureSession")
                 overlayService.dismissOverlay()
                 clearPendingCapture()
                 transition(to: .idle)
             } catch {
-                print("Pin failed: \(error.localizedDescription)")
+                TYLogger.error("Pin failed", tag: "CaptureSession", error: error)
             }
         }
     }
@@ -512,7 +512,7 @@ final class CaptureSessionService {
         let pendingSelectionRect = pendingCaptureSource.selectionRect
 
         guard annotations.isEmpty else {
-            print("Scrolling capture failed: current selection contains annotations.")
+            TYLogger.warn("Scrolling capture failed: current selection contains annotations.", tag: "CaptureSession")
             toastService.showToast(message: AppText.scrollingCaptureAnnotationBlocked)
             return
         }
@@ -538,7 +538,7 @@ final class CaptureSessionService {
         pendingScreenImages.removeAll()
         reactivateSourceApplicationForScrolling()
 
-        print("Scrolling Capture Started")
+        TYLogger.info("Scrolling Capture Started", tag: "CaptureSession")
 
         captureInitialScrollingFrame(for: pendingSelectionRect)
         installScrollingEventMonitor(for: pendingSelectionRect)
@@ -567,11 +567,11 @@ final class CaptureSessionService {
 
         do {
             try clipboardService.copyImage(image)
-            print("Scrolling Capture Copy Success")
+            TYLogger.info("Scrolling Capture Copy Success", tag: "CaptureSession")
             toastService.showToast(message: AppText.longScreenshotCopiedToast)
             finishScrollingCaptureSession()
         } catch {
-            print("Scrolling capture copy failed: \(error.localizedDescription)")
+            TYLogger.error("Scrolling capture copy failed", tag: "CaptureSession", error: error)
         }
     }
 
@@ -592,21 +592,21 @@ final class CaptureSessionService {
             do {
                 temporaryFileURL = try self.imageSaveService.saveTemporaryPNG(image)
                 let savedFileURL = try self.imageSaveService.moveImageToConfiguredDirectory(from: temporaryFileURL!)
-                print("Scrolling Capture Save Success")
-                print("path: \(savedFileURL.path)")
+                TYLogger.info("Scrolling Capture Save Success", tag: "CaptureSession")
+                TYLogger.debug("path: \(savedFileURL.path)", tag: "CaptureSession")
                 self.toastService.showToast(message: AppText.longScreenshotSavedToast)
                 self.finishScrollingCaptureSession()
             } catch let error as ImageSaveError {
                 if let temporaryFileURL {
                     self.cleanupTemporaryImage(at: temporaryFileURL)
                 }
-                print("Scrolling capture save failed: \(error.localizedDescription)")
+                TYLogger.error("Scrolling capture save failed", tag: "CaptureSession", error: error)
                 self.presentSaveAlertIfNeeded(for: error)
             } catch {
                 if let temporaryFileURL {
                     self.cleanupTemporaryImage(at: temporaryFileURL)
                 }
-                print("Scrolling capture save failed: \(error.localizedDescription)")
+                TYLogger.error("Scrolling capture save failed", tag: "CaptureSession", error: error)
             }
         }
     }
@@ -726,7 +726,7 @@ final class CaptureSessionService {
                     )
                 }
             } catch {
-                print("Translation OCR failed: \(error.localizedDescription)")
+                TYLogger.error("Translation OCR failed", tag: "CaptureSession", error: error)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     toastService.showToast(message: AppText.ocrFailedToast)
@@ -838,28 +838,28 @@ final class CaptureSessionService {
     private func transition(to newState: CaptureState) {
         let oldState = state
         state = newState
-        print("[CaptureSession] \(oldState.displayName) -> \(newState.displayName)")
+        TYLogger.debug("\(oldState.displayName) -> \(newState.displayName)", tag: "CaptureSession")
     }
 
     private func currentAITextInputStrategy() -> AITextInputStrategy {
         let useVision = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey)
-        print("[AI Analysis] Settings aiUseVisionTextExtraction: \(useVision)")
+        TYLogger.debug("Settings aiUseVisionTextExtraction: \(useVision)", tag: "AI Analysis")
         if useVision {
-            print("[AI Analysis] Scrolling capture uses local OCR before backend analysis")
+            TYLogger.debug("Scrolling capture uses local OCR before backend analysis", tag: "AI Analysis")
         }
         return .localOCR
     }
 
     private func logSelection(_ rect: CGRect) {
-        print("Selection Rect")
-        print("x: \(Int(rect.origin.x))")
-        print("y: \(Int(rect.origin.y))")
-        print("width: \(Int(rect.width))")
-        print("height: \(Int(rect.height))")
+        TYLogger.debug("Selection Rect", tag: "CaptureSession")
+        TYLogger.debug("x: \(Int(rect.origin.x))", tag: "CaptureSession")
+        TYLogger.debug("y: \(Int(rect.origin.y))", tag: "CaptureSession")
+        TYLogger.debug("width: \(Int(rect.width))", tag: "CaptureSession")
+        TYLogger.debug("height: \(Int(rect.height))", tag: "CaptureSession")
     }
 
     private func clearPendingCapture() {
-        print("[CaptureSession] closing translation window because screenshot session ended")
+        TYLogger.debug("closing translation window because screenshot session ended", tag: "CaptureSession")
         translationResultPanelService.dismiss()
         pendingCaptureSource = nil
         pendingAIAnalysisMode = nil
@@ -896,7 +896,7 @@ final class CaptureSessionService {
         do {
             try imageSaveService.removeImage(at: url)
         } catch {
-            print("Temporary image cleanup failed: \(error.localizedDescription)")
+            TYLogger.error("Temporary image cleanup failed", tag: "CaptureSession", error: error)
         }
     }
 
@@ -904,14 +904,14 @@ final class CaptureSessionService {
     private func copyOCRPreviewText(_ text: String) {
         do {
             try clipboardService.copyText(text)
-            print("Clipboard Copy Success")
+            TYLogger.info("Clipboard Copy Success", tag: "CaptureSession")
             toastService.showToast(message: AppText.ocrCopiedToast)
             ocrPreviewWindowService.dismiss()
             overlayService.dismissOverlay()
             clearPendingCapture()
             transition(to: .idle)
         } catch {
-            print("OCR clipboard copy failed: \(error.localizedDescription)")
+            TYLogger.error("OCR clipboard copy failed", tag: "CaptureSession", error: error)
             toastService.showToast(message: AppText.ocrCopyFailedToast)
         }
     }
@@ -956,7 +956,7 @@ final class CaptureSessionService {
     ) async {
         let selectionRect = source.selectionRect
 
-        print("[AI Analysis] mode: \(mode.menuTitle)")
+        TYLogger.info("mode: \(mode.menuTitle)", tag: "AI Analysis")
 
         defer {
             isAIAnalysisInProgress = false
@@ -967,7 +967,7 @@ final class CaptureSessionService {
             let image = try await captureImageForPendingSource(source)
 
             let useVision = UserDefaults.standard.bool(forKey: AppSettings.aiUseVisionTextExtractionKey)
-            print("[AI Analysis] aiUseVisionTextExtraction: \(useVision)")
+            TYLogger.debug("aiUseVisionTextExtraction: \(useVision)", tag: "AI Analysis")
 
             if useVision {
                 await performBackendAIAnalysis(image: image, source: source, mode: mode)
@@ -1057,7 +1057,7 @@ final class CaptureSessionService {
                 secondaryCopyText: response.analysis
             )
 
-            print("[AI Pro Backend] Analysis success, model: \(response.model)")
+            TYLogger.info("Analysis success, model: \(response.model)", tag: "AI Pro Backend")
 
             aiAnalysisPreviewWindowService.presentResult(
                 result: result,
@@ -1082,7 +1082,7 @@ final class CaptureSessionService {
         } catch let error as AIProBackendError {
             switch error {
             case .authRequired, .subscriptionRequired:
-                print("[AI Pro Backend] Backend rejected: \(error.localizedDescription)")
+                TYLogger.warn("Backend rejected: \(error.localizedDescription)", tag: "AI Pro Backend")
                 toastService.showToast(message: error.localizedDescription)
                 aiAnalysisPreviewWindowService.presentError(
                     title: AppText.aiResultError,
@@ -1096,7 +1096,7 @@ final class CaptureSessionService {
                     }
                 )
             default:
-                print("[AI Pro Backend] Backend error: \(error.localizedDescription)")
+                TYLogger.error("Backend error: \(error.localizedDescription)", tag: "AI Pro Backend")
                 toastService.showToast(message: error.localizedDescription)
                 aiAnalysisPreviewWindowService.presentError(
                     title: AppText.aiResultError,
@@ -1111,7 +1111,7 @@ final class CaptureSessionService {
                 )
             }
         } catch {
-            print("[AI Pro Backend] Unexpected error: \(error.localizedDescription)")
+            TYLogger.error("Unexpected error: \(error.localizedDescription)", tag: "AI Pro Backend")
             toastService.showToast(message: AppText.aiFailedToast)
             aiAnalysisPreviewWindowService.presentError(
                 title: AppText.aiResultError,
@@ -1139,7 +1139,7 @@ final class CaptureSessionService {
         let requestID = UUID().uuidString
 
         // Step 1: 本地 OCR 提取文字（在当前线程执行，不会阻塞主线程）
-        print("[AI Analysis] Extracting text via local OCR for backend text analysis")
+        TYLogger.info("Extracting text via local OCR for backend text analysis", tag: "AI Analysis")
 
         let extractedText: String
         do {
@@ -1150,11 +1150,11 @@ final class CaptureSessionService {
 
                 switch error {
                 case .noTextRecognized, .emptyText:
-                    print("[AI Analysis] Local OCR produced no text")
+                    TYLogger.warn("Local OCR produced no text", tag: "AI Analysis")
                     self.toastService.showToast(message: self.emptyContentMessage(for: mode))
                     self.aiAnalysisPreviewWindowService.dismiss()
                 case .requestFailed:
-                    print("[AI Analysis] Local OCR failed: \(error.localizedDescription)")
+                    TYLogger.error("Local OCR failed", tag: "AI Analysis", error: error)
                     self.toastService.showToast(message: AppText.ocrFailedToast)
                     self.aiAnalysisPreviewWindowService.presentError(
                         title: AppText.ocrFailedToast,
@@ -1195,14 +1195,14 @@ final class CaptureSessionService {
             await MainActor.run { [weak self] in
                 guard let self, self.isAIAnalysisInProgress else { return }
 
-                print("[AI Analysis] Local OCR produced empty text")
+                TYLogger.warn("Local OCR produced empty text", tag: "AI Analysis")
                 self.toastService.showToast(message: self.emptyContentMessage(for: mode))
                 self.aiAnalysisPreviewWindowService.dismiss()
             }
             return
         }
 
-        print("[AI Analysis] Local OCR succeeded, text length: \(trimmedText.count)")
+        TYLogger.info("Local OCR succeeded, text length: \(trimmedText.count)", tag: "AI Analysis")
 
         // Step 2: 构建完整 prompt — 将分析指令与提取的文字一起发给后端
         let analysisPrompt: String
@@ -1230,7 +1230,7 @@ final class CaptureSessionService {
                 secondaryCopyText: response.analysis
             )
 
-            print("[AI Pro Backend] Text analysis succeeded, model: \(response.model)")
+            TYLogger.info("Text analysis succeeded, model: \(response.model)", tag: "AI Pro Backend")
 
             await MainActor.run { [weak self] in
                 guard let self, self.isAIAnalysisInProgress else { return }
@@ -1262,7 +1262,7 @@ final class CaptureSessionService {
 
                 switch error {
                 case .authRequired, .subscriptionRequired:
-                    print("[AI Pro Backend] Backend rejected: \(error.localizedDescription)")
+                    TYLogger.warn("Backend rejected: \(error.localizedDescription)", tag: "AI Pro Backend")
                     self.toastService.showToast(message: error.localizedDescription)
                     self.aiAnalysisPreviewWindowService.presentError(
                         title: AppText.aiResultError,
@@ -1276,7 +1276,7 @@ final class CaptureSessionService {
                         }
                     )
                 default:
-                    print("[AI Pro Backend] Backend error: \(error.localizedDescription)")
+                    TYLogger.error("Backend error: \(error.localizedDescription)", tag: "AI Pro Backend")
                     self.toastService.showToast(message: error.localizedDescription)
                     self.aiAnalysisPreviewWindowService.presentError(
                         title: AppText.aiResultError,
@@ -1295,7 +1295,7 @@ final class CaptureSessionService {
             await MainActor.run { [weak self] in
                 guard let self, self.isAIAnalysisInProgress else { return }
 
-                print("[AI Pro Backend] Unexpected error: \(error.localizedDescription)")
+                TYLogger.error("Unexpected error: \(error.localizedDescription)", tag: "AI Pro Backend")
                 self.toastService.showToast(message: AppText.aiFailedToast)
                 self.aiAnalysisPreviewWindowService.presentError(
                     title: AppText.aiResultError,
@@ -1318,10 +1318,10 @@ final class CaptureSessionService {
     ) async throws -> String {
         switch strategy {
         case .localOCR:
-            print("[AI Analysis] Resolve text via local OCR")
+            TYLogger.debug("Resolve text via local OCR", tag: "AI Analysis")
             return try ocrService.recognizeText(in: image)
         case .visionAI:
-            print("[AI Analysis] Resolve text via AI vision extraction")
+            TYLogger.debug("Resolve text via AI vision extraction", tag: "AI Analysis")
             let extracted = try await aiImageTextExtractionService.extractText(from: image)
             return extracted.text
         }
@@ -1336,11 +1336,11 @@ final class CaptureSessionService {
     ) {
         switch error {
         case .noUsefulText:
-            print("[AI Analysis] Vision extraction produced no useful text")
+            TYLogger.warn("Vision extraction produced no useful text", tag: "AI Analysis")
             toastService.showToast(message: emptyContentMessage(for: mode))
             aiAnalysisPreviewWindowService.dismiss()
         case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
-            print("[AI Analysis] Vision extraction failed with recoverable error")
+            TYLogger.error("Vision extraction failed with recoverable error", tag: "AI Analysis")
             toastService.showToast(message: AppText.aiVisionFailedToast)
             aiAnalysisPreviewWindowService.presentError(
                 title: AppText.aiVisionFailedToast,
@@ -1395,10 +1395,10 @@ final class CaptureSessionService {
     ) async {
         let strategy = currentAITextInputStrategy()
 
-        print("[AI Analysis] mode: \(mode.menuTitle)")
-        print("[AI Analysis] strategy: \(strategy.logName)")
-        print("[AI Analysis] resultRevision: \(resultRevision)")
-        print("[AI Analysis] selection: \(Int(selectionRect.width))x\(Int(selectionRect.height))")
+        TYLogger.info("mode: \(mode.menuTitle)", tag: "AI Analysis")
+        TYLogger.debug("strategy: \(strategy.logName)", tag: "AI Analysis")
+        TYLogger.debug("resultRevision: \(resultRevision)", tag: "AI Analysis")
+        TYLogger.debug("selection: \(Int(selectionRect.width))x\(Int(selectionRect.height))", tag: "AI Analysis")
 
         do {
             let text = try await resolveAIText(from: image, strategy: strategy)
@@ -1428,7 +1428,7 @@ final class CaptureSessionService {
                 rawText: response.analysis,
                 secondaryCopyText: response.analysis
             )
-            print("[AI Pro Backend] Scrolling text analysis succeeded, model: \(response.model)")
+            TYLogger.info("Scrolling text analysis succeeded, model: \(response.model)", tag: "AI Pro Backend")
 
             await MainActor.run {
                 guard shouldAcceptScrollingAIResult(
@@ -1468,7 +1468,7 @@ final class CaptureSessionService {
                     return
                 }
 
-                print("[AI Pro Backend] Scrolling backend error: \(error.localizedDescription)")
+                TYLogger.error("Scrolling backend error", tag: "AI Pro Backend", error: error)
                 toastService.showToast(message: error.localizedDescription)
                 aiAnalysisPreviewWindowService.presentError(
                     title: AppText.aiResultError,
@@ -1494,7 +1494,7 @@ final class CaptureSessionService {
 
                 switch error {
                 case .noTextRecognized, .emptyText:
-                    print("[AI Analysis] Scrolling local OCR produced no useful text: \(error.localizedDescription)")
+                    TYLogger.warn("Scrolling local OCR produced no useful text", tag: "AI Analysis", error: error)
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .requestFailed:
@@ -1524,11 +1524,11 @@ final class CaptureSessionService {
 
                 switch error {
                 case .noUsefulText:
-                    print("[AI Analysis] Scrolling vision extraction produced no useful text")
+                    TYLogger.warn("Scrolling vision extraction produced no useful text", tag: "AI Analysis")
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .missingAPIKey, .imageEncodingFailed, .invalidResponse, .emptyOutput, .requestFailed:
-                    print("[AI Analysis] Scrolling vision extraction failed with recoverable error")
+                    TYLogger.error("Scrolling vision extraction failed with recoverable error", tag: "AI Analysis")
                     toastService.showToast(message: AppText.aiVisionFailedToast)
                     aiAnalysisPreviewWindowService.presentError(
                         title: AppText.aiVisionFailedToast,
@@ -1555,7 +1555,7 @@ final class CaptureSessionService {
 
                 switch error {
                 case .emptyInput, .lowQualityOutput:
-                    print("[AI Analysis] Scrolling interface structure produced no useful content: \(error.localizedDescription)")
+                    TYLogger.warn("Scrolling interface structure produced no useful content", tag: "AI Analysis", error: error)
                     toastService.showToast(message: emptyContentMessage(for: mode))
                     aiAnalysisPreviewWindowService.dismiss()
                 case .missingAPIKey, .invalidResponse, .emptyOutput, .requestFailed:
@@ -1625,7 +1625,7 @@ final class CaptureSessionService {
             toastService.showToast(message: AppText.aiCopiedToast)
             aiAnalysisPreviewWindowService.dismiss()
         } catch {
-            print("AI analysis clipboard copy failed: \(error.localizedDescription)")
+            TYLogger.error("AI analysis clipboard copy failed", tag: "CaptureSession", error: error)
             toastService.showToast(message: AppText.aiCopyFailedToast)
         }
     }
@@ -1640,7 +1640,7 @@ final class CaptureSessionService {
             toastService.showToast(message: successMessage)
             aiAnalysisPreviewWindowService.dismiss()
         } catch {
-            print("AI secondary clipboard copy failed: \(error.localizedDescription)")
+            TYLogger.error("AI secondary clipboard copy failed", tag: "CaptureSession", error: error)
             toastService.showToast(message: AppText.aiCopyFailedToast)
         }
     }
@@ -1723,7 +1723,7 @@ final class CaptureSessionService {
         aiAnalysisPreviewWindowService.dismiss()
         scrollingCapturePanelService.dismissPanel()
         scrollingCapturePreviewWindowService.dismissPreview()
-        print("Scrolling Capture Cancelled")
+        TYLogger.info("Scrolling Capture Cancelled", tag: "CaptureSession")
         overlayService.dismissOverlay()
         clearPendingCapture()
         if state != .idle {
@@ -1748,7 +1748,7 @@ final class CaptureSessionService {
 
     @MainActor
     private func failScrollingCapture(message: String, error: Error) {
-        print("\(message): \(error.localizedDescription)")
+        TYLogger.error(message, tag: "CaptureSession", error: error)
         invalidateScrollingOCRRequest()
         scrollingAIRequestID = UUID()
         ocrPreviewWindowService.dismiss()
@@ -1897,10 +1897,10 @@ final class CaptureSessionService {
 
                 self.scrollingCaptureFrames.append(frame)
                 try self.rebuildScrollingCaptureResult(for: selectionRect)
-                print("Scrolling Capture Frame Appended")
-                print("count: \(self.scrollingCaptureFrames.count)")
+                TYLogger.debug("Scrolling Capture Frame Appended", tag: "CaptureSession")
+                TYLogger.debug("count: \(self.scrollingCaptureFrames.count)", tag: "CaptureSession")
             } catch {
-                print("Scrolling capture append failed: \(error.localizedDescription)")
+                TYLogger.error("Scrolling capture append failed", tag: "CaptureSession", error: error)
             }
         }
     }

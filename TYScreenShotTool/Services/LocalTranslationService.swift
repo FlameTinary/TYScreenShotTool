@@ -61,9 +61,9 @@ final class LocalTranslationService {
     static func userFriendlyMessage(for error: Error) -> String {
         let nsError = error as NSError
 
-        print("[LocalTranslation] error domain:", nsError.domain)
-        print("[LocalTranslation] error code:", nsError.code)
-        print("[LocalTranslation] error:", nsError)
+        TYLogger.debug("error domain: \(nsError.domain)", tag: "LocalTranslation")
+        TYLogger.debug("error code: \(nsError.code)", tag: "LocalTranslation")
+        TYLogger.debug("error: \(nsError)", tag: "LocalTranslation")
 
         // 尝试匹配 TranslationError 类型（使用模式匹配 ~=）
         if let translationError = error as? TranslationError {
