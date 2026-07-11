@@ -29,11 +29,8 @@ final class SettingsViewController: NSViewController {
     // MARK: - AI Pro Login Section
 
     private let loginStatusLabel = NSTextField(labelWithString: "")
+    private let subscriptionInfoLabel = NSTextField(labelWithString: "")
     private let loginActionButton = NSButton(title: "", target: nil, action: nil)
-    private let switchAccountButton = NSButton(title: "", target: nil, action: nil)
-    #if DEBUG
-    private let sandboxAccountHintLabel = NSTextField(labelWithString: "")
-    #endif
     private let subscriptionActionsStack = NSStackView()
     private let subscribeButton = NSButton(title: "", target: nil, action: nil)
     private let restoreSubscriptionButton = NSButton(title: "", target: nil, action: nil)
@@ -132,8 +129,6 @@ extension SettingsViewController {
         subscribeButton.action = #selector(handleSubscribeAction)
         restoreSubscriptionButton.target = self
         restoreSubscriptionButton.action = #selector(handleRestoreSubscriptionAction)
-        switchAccountButton.target = self
-        switchAccountButton.action = #selector(handleSwitchAppleAccountAction)
         #if DEBUG
         aiVisionCheckbox.target = self
         aiVisionCheckbox.action = #selector(aiVisionChanged)
@@ -181,13 +176,15 @@ extension SettingsViewController {
     func reloadLoginStatus() {
         guard AIAvailabilityService().isSubscriptionAllowed else {
             loginStatusLabel.stringValue = AppText.settingsLoginNotAvailable
+            subscriptionInfoLabel.isHidden = true
             loginActionButton.isHidden = true
-            switchAccountButton.isHidden = true
             subscribeButton.isHidden = true
             restoreSubscriptionButton.isHidden = true
             return
         }
 
+        subscriptionInfoLabel.isHidden = false
+        subscriptionInfoLabel.stringValue = AppText.settingsSubscriptionInfo
         loginActionButton.isHidden = false
 
         if AIProSessionManager.shared.isSignedIn {
@@ -195,8 +192,6 @@ extension SettingsViewController {
             loginStatusLabel.textColor = .labelColor
             loginActionButton.title = AppText.settingsSignOut
             loginActionButton.action = #selector(handleLoginAction)
-            switchAccountButton.title = AppText.settingsSwitchAppleAccount
-            switchAccountButton.isHidden = false
             renderSignedInStatus(
                 userID: userID,
                 subscriptionStatus: AIProSubscriptionService.shared.status
@@ -216,7 +211,6 @@ extension SettingsViewController {
             loginStatusLabel.stringValue = ""
             loginActionButton.title = AppText.aiProLoginButton
             loginActionButton.action = #selector(handleLoginAction)
-            switchAccountButton.isHidden = true
             subscribeButton.isHidden = true
             restoreSubscriptionButton.isHidden = true
         }
@@ -549,21 +543,16 @@ private extension SettingsViewController {
         loginStatusLabel.textColor = .secondaryLabelColor
         loginStatusLabel.maximumNumberOfLines = 0
 
+        // 订阅审核截图需要清楚展示商品名称和权益。
+        // 这块说明保持在登录状态附近，方便审核人员直接对应 App Store Connect 的订阅项目。
+        subscriptionInfoLabel.font = .systemFont(ofSize: 12)
+        subscriptionInfoLabel.textColor = .secondaryLabelColor
+        subscriptionInfoLabel.maximumNumberOfLines = 0
+        subscriptionInfoLabel.stringValue = AppText.settingsSubscriptionInfo
+
         loginActionButton.bezelStyle = .rounded
         loginActionButton.target = self
         loginActionButton.action = #selector(handleLoginAction)
-
-        switchAccountButton.bezelStyle = .rounded
-        switchAccountButton.target = self
-        switchAccountButton.action = #selector(handleSwitchAppleAccountAction)
-        switchAccountButton.isHidden = true
-
-        #if DEBUG
-        sandboxAccountHintLabel.font = .systemFont(ofSize: 11)
-        sandboxAccountHintLabel.textColor = .secondaryLabelColor
-        sandboxAccountHintLabel.maximumNumberOfLines = 0
-        sandboxAccountHintLabel.stringValue = AppText.settingsSandboxAccountHint
-        #endif
 
         subscribeButton.bezelStyle = .rounded
         subscribeButton.target = self
@@ -583,12 +572,9 @@ private extension SettingsViewController {
 
         container.addSubview(sectionTitle)
         container.addSubview(loginStatusLabel)
+        container.addSubview(subscriptionInfoLabel)
         container.addSubview(loginActionButton)
-        container.addSubview(switchAccountButton)
         container.addSubview(subscriptionActionsStack)
-        #if DEBUG
-        container.addSubview(sandboxAccountHintLabel)
-        #endif
 
         sectionTitle.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
@@ -597,28 +583,21 @@ private extension SettingsViewController {
             make.top.equalTo(sectionTitle.snp.bottom).offset(8)
             make.leading.trailing.equalToSuperview()
         }
+        subscriptionInfoLabel.snp.makeConstraints { make in
+            make.top.equalTo(loginStatusLabel.snp.bottom).offset(6)
+            make.leading.trailing.equalToSuperview()
+        }
         loginActionButton.snp.makeConstraints { make in
-            make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
+            make.top.equalTo(subscriptionInfoLabel.snp.bottom).offset(8)
             make.leading.equalToSuperview()
         }
-        switchAccountButton.snp.makeConstraints { make in
-            make.centerY.equalTo(loginActionButton)
+        subscriptionActionsStack.snp.makeConstraints { make in
+            make.top.equalTo(subscriptionInfoLabel.snp.bottom).offset(8)
             make.leading.equalTo(loginActionButton.snp.trailing).offset(8)
         }
         subscriptionActionsStack.snp.makeConstraints { make in
-            make.top.equalTo(loginStatusLabel.snp.bottom).offset(8)
-            make.leading.equalTo(switchAccountButton.snp.trailing).offset(8)
-        }
-        #if DEBUG
-        sandboxAccountHintLabel.snp.makeConstraints { make in
-            make.top.equalTo(loginActionButton.snp.bottom).offset(6)
-            make.leading.trailing.bottom.equalToSuperview()
-        }
-        #else
-        subscriptionActionsStack.snp.makeConstraints { make in
             make.bottom.equalToSuperview()
         }
-        #endif
 
         return container
     }
@@ -736,33 +715,6 @@ private extension SettingsViewController {
         }
     }
 
-    @objc func handleSwitchAppleAccountAction() {
-        setAccountButtonsEnabled(false)
-        Task {
-            for step in AIProSettingsAccountSwitchBehavior.steps {
-                switch step {
-                case .signOutCurrentSession:
-                    AIProSessionManager.shared.signOut()
-                case .clearSubscriptionCache:
-                    AIProSubscriptionService.shared.clearCachedStatus()
-                case .startSystemAppleSignIn:
-                    do {
-                        _ = try await AIProAuthService.shared.signIn()
-                    } catch {
-                        loginStatusLabel.stringValue = error.localizedDescription
-                        setAccountButtonsEnabled(true)
-                        reloadLoginStatus()
-                        return
-                    }
-                case .refreshSubscriptionStatus:
-                    _ = await AIProSubscriptionService.shared.refreshStatus()
-                }
-            }
-            setAccountButtonsEnabled(true)
-            reloadLoginStatus()
-        }
-    }
-
     func signInAndRefreshStatus() async {
         setAccountButtonsEnabled(false)
         do {
@@ -780,7 +732,6 @@ private extension SettingsViewController {
 
     func setAccountButtonsEnabled(_ isEnabled: Bool) {
         loginActionButton.isEnabled = isEnabled
-        switchAccountButton.isEnabled = isEnabled
     }
 
     @objc func handleSubscribeAction() {

@@ -10,22 +10,6 @@ enum AIProSettingsSignInCompletionBehavior: Equatable {
     static let afterSuccessfulSignIn: AIProSettingsSignInCompletionBehavior = .refreshSubscriptionStatus
 }
 
-enum AIProSettingsAccountSwitchStep: Equatable {
-    case signOutCurrentSession
-    case clearSubscriptionCache
-    case startSystemAppleSignIn
-    case refreshSubscriptionStatus
-}
-
-enum AIProSettingsAccountSwitchBehavior {
-    static let steps: [AIProSettingsAccountSwitchStep] = [
-        .signOutCurrentSession,
-        .clearSubscriptionCache,
-        .startSystemAppleSignIn,
-        .refreshSubscriptionStatus
-    ]
-}
-
 struct AIProSubscriptionProduct: Codable, Equatable {
     let id: String
     let displayName: String
