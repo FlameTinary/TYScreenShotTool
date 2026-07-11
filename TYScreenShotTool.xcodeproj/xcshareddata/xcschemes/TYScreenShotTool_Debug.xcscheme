@@ -79,7 +79,7 @@
          </BuildableReference>
       </BuildableProductRunnable>
       <StoreKitConfigurationFileReference
-         identifier = "../../../TYScreenShotTool/TShot.storekit">
+         identifier = "../../TYScreenShotTool/TShot.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
