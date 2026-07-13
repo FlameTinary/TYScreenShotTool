@@ -15,7 +15,7 @@ const appleAuthMocks = vi.hoisted(() => {
     expiresDate: Date.now() + 86400000,
     purchaseDate: Date.now(),
     signedDate: Date.now(),
-    appAccountToken: "old-user-id-from-storekit"
+    appAccountToken: "user_1" as string | undefined
   });
 
   return {
@@ -394,10 +394,10 @@ describe("TShot AI backend app", () => {
   });
 
   /**
-   * 测试：客户端恢复购买时，订阅应写给当前 Bearer Token 对应的登录用户。
-   * 这覆盖删除 Supabase 用户 / 订阅后重新登录生成新 user_id 的恢复场景。
+   * 测试：不能使用其他后端用户绑定的 Apple 交易认领订阅。
+   * signed transaction 即使由 Apple 正确签名，也必须与当前 Bearer Token 用户一致。
    */
-  it("claims a restored subscription for the currently authenticated user", async () => {
+  it("rejects a signed transaction bound to another authenticated user", async () => {
     const subscriptionWrites: Array<{ userId: string; transaction: SubscriptionTransactionInput }> = [];
     const app = createApp(
       repository(
@@ -422,17 +422,49 @@ describe("TShot AI backend app", () => {
       { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
     );
 
-    expect(response.status).toBe(200);
-    expect(subscriptionWrites).toHaveLength(1);
-    expect(subscriptionWrites[0]).toMatchObject({
-      userId: "new-user-after-db-reset",
-      transaction: {
-        originalTransactionId: "test-original-txn-001",
-        latestTransactionId: "test-txn-001",
-        productId: "tshot.pro.monthly",
-        environment: "Sandbox"
-      }
+    expect(response.status).toBe(403);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "transaction_account_mismatch"
     });
+    expect(subscriptionWrites).toHaveLength(0);
+  });
+
+  /**
+   * 测试：缺少 appAccountToken 的交易不能授予后端账号订阅权限。
+   * 正式购买必须由 App 在 purchase options 中携带当前用户 UUID。
+   */
+  it("rejects a signed transaction without an app account token", async () => {
+    appleAuthMocks.verifyStoreKitTransactionJWT.mockResolvedValueOnce({
+      transactionId: "missing-token-txn-001",
+      originalTransactionId: "missing-token-original-txn-001",
+      productId: "tshot.pro.monthly",
+      bundleId: "com.tshot.app",
+      environment: "Sandbox",
+      expiresDate: Date.now() + 86400000,
+      purchaseDate: Date.now(),
+      signedDate: Date.now(),
+      appAccountToken: undefined
+    });
+    const subscriptionWrites: Array<{ userId: string; transaction: SubscriptionTransactionInput }> = [];
+    const app = createApp(repository(user({ id: "user_1", storefront: "USA" }), { subscriptionWrites }));
+
+    const response = await app.fetch(
+      new Request("https://api.example.com/v1/subscriptions/verify", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ signed_transaction: "valid.storekit.jwt" })
+      }),
+      { ...defaultEnv, APPLE_BUNDLE_ID: "com.tshot.app" }
+    );
+
+    expect(response.status).toBe(403);
+    await expect(json(response)).resolves.toMatchObject({
+      error: "transaction_account_mismatch"
+    });
+    expect(subscriptionWrites).toHaveLength(0);
   });
 
   it("rejects subscription verification for products outside AI Pro", async () => {

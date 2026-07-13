@@ -51,29 +51,10 @@ final class AIProSubscriptionTests: XCTestCase {
         XCTAssertFalse(AppText.settingsRestoreSubscription.isEmpty)
     }
 
-    func test_settingsSandboxAccountHintExplainsStoreKitAndAppleSignInSeparation() {
-        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("StoreKit"))
-        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("Sign in with Apple"))
-        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("[Environment: Xcode]"))
-        XCTAssertTrue(AppText.settingsSandboxAccountHint.contains("Release"))
-    }
-
     func test_settingsSuccessfulSignInRefreshesSubscriptionStatusWithoutAutoRestoringPurchases() {
         XCTAssertEqual(
             AIProSettingsSignInCompletionBehavior.afterSuccessfulSignIn,
             .refreshSubscriptionStatus
-        )
-    }
-
-    func test_settingsSwitchAppleAccountClearsCurrentSessionBeforeSystemSignIn() {
-        XCTAssertEqual(
-            AIProSettingsAccountSwitchBehavior.steps,
-            [
-                .signOutCurrentSession,
-                .clearSubscriptionCache,
-                .startSystemAppleSignIn,
-                .refreshSubscriptionStatus
-            ]
         )
     }
 

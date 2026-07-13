@@ -565,6 +565,22 @@ async function handleVerifySubscription(context: AuthenticatedContext): Promise<
     return json({ error: "invalid_product" }, 400);
   }
 
+  // StoreKit 购买时，App 会把当前后端用户 UUID 作为 appAccountToken 写入 Apple 交易。
+  // 只有交易中的账号令牌与 Bearer Token 对应用户一致时才能授予订阅，避免其他登录用户
+  // 重放一份真实但不属于自己的 signed transaction 来认领 AI Pro 权限。
+  const transactionAccountToken = transaction.appAccountToken?.trim().toLowerCase();
+  const authenticatedUserId = context.user.id.trim().toLowerCase();
+  if (!transactionAccountToken || transactionAccountToken !== authenticatedUserId) {
+    console.error(
+      JSON.stringify({
+        event: "storekit_app_account_token_mismatch",
+        transaction_id: transaction.transactionId,
+        has_app_account_token: Boolean(transactionAccountToken)
+      })
+    );
+    return json({ error: "transaction_account_mismatch" }, 403);
+  }
+
   // 判断订阅状态：根据 expiresDate 判断是否有效
   const now = Date.now();
   const status = transaction.expiresDate && transaction.expiresDate > now ? "active" : "expired";
